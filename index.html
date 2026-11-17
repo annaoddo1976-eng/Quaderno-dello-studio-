@@ -2,7 +2,7 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <meta name="apple-mobile-web-app-title" content="Quaderno per lo studio">
@@ -71,10 +71,12 @@
         :root {
             --study-font-size: 16px;
         }
-        body {
+        html, body {
             background-color: #FAF6F1;
             color: #290E20;
             -webkit-tap-highlight-color: transparent;
+            overflow-x: hidden;
+            width: 100%;
         }
         .study-text {
             font-size: var(--study-font-size);
@@ -83,7 +85,7 @@
         .resizable-box {
             resize: vertical;
             overflow-y: auto;
-            min-height: 110px;
+            min-height: 100px;
         }
         .paper-blank { background-color: #FDFCFA; }
         .paper-lined {
@@ -107,7 +109,7 @@
         [contenteditable="true"]:focus {
             outline: none;
             border-color: #632B4F !important;
-            box-shadow: 0 0 0 3px rgba(99, 43, 79, 0.12);
+            box-shadow: 0 0 0 2px rgba(99, 43, 79, 0.14);
         }
 
         body.pencil-lock-active [contenteditable="true"],
@@ -120,7 +122,7 @@
         .split-grid {
             display: grid;
             grid-template-columns: 1fr;
-            gap: 0.65rem;
+            gap: 0.45rem;
         }
         @media (min-width: 640px) {
             .split-grid {
@@ -132,11 +134,20 @@
         }
 
         canvas.drawing-pad {
-            touch-action: none;
+            touch-action: none !important;
+            -webkit-user-select: none;
+            user-select: none;
             cursor: crosshair;
             display: block;
             width: 100%;
             height: 100%;
+        }
+
+        #pdf-draw-canvas {
+            touch-action: none !important;
+            -webkit-user-select: none;
+            user-select: none;
+            mix-blend-mode: multiply;
         }
 
         #pdf-split-resizer {
@@ -145,6 +156,8 @@
             touch-action: none;
             user-select: none;
         }
+
+        /* Adattamento perfetto PDF + Note in orizzontale e verticale su qualsiasi schermo */
         @media (min-width: 480px) {
             #pdf-split-container {
                 flex-direction: row !important;
@@ -156,12 +169,22 @@
                 height: 100% !important;
             }
         }
+        @media (max-width: 479px) {
+            #pdf-left-pane {
+                width: 100% !important;
+                height: 54% !important;
+            }
+            #pdf-right-pane {
+                width: 100% !important;
+                height: 46% !important;
+            }
+        }
 
-        /* Schede Homepage fedeli all'immagine allegata */
+        /* Schede Homepage */
         .home-tile {
             background: rgba(255, 255, 255, 0.96);
             border: 1.5px solid #9D698B;
-            border-radius: 22px;
+            border-radius: 20px;
             box-shadow: 0 2px 10px rgba(78, 31, 61, 0.05);
             transition: transform 0.14s ease, border-color 0.14s ease, box-shadow 0.14s ease;
         }
@@ -174,9 +197,9 @@
             transform: scale(0.985);
         }
         .home-icon-box {
-            width: 54px;
-            height: 54px;
-            border-radius: 16px;
+            width: 50px;
+            height: 50px;
+            border-radius: 15px;
             background: linear-gradient(155deg, #6E2452 0%, #441132 100%);
             color: #ECCB9A;
             display: flex;
@@ -186,7 +209,7 @@
             box-shadow: inset 0 1px 1px rgba(255,255,255,0.22);
         }
 
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar { width: 5px; height: 5px; }
         ::-webkit-scrollbar-track { background: #FAF6F1; }
         ::-webkit-scrollbar-thumb { background: #C59BB3; border-radius: 9999px; }
 
@@ -199,7 +222,7 @@
         }
     </style>
 </head>
-<body class="font-sans antialiased selection:bg-plum-200 selection:text-plum-900 pb-20 lg:pb-0">
+<body class="font-sans antialiased selection:bg-plum-200 selection:text-plum-900 pb-16 lg:pb-0">
 
     <!-- POPOVER FORMATTAZIONE RAPIDA SU SELEZIONE TESTO (EVIDENZIA + GRASSETTO) -->
     <div id="format-popover" class="no-print fixed z-50 hidden items-center gap-1.5 bg-plum-900 text-ivory-50 px-3 py-2 rounded-2xl shadow-xl border border-plum-300/40">
@@ -216,31 +239,121 @@
         </button>
     </div>
 
-    <!-- MODAL SINCRONIZZAZIONE AUTOMATICA TRA IPAD E IPHONE -->
-    <div id="cloud-sync-modal" class="no-print fixed inset-0 z-50 hidden bg-plum-950/60 backdrop-blur-xs items-center justify-center p-3">
-        <div class="bg-ivory-50 border-2 border-plum-300 rounded-3xl max-w-lg w-full p-5 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
-            <div class="flex items-center justify-between border-b border-ivory-300 pb-3">
-                <div class="flex items-center gap-2.5">
-                    <div class="w-10 h-10 rounded-2xl bg-plum-700 text-gold-200 flex items-center justify-center">
-                        <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+    <!-- MODAL CREAZIONE NUOVA SESSIONE PERSONALIZZATA -->
+    <div id="new-session-modal" class="no-print fixed inset-0 z-50 hidden bg-plum-950/60 backdrop-blur-xs items-center justify-center p-2">
+        <div class="bg-ivory-50 border-2 border-plum-300 rounded-3xl max-w-lg w-full p-4 shadow-2xl space-y-3.5 max-h-[92vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-ivory-300 pb-2.5">
+                <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-2xl bg-plum-700 text-gold-200 flex items-center justify-center">
+                        <i data-lucide="folder-plus" class="w-5 h-5"></i>
                     </div>
                     <div>
-                        <h3 class="font-serif font-bold text-lg text-plum-950">Sincronizza iPad e iPhone</h3>
-                        <p class="text-[11px] text-plum-600">Mantieni aggiornati note, paragrafi e settimane su entrambi i dispositivi</p>
+                        <h3 class="font-serif font-bold text-lg text-plum-900">Aggiungi una nuova sessione</h3>
+                        <p class="text-[11px] text-plum-600">Avrà PDF a schermo diviso, note con tastiera e Apple Pencil</p>
                     </div>
                 </div>
-                <button type="button" onclick="closeCloudSyncModal()" class="p-2 rounded-xl hover:bg-ivory-200 text-plum-800">
+                <button type="button" onclick="closeNewSessionModal()" class="p-1.5 rounded-xl hover:bg-ivory-200 text-plum-800">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
 
-            <div class="bg-white border-2 border-plum-200 rounded-2xl p-4 space-y-3">
+            <div class="space-y-2.5">
+                <div>
+                    <label class="block text-xs font-bold uppercase text-plum-700 mb-1">Nome della sessione:</label>
+                    <input type="text" id="new-session-title-input" onkeydown="if(event.key==='Enter') confirmCreateCustomSession()" placeholder="Es. Assemblea di circoscrizione, Congresso..." class="w-full rounded-xl border-2 border-plum-200 bg-white px-3 py-2 text-sm font-semibold text-plum-950 focus:border-plum-600 outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold uppercase text-plum-700 mb-1">Sottotitolo breve (facoltativo):</label>
+                    <input type="text" id="new-session-sub-input" onkeydown="if(event.key==='Enter') confirmCreateCustomSession()" placeholder="Es. Programma, discorsi e appunti" class="w-full rounded-xl border-2 border-plum-200 bg-white px-3 py-1.5 text-xs text-plum-950 focus:border-plum-600 outline-none">
+                </div>
+
+                <div>
+                    <span class="block text-[11px] font-semibold text-plum-600 mb-1">Idee rapide (tocca per compilare):</span>
+                    <div class="flex flex-wrap gap-1.5">
+                        <button type="button" onclick="fillSuggestedSession('Assemblea di circoscrizione', 'Programma e discorsi')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Assemblea di circoscrizione</button>
+                        <button type="button" onclick="fillSuggestedSession('Congresso di zona', 'Simposi, discorsi e riflessioni')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Congresso di zona</button>
+                        <button type="button" onclick="fillSuggestedSession('Visita del sorvegliante', 'Discorsi e incoraggiamento')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Visita del sorvegliante</button>
+                        <button type="button" onclick="fillSuggestedSession('Adorazione in famiglia', 'Ricerche e spunti')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Adorazione in famiglia</button>
+                        <button type="button" onclick="fillSuggestedSession('Ministero e predicazione', 'Presentazioni e esperienze')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Ministero e predicazione</button>
+                    </div>
+                </div>
+
+                <div>
+                    <span class="block text-xs font-bold uppercase text-plum-700 mb-1">Icona della sessione:</span>
+                    <div class="grid grid-cols-6 gap-2" id="session-icon-picker">
+                        <label class="cursor-pointer">
+                            <input type="radio" name="new-session-icon" value="calendar-heart" checked class="peer hidden">
+                            <div class="p-2 rounded-xl border-2 border-ivory-300 peer-checked:border-plum-600 peer-checked:bg-plum-100 flex items-center justify-center text-plum-800">
+                                <i data-lucide="calendar-heart" class="w-5 h-5"></i>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="new-session-icon" value="landmark" class="peer hidden">
+                            <div class="p-2 rounded-xl border-2 border-ivory-300 peer-checked:border-plum-600 peer-checked:bg-plum-100 flex items-center justify-center text-plum-800">
+                                <i data-lucide="landmark" class="w-5 h-5"></i>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="new-session-icon" value="bookmark" class="peer hidden">
+                            <div class="p-2 rounded-xl border-2 border-ivory-300 peer-checked:border-plum-600 peer-checked:bg-plum-100 flex items-center justify-center text-plum-800">
+                                <i data-lucide="bookmark" class="w-5 h-5"></i>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="new-session-icon" value="heart" class="peer hidden">
+                            <div class="p-2 rounded-xl border-2 border-ivory-300 peer-checked:border-plum-600 peer-checked:bg-plum-100 flex items-center justify-center text-plum-800">
+                                <i data-lucide="heart" class="w-5 h-5"></i>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="new-session-icon" value="sparkles" class="peer hidden">
+                            <div class="p-2 rounded-xl border-2 border-ivory-300 peer-checked:border-plum-600 peer-checked:bg-plum-100 flex items-center justify-center text-plum-800">
+                                <i data-lucide="sparkles" class="w-5 h-5"></i>
+                            </div>
+                        </label>
+                        <label class="cursor-pointer">
+                            <input type="radio" name="new-session-icon" value="folder" class="peer hidden">
+                            <div class="p-2 rounded-xl border-2 border-ivory-300 peer-checked:border-plum-600 peer-checked:bg-plum-100 flex items-center justify-center text-plum-800">
+                                <i data-lucide="folder" class="w-5 h-5"></i>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-1">
+                <button type="button" onclick="closeNewSessionModal()" class="px-4 py-2 rounded-xl border border-ivory-300 text-sm font-semibold text-plum-800 hover:bg-ivory-200">Annulla</button>
+                <button type="button" onclick="confirmCreateCustomSession()" class="px-5 py-2 rounded-xl bg-plum-700 hover:bg-plum-800 text-white text-sm font-semibold shadow-xs">Crea Sessione</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL SINCRONIZZAZIONE AUTOMATICA TRA IPAD E IPHONE -->
+    <div id="cloud-sync-modal" class="no-print fixed inset-0 z-50 hidden bg-plum-950/60 backdrop-blur-xs items-center justify-center p-2">
+        <div class="bg-ivory-50 border-2 border-plum-300 rounded-3xl max-w-lg w-full p-4 shadow-2xl space-y-3.5 max-h-[92vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-ivory-300 pb-2.5">
+                <div class="flex items-center gap-2">
+                    <div class="w-9 h-9 rounded-2xl bg-plum-700 text-gold-200 flex items-center justify-center">
+                        <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-serif font-bold text-lg text-plum-950">Sincronizza iPad e iPhone</h3>
+                        <p class="text-[11px] text-plum-600">Mantieni aggiornati sessioni, note e settimane su entrambi i dispositivi</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeCloudSyncModal()" class="p-1.5 rounded-xl hover:bg-ivory-200 text-plum-800">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="bg-white border-2 border-plum-200 rounded-2xl p-3.5 space-y-2.5">
                 <div class="flex items-center justify-between">
                     <span class="text-xs font-bold uppercase tracking-wider text-plum-800">1. Sincronizzazione Cloud Automatica</span>
                     <span id="sync-modal-badge" class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-plum-100 text-plum-800">Pronto</span>
                 </div>
                 <p class="text-xs text-plum-700 leading-relaxed">
-                    Inserisci lo <strong>stesso Codice Personale</strong> sull'iPad e sull'iPhone (es. <code>anna-adunanze-2026</code>): ogni modifica alle note e ai paragrafi si sincronizzerà automaticamente!
+                    Inserisci lo <strong>stesso Codice Personale</strong> sull'iPad e sull'iPhone (es. <code>anna-adunanze-2026</code>): ogni modifica alle sessioni e alle note si sincronizzerà automaticamente!
                 </p>
 
                 <div class="flex gap-2">
@@ -265,7 +378,7 @@
                 <p id="sync-last-info" class="text-[11px] text-burgundy-600 font-medium"></p>
             </div>
 
-            <div class="bg-plum-50/70 border border-plum-200 rounded-2xl p-4 space-y-2.5">
+            <div class="bg-plum-50/70 border border-plum-200 rounded-2xl p-3.5 space-y-2">
                 <span class="text-xs font-bold uppercase tracking-wider text-plum-800 block">2. Backup completo su iCloud Drive (inclusi PDF e immagini)</span>
                 <p class="text-xs text-plum-700">
                     Per trasferire anche i PDF pesanti e le foto, salva il file su <strong>iCloud Drive</strong> dall'iPad e riaprilo dall'iPhone.
@@ -284,46 +397,46 @@
     </div>
 
     <!-- MODAL CREAZIONE NUOVA NOTA CON TITOLO PERSONALIZZABILE -->
-    <div id="new-note-modal" class="no-print fixed inset-0 z-50 hidden bg-plum-950/60 backdrop-blur-xs items-center justify-center p-3">
-        <div class="bg-ivory-50 border-2 border-plum-300 rounded-3xl max-w-lg w-full p-5 shadow-2xl space-y-4">
-            <div class="flex items-center justify-between border-b border-ivory-300 pb-3">
-                <h3 class="font-serif font-bold text-xl text-plum-900">Crea una nuova nota</h3>
-                <button type="button" onclick="closeNewNoteModal()" class="p-2 rounded-xl hover:bg-ivory-200 text-plum-800">
+    <div id="new-note-modal" class="no-print fixed inset-0 z-50 hidden bg-plum-950/60 backdrop-blur-xs items-center justify-center p-2">
+        <div class="bg-ivory-50 border-2 border-plum-300 rounded-3xl max-w-lg w-full p-4 shadow-2xl space-y-3.5 max-h-[92vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-ivory-300 pb-2.5">
+                <h3 class="font-serif font-bold text-lg text-plum-900">Crea una nuova nota</h3>
+                <button type="button" onclick="closeNewNoteModal()" class="p-1.5 rounded-xl hover:bg-ivory-200 text-plum-800">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
 
-            <div class="space-y-3">
+            <div class="space-y-2.5">
                 <div>
                     <label class="block text-xs font-bold uppercase text-plum-700 mb-1">Titolo della nota (personalizzabile):</label>
-                    <input type="text" id="new-note-title-input" onkeydown="if(event.key==='Enter') confirmCreateCustomNote()" placeholder="Scrivi il titolo della nota..." class="w-full rounded-xl border-2 border-plum-200 bg-white px-3.5 py-2.5 text-sm font-semibold text-plum-950 focus:border-plum-600 outline-none">
+                    <input type="text" id="new-note-title-input" onkeydown="if(event.key==='Enter') confirmCreateCustomNote()" placeholder="Scrivi il titolo della nota..." class="w-full rounded-xl border-2 border-plum-200 bg-white px-3 py-2 text-sm font-semibold text-plum-950 focus:border-plum-600 outline-none">
                 </div>
 
                 <div>
-                    <span class="block text-[11px] font-semibold text-plum-600 mb-1.5">Suggerimenti rapidi (facoltativi):</span>
+                    <span class="block text-[11px] font-semibold text-plum-600 mb-1">Suggerimenti rapidi (facoltativi):</span>
                     <div class="flex flex-wrap gap-1.5">
                         <button type="button" onclick="setSuggestedNoteTitle('Commento importante')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Commento importante</button>
+                        <button type="button" onclick="setSuggestedNoteTitle('Discorso')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Discorso</button>
                         <button type="button" onclick="setSuggestedNoteTitle('Esperienza')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Esperienza</button>
                         <button type="button" onclick="setSuggestedNoteTitle('Spiegazione di un versetto')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Spiegazione di un versetto</button>
                         <button type="button" onclick="setSuggestedNoteTitle('Pensiero personale')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Pensiero personale</button>
-                        <button type="button" onclick="setSuggestedNoteTitle('Commento di un fratello')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Commento di un fratello</button>
                         <button type="button" onclick="setSuggestedNoteTitle('Da ricordare')" class="px-2.5 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-xs font-medium">Da ricordare</button>
                     </div>
                 </div>
 
                 <div>
-                    <span class="block text-xs font-bold uppercase text-plum-700 mb-1.5">Tipo di nota:</span>
-                    <div class="grid grid-cols-2 gap-3">
+                    <span class="block text-xs font-bold uppercase text-plum-700 mb-1">Tipo di nota:</span>
+                    <div class="grid grid-cols-2 gap-2.5">
                         <label class="cursor-pointer">
                             <input type="radio" name="new-note-type" value="keyboard" checked class="peer hidden">
-                            <div class="p-3 rounded-2xl border-2 border-ivory-300 peer-checked:border-plum-600 peer-checked:bg-plum-50 flex items-center gap-2.5">
+                            <div class="p-2.5 rounded-2xl border-2 border-ivory-300 peer-checked:border-plum-600 peer-checked:bg-plum-50 flex items-center gap-2">
                                 <i data-lucide="keyboard" class="w-5 h-5 text-plum-700"></i>
                                 <span class="text-sm font-semibold text-plum-900">Con Tastiera</span>
                             </div>
                         </label>
                         <label class="cursor-pointer">
                             <input type="radio" name="new-note-type" value="pen" class="peer hidden">
-                            <div class="p-3 rounded-2xl border-2 border-ivory-300 peer-checked:border-plum-600 peer-checked:bg-plum-50 flex items-center gap-2.5">
+                            <div class="p-2.5 rounded-2xl border-2 border-ivory-300 peer-checked:border-plum-600 peer-checked:bg-plum-50 flex items-center gap-2">
                                 <i data-lucide="pen-tool" class="w-5 h-5 text-burgundy-600"></i>
                                 <span class="text-sm font-semibold text-plum-900">Con Penna / Pencil</span>
                             </div>
@@ -332,7 +445,7 @@
                 </div>
             </div>
 
-            <div class="flex justify-end gap-2 pt-2">
+            <div class="flex justify-end gap-2 pt-1">
                 <button type="button" onclick="closeNewNoteModal()" class="px-4 py-2 rounded-xl border border-ivory-300 text-sm font-semibold text-plum-800 hover:bg-ivory-200">Annulla</button>
                 <button type="button" onclick="confirmCreateCustomNote()" class="px-5 py-2 rounded-xl bg-plum-600 hover:bg-plum-700 text-white text-sm font-semibold shadow-xs">Crea Nota</button>
             </div>
@@ -340,18 +453,18 @@
     </div>
 
     <!-- MODAL INCOLLA PREPARAZIONE COMPLETA TORRE DI GUARDIA -->
-    <div id="bulk-paste-modal" class="no-print fixed inset-0 z-50 hidden bg-plum-950/60 backdrop-blur-xs items-center justify-center p-3">
-        <div class="bg-ivory-50 border-2 border-plum-300 rounded-3xl max-w-2xl w-full p-5 shadow-2xl space-y-4">
-            <div class="flex items-center justify-between border-b border-ivory-300 pb-3">
+    <div id="bulk-paste-modal" class="no-print fixed inset-0 z-50 hidden bg-plum-950/60 backdrop-blur-xs items-center justify-center p-2">
+        <div class="bg-ivory-50 border-2 border-plum-300 rounded-3xl max-w-2xl w-full p-4 shadow-2xl space-y-3 max-h-[92vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-ivory-300 pb-2.5">
                 <div>
                     <h3 class="font-serif font-bold text-lg text-plum-900">Incolla Preparazione Articolo</h3>
                     <p class="text-xs text-plum-600">Incolla domande e commenti già preparati per suddividerli automaticamente nei paragrafi.</p>
                 </div>
-                <button type="button" onclick="closeBulkPasteModal()" class="p-2 rounded-xl hover:bg-ivory-200 text-plum-800">
+                <button type="button" onclick="closeBulkPasteModal()" class="p-1.5 rounded-xl hover:bg-ivory-200 text-plum-800">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <textarea id="bulk-paste-textarea" rows="10" placeholder="Paragrafo 1&#10;Domanda: ...&#10;Commento: ...&#10;&#10;Paragrafo 2&#10;Domanda: ...&#10;Commento: ..." class="w-full rounded-2xl border border-plum-200 bg-white p-3.5 text-sm text-plum-950 focus:border-plum-600 outline-none"></textarea>
+            <textarea id="bulk-paste-textarea" rows="8" placeholder="Paragrafo 1&#10;Domanda: ...&#10;Commento: ...&#10;&#10;Paragrafo 2&#10;Domanda: ...&#10;Commento: ..." class="w-full rounded-2xl border border-plum-200 bg-white p-3 text-sm text-plum-950 focus:border-plum-600 outline-none"></textarea>
             <div class="flex items-center justify-between gap-3">
                 <label class="flex items-center gap-2 text-xs text-plum-800 cursor-pointer">
                     <input type="checkbox" id="bulk-replace-existing" class="rounded text-plum-600">
@@ -366,124 +479,127 @@
     </div>
 
     <!-- LIGHTBOX IMMAGINE A SCHERMO INTERO -->
-    <div id="image-lightbox" class="no-print fixed inset-0 z-50 hidden bg-black/85 items-center justify-center p-3" onclick="closeImageLightbox()">
+    <div id="image-lightbox" class="no-print fixed inset-0 z-50 hidden bg-black/85 items-center justify-center p-2" onclick="closeImageLightbox()">
         <div class="relative max-w-4xl w-full flex flex-col items-center gap-2" onclick="event.stopPropagation()">
-            <div class="w-full flex items-center justify-between text-white px-2">
+            <div class="w-full flex items-center justify-between text-white px-1">
                 <span id="lightbox-caption" class="text-sm font-medium"></span>
-                <button type="button" onclick="closeImageLightbox()" class="px-4 py-2 rounded-xl bg-ivory-50 text-plum-950 font-semibold text-sm flex items-center gap-1.5">
+                <button type="button" onclick="closeImageLightbox()" class="px-3.5 py-1.5 rounded-xl bg-ivory-50 text-plum-950 font-semibold text-sm flex items-center gap-1.5">
                     <i data-lucide="x" class="w-4 h-4"></i> Chiudi
                 </button>
             </div>
-            <img id="lightbox-img" src="" alt="Immagine ingrandita" class="max-h-[82vh] w-auto object-contain rounded-2xl bg-white p-2 shadow-2xl">
+            <img id="lightbox-img" src="" alt="Immagine ingrandita" class="max-h-[84vh] w-auto object-contain rounded-2xl bg-white p-1.5 shadow-2xl">
         </div>
     </div>
 
     <!-- =========================================================
-         AREA STUDIO PDF A SCHERMO DIVISO: PDF A SINISTRA (70%) + NOTE A DESTRA (30%)
+         AREA STUDIO PDF A SCHERMO DIVISO: PDF A SINISTRA + NOTE A DESTRA (ADATTIVA)
          ========================================================= -->
     <div id="pdf-studio-workspace" class="no-print fixed inset-0 z-50 hidden bg-ivory-100 flex-col">
-        <div class="bg-plum-900 text-ivory-50 px-2.5 sm:px-3 py-2 flex flex-wrap items-center justify-between gap-1.5 border-b border-plum-700">
-            <div class="flex items-center gap-2 min-w-0">
-                <button type="button" onclick="closePdfStudioWorkspace()" class="px-3 py-1.5 rounded-xl bg-burgundy-600 hover:bg-burgundy-500 text-white text-xs sm:text-sm font-semibold flex items-center gap-1.5 shrink-0">
-                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Torna al Quaderno
+        <!-- Barra superiore compatta -->
+        <div class="bg-plum-900 text-ivory-50 px-1.5 sm:px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-1 border-b border-plum-700">
+            <div class="flex items-center gap-1.5 min-w-0">
+                <button type="button" onclick="closePdfStudioWorkspace()" class="px-2.5 py-1 rounded-xl bg-burgundy-600 hover:bg-burgundy-500 text-white text-xs font-semibold flex items-center gap-1 shrink-0">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i> Quaderno
                 </button>
-                <span id="pdf-workspace-title" class="font-serif font-semibold text-sm truncate max-w-[150px] sm:max-w-xs">Documento PDF</span>
+                <span id="pdf-workspace-title" class="font-serif font-semibold text-xs sm:text-sm truncate max-w-[120px] sm:max-w-[200px]">Documento PDF</span>
             </div>
 
-            <div class="flex items-center gap-1 bg-plum-800 rounded-xl px-2 py-1 border border-plum-700">
+            <div class="flex items-center gap-0.5 bg-plum-800 rounded-xl px-1.5 py-0.5 border border-plum-700">
                 <button type="button" onclick="pdfChangePage(-1)" class="p-1 rounded-lg hover:bg-plum-700" title="Pagina precedente">
-                    <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                    <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
                 </button>
-                <div class="flex items-center gap-1 px-1 text-xs font-semibold">
+                <div class="flex items-center gap-1 px-0.5 text-[11px] font-semibold">
                     <span>Pag.</span>
-                    <input type="number" id="pdf-page-input" min="1" value="1" onchange="pdfJumpToPage(this.value)" class="w-11 text-center bg-plum-950 border border-plum-600 rounded py-0.5 text-white">
+                    <input type="number" id="pdf-page-input" min="1" value="1" onchange="pdfJumpToPage(this.value)" class="w-10 text-center bg-plum-950 border border-plum-600 rounded py-0.5 text-white">
                     <span id="pdf-total-pages">/ 1</span>
                 </div>
                 <button type="button" onclick="pdfChangePage(1)" class="p-1 rounded-lg hover:bg-plum-700" title="Pagina successiva">
-                    <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                    <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
                 </button>
-                <div class="w-px h-4 bg-plum-600 mx-0.5"></div>
+                <div class="w-px h-3.5 bg-plum-600 mx-0.5"></div>
+                <button type="button" onclick="pdfFitToPaneWidth()" class="px-1.5 py-0.5 rounded bg-plum-700 hover:bg-plum-600 text-[10px] font-bold" title="Adatta PDF alla larghezza dello schermo">Adatta</button>
                 <button type="button" onclick="pdfChangeZoom(-0.15)" class="px-1.5 py-0.5 rounded hover:bg-plum-700 text-xs font-bold">−</button>
-                <span id="pdf-zoom-text" class="text-xs font-semibold min-w-[40px] text-center">120%</span>
+                <span id="pdf-zoom-text" class="text-[11px] font-semibold min-w-[36px] text-center">100%</span>
                 <button type="button" onclick="pdfChangeZoom(0.15)" class="px-1.5 py-0.5 rounded hover:bg-plum-700 text-xs font-bold">+</button>
             </div>
 
-            <div class="flex items-center gap-1 bg-plum-800 rounded-xl px-2 py-1 border border-plum-700">
-                <i data-lucide="search" class="w-3.5 h-3.5 text-plum-200"></i>
-                <input type="text" id="pdf-search-input" onkeydown="if(event.key==='Enter') searchInsidePdf()" placeholder="Cerca nel PDF..." class="bg-transparent text-xs text-white placeholder-plum-300 w-24 sm:w-28 outline-none">
-                <button type="button" onclick="searchInsidePdf()" class="px-2 py-0.5 rounded bg-plum-600 hover:bg-plum-500 text-[11px] font-semibold">Trova</button>
-                <span id="pdf-search-status" class="text-[11px] text-plum-200"></span>
+            <div class="flex items-center gap-1 bg-plum-800 rounded-xl px-1.5 py-0.5 border border-plum-700">
+                <i data-lucide="search" class="w-3 h-3 text-plum-200"></i>
+                <input type="text" id="pdf-search-input" onkeydown="if(event.key==='Enter') searchInsidePdf()" placeholder="Cerca..." class="bg-transparent text-xs text-white placeholder-plum-300 w-16 sm:w-24 outline-none">
+                <button type="button" onclick="searchInsidePdf()" class="px-1.5 py-0.5 rounded bg-plum-600 hover:bg-plum-500 text-[10px] font-semibold">Trova</button>
+                <span id="pdf-search-status" class="text-[10px] text-plum-200"></span>
             </div>
 
             <div class="flex items-center gap-1 flex-wrap">
-                <button type="button" onclick="rotateActivePdf(90)" class="px-2 py-1.5 rounded-xl bg-plum-800 hover:bg-plum-700 text-xs font-semibold border border-plum-600 flex items-center gap-1" title="Ruota la pagina PDF se è capovolta">
-                    <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i> Ruota
+                <button type="button" onclick="rotateActivePdf(90)" class="px-2 py-1 rounded-xl bg-plum-800 hover:bg-plum-700 text-[11px] font-semibold border border-plum-600 flex items-center gap-1" title="Ruota pagina PDF">
+                    <i data-lucide="rotate-cw" class="w-3 h-3"></i> <span class="hidden sm:inline">Ruota</span>
                 </button>
-                <button type="button" onclick="toggleLockPdfScroll()" id="btn-lock-pdf-scroll" class="px-2 py-1.5 rounded-xl bg-plum-800 hover:bg-plum-700 text-xs font-semibold border border-plum-600 flex items-center gap-1" title="Blocca la posizione del PDF mentre scorri le note a destra">
-                    <i data-lucide="unlock" class="w-3.5 h-3.5"></i>
+                <button type="button" onclick="toggleLockPdfScroll()" id="btn-lock-pdf-scroll" class="px-2 py-1 rounded-xl bg-plum-800 hover:bg-plum-700 text-[11px] font-semibold border border-plum-600 flex items-center gap-1" title="Blocca PDF mentre scorri le note">
+                    <i data-lucide="lock" class="w-3 h-3"></i>
                     <span id="label-lock-pdf-scroll">Blocca PDF</span>
                 </button>
-                <button type="button" onclick="setPdfSplitRatio((state.pdfSplitPercent || 70) + 10)" class="px-2 py-1.5 rounded-xl bg-plum-800 hover:bg-plum-700 text-xs font-semibold border border-plum-600">+PDF</button>
-                <button type="button" onclick="setPdfSplitRatio(70)" class="px-2 py-1.5 rounded-xl bg-plum-800 hover:bg-plum-700 text-xs font-semibold border border-plum-600">70/30</button>
-                <button type="button" onclick="setPdfSplitRatio((state.pdfSplitPercent || 70) - 10)" class="px-2 py-1.5 rounded-xl bg-plum-800 hover:bg-plum-700 text-xs font-semibold border border-plum-600">+Note</button>
-                <button type="button" onclick="togglePdfNotesDrawer()" id="btn-toggle-pdf-notes" class="px-2.5 py-1.5 rounded-xl bg-ivory-100 text-plum-950 text-xs font-bold flex items-center gap-1">
-                    <i data-lucide="panel-right" class="w-3.5 h-3.5"></i>
+                <button type="button" onclick="setPdfSplitRatio((state.pdfSplitPercent || 70) + 10)" class="hidden sm:inline-flex px-1.5 py-1 rounded-xl bg-plum-800 hover:bg-plum-700 text-[11px] font-semibold border border-plum-600">+PDF</button>
+                <button type="button" onclick="setPdfSplitRatio(70)" class="hidden sm:inline-flex px-1.5 py-1 rounded-xl bg-plum-800 hover:bg-plum-700 text-[11px] font-semibold border border-plum-600">70/30</button>
+                <button type="button" onclick="setPdfSplitRatio((state.pdfSplitPercent || 70) - 10)" class="hidden sm:inline-flex px-1.5 py-1 rounded-xl bg-plum-800 hover:bg-plum-700 text-[11px] font-semibold border border-plum-600">+Note</button>
+                <button type="button" onclick="togglePdfNotesDrawer()" id="btn-toggle-pdf-notes" class="px-2 py-1 rounded-xl bg-ivory-100 text-plum-950 text-[11px] font-bold flex items-center gap-1">
+                    <i data-lucide="panel-right" class="w-3 h-3"></i>
                     <span id="label-toggle-pdf-notes">Nascondi Note</span>
                 </button>
-                <button type="button" onclick="exportAnnotatedPdf()" class="px-2.5 py-1.5 rounded-xl bg-burgundy-600 hover:bg-burgundy-500 text-white text-xs font-semibold flex items-center gap-1">
-                    <i data-lucide="download" class="w-3.5 h-3.5"></i> <span class="hidden sm:inline">Esporta PDF</span>
+                <button type="button" onclick="exportAnnotatedPdf()" class="px-2 py-1 rounded-xl bg-burgundy-600 hover:bg-burgundy-500 text-white text-[11px] font-semibold flex items-center gap-1">
+                    <i data-lucide="download" class="w-3 h-3"></i> <span class="hidden md:inline">Esporta PDF</span>
                 </button>
             </div>
         </div>
 
-        <div class="bg-ivory-200 border-b border-ivory-300 px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-1.5 text-xs">
+        <!-- Barra strumenti annotazioni PDF -->
+        <div class="bg-ivory-200 border-b border-ivory-300 px-1.5 sm:px-2.5 py-1 flex flex-wrap items-center justify-between gap-1 text-xs">
             <div class="flex items-center gap-1 flex-wrap">
-                <span class="font-bold text-plum-900 mr-0.5">Strumenti PDF:</span>
                 <button type="button" onclick="setPdfAnnotTool('scroll')" class="pdf-annot-btn px-2 py-1 rounded-xl font-semibold bg-white border border-plum-300 text-plum-900 flex items-center gap-1" data-tool="scroll">
                     <i data-lucide="hand" class="w-3.5 h-3.5"></i> Scorri
                 </button>
                 <button type="button" onclick="setPdfAnnotTool('pen')" class="pdf-annot-btn px-2 py-1 rounded-xl font-semibold bg-plum-700 text-white flex items-center gap-1" data-tool="pen">
                     <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> Penna
                 </button>
-                <button type="button" onclick="setPdfAnnotTool('highlight')" class="pdf-annot-btn px-2 py-1 rounded-xl font-semibold bg-[#FEF08A] border border-yellow-400 text-plum-950 flex items-center gap-1" data-tool="highlight">
+                <button type="button" onclick="setPdfAnnotTool('highlight')" class="pdf-annot-btn px-2 py-1 rounded-xl font-semibold bg-[#FEF08A] border border-yellow-500 text-plum-950 flex items-center gap-1" data-tool="highlight">
                     <i data-lucide="highlighter" class="w-3.5 h-3.5"></i> Evidenzia
                 </button>
                 <button type="button" onclick="addTextBoxToPdfPage()" class="px-2 py-1 rounded-xl font-semibold bg-white border border-plum-300 hover:bg-plum-50 text-plum-900 flex items-center gap-1">
-                    <i data-lucide="type" class="w-3.5 h-3.5 text-plum-700"></i> + Testo sul PDF
+                    <i data-lucide="type" class="w-3.5 h-3.5 text-plum-700"></i> + Testo
                 </button>
                 <label class="px-2 py-1 rounded-xl font-semibold bg-white border border-plum-300 hover:bg-plum-50 text-plum-900 flex items-center gap-1 cursor-pointer">
-                    <i data-lucide="image-plus" class="w-3.5 h-3.5 text-burgundy-600"></i> + Immagine sul PDF
+                    <i data-lucide="image-plus" class="w-3.5 h-3.5 text-burgundy-600"></i> + Foto
                     <input type="file" accept="image/jpeg,image/png,image/webp,image/*" onchange="addImageOverlayToPdfPage(event)" class="hidden">
                 </label>
-                <button type="button" onclick="setPdfAnnotTool('line')" class="pdf-annot-btn px-2 py-1 rounded-xl font-semibold bg-white border border-plum-300 text-plum-900 flex items-center gap-1" data-tool="line">
+                <button type="button" onclick="setPdfAnnotTool('line')" class="pdf-annot-btn px-1.5 py-1 rounded-xl font-semibold bg-white border border-plum-300 text-plum-900" data-tool="line">
                     <i data-lucide="underline" class="w-3.5 h-3.5"></i>
                 </button>
-                <button type="button" onclick="setPdfAnnotTool('circle')" class="pdf-annot-btn px-2 py-1 rounded-xl font-semibold bg-white border border-plum-300 text-plum-900 flex items-center gap-1" data-tool="circle">
+                <button type="button" onclick="setPdfAnnotTool('circle')" class="pdf-annot-btn px-1.5 py-1 rounded-xl font-semibold bg-white border border-plum-300 text-plum-900" data-tool="circle">
                     <i data-lucide="circle" class="w-3.5 h-3.5"></i>
                 </button>
-                <button type="button" onclick="setPdfAnnotTool('eraser')" class="pdf-annot-btn px-2 py-1 rounded-xl font-semibold bg-white border border-plum-300 text-plum-900 flex items-center gap-1" data-tool="eraser">
+                <button type="button" onclick="setPdfAnnotTool('eraser')" class="pdf-annot-btn px-1.5 py-1 rounded-xl font-semibold bg-white border border-plum-300 text-plum-900" data-tool="eraser">
                     <i data-lucide="eraser" class="w-3.5 h-3.5"></i>
                 </button>
             </div>
 
             <div class="flex items-center gap-1 flex-wrap">
-                <button type="button" onclick="setPdfPenColorDirect('#4E1F3D')" class="w-5 h-5 rounded-full bg-[#4E1F3D] border-2 border-white shadow-2xs"></button>
-                <button type="button" onclick="setPdfPenColorDirect('#8E2D45')" class="w-5 h-5 rounded-full bg-[#8E2D45] border-2 border-white shadow-2xs"></button>
-                <button type="button" onclick="setPdfPenColorDirect('#1D4ED8')" class="w-5 h-5 rounded-full bg-[#1D4ED8] border-2 border-white shadow-2xs"></button>
+                <button type="button" onclick="setPdfPenColorDirect('#4E1F3D')" class="w-5 h-5 rounded-full bg-[#4E1F3D] border-2 border-white shadow-2xs" title="Penna Prugna"></button>
+                <button type="button" onclick="setPdfPenColorDirect('#8E2D45')" class="w-5 h-5 rounded-full bg-[#8E2D45] border-2 border-white shadow-2xs" title="Penna Bordeaux"></button>
+                <button type="button" onclick="setPdfPenColorDirect('#1D4ED8')" class="w-5 h-5 rounded-full bg-[#1D4ED8] border-2 border-white shadow-2xs" title="Penna Blu"></button>
                 <div class="w-px h-4 bg-plum-300 mx-0.5"></div>
-                <button type="button" onclick="setPdfHighlightColorDirect('#FEF08A')" class="w-5 h-5 rounded-full bg-[#FEF08A] border-2 border-plum-500 shadow-2xs"></button>
-                <button type="button" onclick="setPdfHighlightColorDirect('#BBF7D0')" class="w-5 h-5 rounded-full bg-[#BBF7D0] border-2 border-plum-500 shadow-2xs"></button>
-                <button type="button" onclick="setPdfHighlightColorDirect('#BAE6FD')" class="w-5 h-5 rounded-full bg-[#BAE6FD] border-2 border-plum-500 shadow-2xs"></button>
-                <button type="button" onclick="setPdfHighlightColorDirect('#FBCFE8')" class="w-5 h-5 rounded-full bg-[#FBCFE8] border-2 border-plum-500 shadow-2xs"></button>
+                <button type="button" onclick="setPdfHighlightColorDirect('#FEF08A')" class="w-5 h-5 rounded-full bg-[#FEF08A] border-2 border-plum-500 shadow-2xs" title="Evidenziatore Giallo"></button>
+                <button type="button" onclick="setPdfHighlightColorDirect('#BBF7D0')" class="w-5 h-5 rounded-full bg-[#BBF7D0] border-2 border-plum-500 shadow-2xs" title="Evidenziatore Verde"></button>
+                <button type="button" onclick="setPdfHighlightColorDirect('#BAE6FD')" class="w-5 h-5 rounded-full bg-[#BAE6FD] border-2 border-plum-500 shadow-2xs" title="Evidenziatore Azzurro"></button>
+                <button type="button" onclick="setPdfHighlightColorDirect('#FBCFE8')" class="w-5 h-5 rounded-full bg-[#FBCFE8] border-2 border-plum-500 shadow-2xs" title="Evidenziatore Rosa"></button>
                 <input type="range" min="1" max="16" value="3" oninput="pdfAnnotWidth=parseInt(this.value,10)" class="w-12 accent-plum-700">
                 <button type="button" onclick="pdfUndoStroke()" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 font-semibold text-plum-900">Annulla</button>
                 <button type="button" onclick="pdfRedoStroke()" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 font-semibold text-plum-900">Ripristina</button>
             </div>
         </div>
 
+        <!-- Contenitore PDF + Note (margini stretti per massima visibilità sia in verticale che in orizzontale) -->
         <div id="pdf-split-container" class="flex-1 flex flex-col sm:flex-row overflow-hidden relative">
-            <div id="pdf-left-pane" style="width: 70%;" class="w-full sm:w-[70%] h-1/2 sm:h-full overflow-auto bg-ivory-300/70 p-2 flex justify-center items-start">
-                <div id="pdf-page-wrapper" class="relative bg-white shadow-xl rounded-lg overflow-hidden">
+            <div id="pdf-left-pane" style="width: 70%;" class="w-full sm:w-[70%] h-1/2 sm:h-full overflow-auto bg-ivory-300/70 p-1 flex justify-center items-start">
+                <div id="pdf-page-wrapper" class="relative bg-white shadow-lg rounded-md overflow-hidden shrink-0">
                     <canvas id="pdf-base-canvas" class="block"></canvas>
                     <canvas id="pdf-draw-canvas" class="absolute inset-0 touch-none cursor-crosshair"></canvas>
                     <div id="pdf-overlays-layer" class="absolute inset-0 pointer-events-none"></div>
@@ -494,17 +610,16 @@
                 <div class="w-1.5 h-16 rounded-full bg-plum-900"></div>
             </div>
 
-            <div id="pdf-right-pane" style="width: 30%;" class="w-full sm:w-[30%] h-1/2 sm:h-full overflow-y-auto bg-ivory-100 border-t-2 sm:border-t-0 border-plum-300 p-2.5 space-y-3">
-                <div class="flex items-center justify-between border-b border-ivory-300 pb-2">
-                    <div>
-                        <h3 class="font-serif font-bold text-sm text-plum-900">Appunti sul Documento</h3>
-                        <p class="text-[11px] text-plum-600">Aggiungi ed elimina note mentre leggi</p>
+            <div id="pdf-right-pane" style="width: 30%;" class="w-full sm:w-[30%] h-1/2 sm:h-full overflow-y-auto bg-ivory-100 border-t-2 sm:border-t-0 border-plum-300 p-1.5 space-y-2">
+                <div class="flex items-center justify-between border-b border-ivory-300 pb-1.5">
+                    <div class="min-w-0">
+                        <h3 class="font-serif font-bold text-xs sm:text-sm text-plum-900 truncate">Appunti sul Documento</h3>
                     </div>
-                    <button type="button" onclick="openNewNoteModal('pdf_active')" class="px-2.5 py-1.5 rounded-xl bg-plum-600 hover:bg-plum-700 text-white text-xs font-semibold flex items-center gap-1">
+                    <button type="button" onclick="openNewNoteModal('pdf_active')" class="px-2 py-1 rounded-xl bg-plum-600 hover:bg-plum-700 text-white text-xs font-semibold flex items-center gap-1 shrink-0">
                         <i data-lucide="plus" class="w-3.5 h-3.5"></i> Nuova Nota
                     </button>
                 </div>
-                <div id="pdf-side-notes-list" class="space-y-3"></div>
+                <div id="pdf-side-notes-list" class="space-y-2"></div>
             </div>
         </div>
     </div>
@@ -518,37 +633,40 @@
         <div id="sidebar-backdrop" onclick="toggleSidebar()" class="fixed inset-0 z-30 bg-plum-950/40 hidden lg:hidden"></div>
 
         <!-- SIDEBAR DI NAVIGAZIONE -->
-        <aside id="sidebar" class="no-print fixed lg:sticky top-0 left-0 z-40 h-screen w-72 bg-ivory-50 border-r border-plum-200 flex flex-col transition-transform duration-200 -translate-x-full lg:translate-x-0 shrink-0">
-            <div class="p-3.5 border-b border-plum-200 bg-plum-50/70 flex items-center justify-between">
-                <button type="button" onclick="navigateTo('dashboard')" class="flex items-center gap-2.5 text-left">
-                    <div class="w-9 h-9 rounded-2xl bg-plum-700 text-gold-200 flex items-center justify-center shadow-xs">
-                        <i data-lucide="book-open" class="w-5 h-5"></i>
+        <aside id="sidebar" class="no-print fixed lg:sticky top-0 left-0 z-40 h-screen w-68 bg-ivory-50 border-r border-plum-200 flex flex-col transition-transform duration-200 -translate-x-full lg:translate-x-0 shrink-0">
+            <div class="p-2.5 border-b border-plum-200 bg-plum-50/70 flex items-center justify-between">
+                <button type="button" onclick="navigateTo('dashboard')" class="flex items-center gap-2 text-left">
+                    <div class="w-8 h-8 rounded-2xl bg-plum-700 text-gold-200 flex items-center justify-center shadow-xs">
+                        <i data-lucide="book-open" class="w-4 h-4"></i>
                     </div>
                     <div>
-                        <span class="font-serif font-bold text-base text-plum-950 block leading-tight">Quaderno per lo studio</span>
-                        <span class="text-[11px] text-burgundy-600 font-medium">iPad &amp; iPhone Sync</span>
+                        <span class="font-serif font-bold text-sm text-plum-950 block leading-tight">Quaderno per lo studio</span>
+                        <span class="text-[10px] text-burgundy-600 font-medium">iPad &amp; iPhone Sync</span>
                     </div>
                 </button>
-                <button type="button" onclick="toggleSidebar()" class="lg:hidden p-1.5 rounded-xl hover:bg-plum-100 text-plum-800">
+                <button type="button" onclick="toggleSidebar()" class="lg:hidden p-1 rounded-xl hover:bg-plum-100 text-plum-800">
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
 
-            <nav id="nav-menu" class="flex-1 overflow-y-auto p-2.5 space-y-1 text-sm"></nav>
+            <nav id="nav-menu" class="flex-1 overflow-y-auto p-1.5 space-y-1 text-sm"></nav>
 
-            <div class="p-3 border-t border-plum-200 bg-plum-50/60 space-y-2">
-                <div class="flex items-center justify-between text-xs">
+            <div class="p-2.5 border-t border-plum-200 bg-plum-50/60 space-y-1.5">
+                <button type="button" onclick="openNewSessionModal()" class="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-burgundy-600 hover:bg-burgundy-700 text-white text-xs font-bold shadow-2xs">
+                    <i data-lucide="folder-plus" class="w-4 h-4"></i> + Aggiungi Sessione
+                </button>
+                <div class="flex items-center justify-between text-xs pt-0.5">
                     <span class="flex items-center gap-1.5 font-semibold text-plum-900">
-                        <span id="save-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-600"></span>
+                        <span id="save-dot" class="w-2 h-2 rounded-full bg-emerald-600"></span>
                         <span id="save-status-text">Salvato in locale</span>
                     </span>
                     <button type="button" onclick="openCloudSyncModal()" class="text-[11px] font-bold text-burgundy-600 underline">Sync Cloud</button>
                 </div>
                 <div class="grid grid-cols-2 gap-1.5">
-                    <button type="button" onclick="openCloudSyncModal()" class="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-plum-700 hover:bg-plum-800 text-white text-xs font-semibold">
+                    <button type="button" onclick="openCloudSyncModal()" class="flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl bg-plum-700 hover:bg-plum-800 text-white text-xs font-semibold">
                         <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Sincronizza
                     </button>
-                    <label class="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-xl bg-white hover:bg-plum-50 text-plum-900 border border-plum-300 text-xs font-semibold cursor-pointer">
+                    <label class="flex items-center justify-center gap-1 px-2 py-1.5 rounded-xl bg-white hover:bg-plum-50 text-plum-900 border border-plum-300 text-xs font-semibold cursor-pointer">
                         <i data-lucide="upload" class="w-3.5 h-3.5"></i> Ripristina
                         <input type="file" accept=".json" onchange="importFullBackup(event)" class="hidden">
                     </label>
@@ -559,26 +677,26 @@
         <!-- CONTENUTO PRINCIPALE -->
         <div id="main-content" class="flex-1 flex flex-col min-w-0">
 
-            <!-- BARRA SUPERIORE COMPATTA -->
-            <header id="main-header" class="no-print sticky top-0 z-20 bg-ivory-100/95 backdrop-blur-xs border-b border-plum-200 px-2 sm:px-3 py-1.5">
-                <div class="w-full flex flex-wrap items-center justify-between gap-1.5">
-                    <div class="flex items-center gap-1.5">
-                        <button type="button" onclick="toggleSidebar()" class="p-2 rounded-xl bg-white border border-plum-300 text-plum-900 hover:bg-plum-50" title="Menu sezioni">
-                            <i data-lucide="menu" class="w-5 h-5"></i>
+            <!-- BARRA SUPERIORE ULTRA-COMPATTA -->
+            <header id="main-header" class="no-print sticky top-0 z-20 bg-ivory-100/95 backdrop-blur-xs border-b border-plum-200 px-1.5 sm:px-2 py-1">
+                <div class="w-full flex flex-wrap items-center justify-between gap-1">
+                    <div class="flex items-center gap-1">
+                        <button type="button" onclick="toggleSidebar()" class="p-1.5 rounded-xl bg-white border border-plum-300 text-plum-900 hover:bg-plum-50" title="Menu sezioni">
+                            <i data-lucide="menu" class="w-4 h-4"></i>
                         </button>
 
                         <div class="flex items-center gap-0.5 bg-white border border-plum-300 rounded-2xl p-0.5 shadow-2xs">
                             <button type="button" onclick="shiftWeek(-1)" class="p-1 rounded-xl hover:bg-plum-50 text-plum-800" title="Settimana precedente">
-                                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+                                <i data-lucide="chevron-left" class="w-3.5 h-3.5"></i>
                             </button>
-                            <div class="px-1.5 text-center">
-                                <span class="block text-[9px] uppercase tracking-wider text-burgundy-600 font-bold">
+                            <div class="px-1 text-center">
+                                <span class="block text-[9px] uppercase tracking-wider text-burgundy-600 font-bold leading-none">
                                     <span id="week-lock-badge">Settimana di studio</span>
                                 </span>
-                                <span id="current-week-label" class="text-xs font-serif font-bold text-plum-950"></span>
+                                <span id="current-week-label" class="text-[11px] sm:text-xs font-serif font-bold text-plum-950"></span>
                             </div>
                             <button type="button" onclick="shiftWeek(1)" class="p-1 rounded-xl hover:bg-plum-50 text-plum-800" title="Settimana successiva">
-                                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+                                <i data-lucide="chevron-right" class="w-3.5 h-3.5"></i>
                             </button>
                         </div>
 
@@ -604,16 +722,16 @@
                         </button>
 
                         <div class="flex items-center bg-white border border-plum-300 rounded-xl p-0.5">
-                            <button type="button" onclick="changeGlobalFontSize(-1)" class="px-1.5 py-1 text-xs font-bold text-plum-900 hover:bg-plum-50 rounded-lg">A−</button>
-                            <button type="button" onclick="changeGlobalFontSize(1)" class="px-1.5 py-1 text-xs font-bold text-plum-900 hover:bg-plum-50 rounded-lg">A+</button>
+                            <button type="button" onclick="changeGlobalFontSize(-1)" class="px-1.5 py-0.5 text-xs font-bold text-plum-900 hover:bg-plum-50 rounded-lg">A−</button>
+                            <button type="button" onclick="changeGlobalFontSize(1)" class="px-1.5 py-0.5 text-xs font-bold text-plum-900 hover:bg-plum-50 rounded-lg">A+</button>
                         </div>
 
                         <button type="button" onclick="navigateTo('archivio')" class="p-1.5 rounded-xl border border-plum-300 bg-white hover:bg-plum-50 text-plum-900" title="Cerca nelle settimane">
-                            <i data-lucide="search" class="w-4 h-4"></i>
+                            <i data-lucide="search" class="w-3.5 h-3.5"></i>
                         </button>
 
                         <button type="button" onclick="openCloudSyncModal()" class="p-1.5 rounded-xl border border-plum-300 bg-white hover:bg-plum-50 text-plum-900" title="Impostazioni & Sincronizzazione">
-                            <i data-lucide="settings" class="w-4 h-4"></i>
+                            <i data-lucide="settings" class="w-3.5 h-3.5"></i>
                         </button>
                     </div>
                 </div>
@@ -624,27 +742,27 @@
         </div>
     </div>
 
-    <!-- BARRA DI NAVIGAZIONE INFERIORE A 5 VOCI -->
-    <nav id="mobile-bottom-nav" class="no-print fixed bottom-0 inset-x-0 z-30 bg-[#FAF5EF]/95 backdrop-blur-md border-t border-plum-200 px-2 py-1.5 flex items-center justify-around lg:hidden">
-        <button type="button" onclick="navigateTo('dashboard')" id="bnav-dashboard" class="px-3.5 py-1.5 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition">
-            <i data-lucide="home" class="w-5 h-5"></i>
+    <!-- BARRA DI NAVIGAZIONE INFERIORE PULITA -->
+    <nav id="mobile-bottom-nav" class="no-print fixed bottom-0 inset-x-0 z-30 bg-[#FAF5EF]/95 backdrop-blur-md border-t border-plum-200 px-1.5 py-1 flex items-center justify-around lg:hidden">
+        <button type="button" onclick="navigateTo('dashboard')" id="bnav-dashboard" class="px-3 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition">
+            <i data-lucide="home" class="w-4 h-4"></i>
             <span class="text-[10px] font-bold">Home</span>
         </button>
-        <button type="button" onclick="navigateTo('torre')" id="bnav-torre" class="px-3 py-1.5 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition">
-            <i data-lucide="calendar" class="w-5 h-5"></i>
-            <span class="text-[10px] font-semibold">Calendario</span>
+        <button type="button" onclick="navigateTo('torre')" id="bnav-torre" class="px-3 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition">
+            <i data-lucide="castle" class="w-4 h-4"></i>
+            <span class="text-[10px] font-semibold">Torre</span>
         </button>
-        <button type="button" onclick="navigateTo('pubblicazioni')" id="bnav-pubblicazioni" class="px-3 py-1.5 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition">
-            <i data-lucide="file-text" class="w-5 h-5"></i>
-            <span class="text-[10px] font-semibold">Pubblicazioni</span>
+        <button type="button" onclick="navigateTo('vita')" id="bnav-vita" class="px-3 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition">
+            <i data-lucide="users" class="w-4 h-4"></i>
+            <span class="text-[10px] font-semibold">Vita cristiana</span>
         </button>
-        <button type="button" onclick="navigateTo('appunti')" id="bnav-appunti" class="px-3 py-1.5 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition">
-            <i data-lucide="bookmark" class="w-5 h-5"></i>
-            <span class="text-[10px] font-semibold">Segnalibri</span>
-        </button>
-        <button type="button" onclick="navigateTo('studio_personale')" id="bnav-studio_personale" class="px-3 py-1.5 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition">
-            <i data-lucide="bar-chart-2" class="w-5 h-5"></i>
+        <button type="button" onclick="navigateTo('studio_personale')" id="bnav-studio_personale" class="px-3 py-1 rounded-2xl flex flex-col items-center justify-center gap-0.5 transition">
+            <i data-lucide="graduation-cap" class="w-4 h-4"></i>
             <span class="text-[10px] font-semibold">Studio personale</span>
+        </button>
+        <button type="button" onclick="openNewSessionModal()" class="px-3 py-1 rounded-2xl text-burgundy-700 hover:bg-plum-100 flex flex-col items-center justify-center gap-0.5 transition">
+            <i data-lucide="folder-plus" class="w-4 h-4"></i>
+            <span class="text-[10px] font-bold">+ Sessione</span>
         </button>
     </nav>
 
@@ -721,25 +839,38 @@
         }
 
         /* =========================================================
-           2. STATO APPLICAZIONE & SINCRONIZZAZIONE AUTOMATICA IPAD <-> IPHONE
+           2. STATO APPLICAZIONE, SESSIONI PERSONALIZZABILI E SINCRONIZZAZIONE
            ========================================================= */
         const STORAGE_KEY_V3 = 'quaderno_per_lo_studio_v3';
         const STORAGE_KEY_V2 = 'quaderno_adunanze_anna_v2';
 
-        const SECTIONS_META = [
-            { id: 'dashboard', title: 'Adunanza settimanale', shortSub: 'Preparazione completa', icon: 'calendar', desc: 'Panoramica della settimana e accesso rapido' },
-            { id: 'torre', title: 'Torre di Guardia', shortSub: "Studio dell'articolo", icon: 'castle', desc: 'Studio per paragrafi, commenti e foglio Apple Pencil' },
-            { id: 'tesori', title: 'Tesori della Parola di Dio', shortSub: 'Punti principali e applicazioni', icon: 'gem', desc: 'Aggiungi ed elimina le tue note e consulta il PDF' },
-            { id: 'gemme', title: 'Gemme spirituali', shortSub: 'Spunti e risposte', icon: 'sprout', desc: 'Aggiungi ed elimina le tue note e consulta il PDF' },
-            { id: 'vita', title: 'Vita cristiana', shortSub: 'Preparazione e idee', icon: 'users', desc: 'Seconda parte dell’adunanza infrasettimanale, note e PDF' },
-            { id: 'studio_libro', title: 'Studio del libro', shortSub: 'Capitolo per capitolo', icon: 'book-open', desc: 'Capitoli, paragrafi, commenti e appunti a mano' },
-            { id: 'broadcasting', title: 'JW Broadcasting', shortSub: 'Riassunti e spunti', icon: 'film', desc: 'Programmi mensili, note personalizzate e PDF' },
-            { id: 'appunti', title: 'Le mie note', shortSub: 'Appunti, esperienze e idee', icon: 'bookmark', desc: 'Tutte le note personalizzabili con tastiera o penna' },
-            { id: 'studio_personale', title: 'Studio personale', shortSub: 'Approfondimenti', icon: 'graduation-cap', desc: 'Note di approfondimento, dimostrazioni e PDF' },
-            { id: 'pubblicazioni', title: 'Pubblicazioni', shortSub: 'I tuoi PDF annotati', icon: 'file-text', desc: 'I tuoi PDF caricati con annotazioni, testi e immagini' },
-            { id: 'discorso', title: 'Discorso pubblico', shortSub: 'Appunti del discorso', icon: 'mic', desc: 'Note del discorso pubblico e PDF di riferimento' },
-            { id: 'archivio', title: 'Archivio delle settimane precedenti', shortSub: 'Cronologia studio', icon: 'archive', desc: 'Consulta e riapri tutte le settimane studiate' }
+        const BASE_SECTIONS_META = [
+            { id: 'dashboard', title: 'Home', shortSub: 'Pagina principale', icon: 'home', isCustom: false },
+            { id: 'torre', title: 'Torre di Guardia', shortSub: "Studio dell'articolo", icon: 'castle', isCustom: false },
+            { id: 'tesori', title: 'Tesori della Parola di Dio', shortSub: 'Punti principali e applicazioni', icon: 'gem', isCustom: false },
+            { id: 'gemme', title: 'Gemme spirituali', shortSub: 'Spunti e risposte', icon: 'sprout', isCustom: false },
+            { id: 'vita', title: 'Vita cristiana', shortSub: 'Preparazione e idee', icon: 'users', isCustom: false },
+            { id: 'studio_libro', title: 'Studio del libro', shortSub: 'Capitolo per capitolo', icon: 'book-open', isCustom: false },
+            { id: 'broadcasting', title: 'JW Broadcasting', shortSub: 'Riassunti e spunti', icon: 'film', isCustom: false },
+            { id: 'studio_personale', title: 'Studio personale', shortSub: 'Approfondimenti e note', icon: 'graduation-cap', isCustom: false },
+            { id: 'discorso', title: 'Discorso pubblico', shortSub: 'Appunti del discorso', icon: 'mic', isCustom: false },
+            { id: 'archivio', title: 'Archivio delle settimane precedenti', shortSub: 'Settimane precedenti', icon: 'archive', isCustom: false }
         ];
+
+        function getAllSectionsMeta() {
+            const customList = Array.isArray(state.customSessions)
+                ? state.customSessions.map(cs => ({
+                    id: cs.id,
+                    title: cs.title,
+                    shortSub: cs.sub || 'Sessione personalizzata',
+                    icon: cs.icon || 'calendar-heart',
+                    isCustom: true
+                }))
+                : [];
+            const beforeArchive = BASE_SECTIONS_META.slice(0, -1);
+            const archiveSec = BASE_SECTIONS_META[BASE_SECTIONS_META.length - 1];
+            return [...beforeArchive, ...customList, archiveSec];
+        }
 
         function getMondayOfWeek(date) {
             const d = new Date(date);
@@ -825,6 +956,7 @@
                 autoSync: true,
                 lastSyncTime: ''
             },
+            customSessions: [],
             weeks: {},
             customNotes: [],
             studioPersonale: [],
@@ -866,6 +998,9 @@
                     lastSyncTime: new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
                 }
             };
+            if (['appunti', 'pubblicazioni'].includes(state.activeSection)) {
+                state.activeSection = 'dashboard';
+            }
             if (state.lockedWeekKey) state.currentWeekKey = state.lockedWeekKey;
             localStorage.setItem(STORAGE_KEY_V3, JSON.stringify(state));
             dbSaveStateMirror(state);
@@ -898,6 +1033,7 @@
                     lastUpdatedAt: state.lastUpdatedAt || Date.now(),
                     lockedWeekKey: state.lockedWeekKey,
                     currentWeekKey: state.currentWeekKey,
+                    customSessions: state.customSessions || [],
                     weeks: state.weeks,
                     customNotes: state.customNotes
                 };
@@ -1028,7 +1164,7 @@
                                 customNotes: Array.isArray(v2.appuntiPersonali)
                                     ? v2.appuntiPersonali.map(ap => ({
                                         id: ap.id || ('note_' + Date.now()),
-                                        section: 'appunti',
+                                        section: 'studio_personale',
                                         weekKey: null,
                                         pdfId: null,
                                         title: ap.titolo || 'Nota personale',
@@ -1052,8 +1188,13 @@
                 state = {
                     ...state,
                     ...loaded,
+                    customSessions: Array.isArray(loaded.customSessions) ? loaded.customSessions : [],
                     syncConfig: { ...state.syncConfig, ...(loaded.syncConfig || {}) }
                 };
+            }
+
+            if (['appunti', 'pubblicazioni'].includes(state.activeSection)) {
+                state.activeSection = 'dashboard';
             }
 
             if (state.lockedWeekKey) {
@@ -1099,29 +1240,115 @@
         }
 
         /* =========================================================
+           2B. CREAZIONE, RINOMINA ED ELIMINAZIONE SESSIONI PERSONALIZZATE
+           ========================================================= */
+        function openNewSessionModal() {
+            document.getElementById('new-session-title-input').value = '';
+            document.getElementById('new-session-sub-input').value = '';
+            const m = document.getElementById('new-session-modal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+            if (window.lucide) lucide.createIcons();
+            setTimeout(() => document.getElementById('new-session-title-input').focus(), 50);
+        }
+
+        function closeNewSessionModal() {
+            const m = document.getElementById('new-session-modal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+        }
+
+        function fillSuggestedSession(title, sub) {
+            document.getElementById('new-session-title-input').value = title;
+            document.getElementById('new-session-sub-input').value = sub;
+        }
+
+        function confirmCreateCustomSession() {
+            const titleVal = document.getElementById('new-session-title-input').value.trim();
+            if (!titleVal) {
+                alert('Scrivi il nome della nuova sessione (es. Assemblea di circoscrizione, Congresso...).');
+                return;
+            }
+            const subVal = document.getElementById('new-session-sub-input').value.trim() || 'Appunti, discorsi e PDF';
+            const iconRadio = document.querySelector('input[name="new-session-icon"]:checked');
+            const iconVal = iconRadio ? iconRadio.value : 'calendar-heart';
+
+            const newSec = {
+                id: 'csec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+                title: titleVal,
+                sub: subVal,
+                icon: iconVal,
+                createdAt: new Date().toLocaleDateString('it-IT')
+            };
+
+            if (!Array.isArray(state.customSessions)) state.customSessions = [];
+            state.customSessions.push(newSec);
+            state.activeSection = newSec.id;
+            saveState();
+            closeNewSessionModal();
+            renderSidebar();
+            renderActiveSection();
+        }
+
+        function updateCustomSessionTitle(secId, newTitle) {
+            const sec = (state.customSessions || []).find(s => s.id === secId);
+            if (sec && newTitle.trim()) {
+                sec.title = newTitle.trim();
+                saveState();
+                renderSidebar();
+            }
+        }
+
+        let pendingDeleteSessionId = null;
+        let pendingDeleteSessionTimer = null;
+
+        function requestDeleteCustomSession(secId) {
+            if (pendingDeleteSessionId === secId) {
+                clearTimeout(pendingDeleteSessionTimer);
+                pendingDeleteSessionId = null;
+                state.customSessions = (state.customSessions || []).filter(s => s.id !== secId);
+                state.customNotes = state.customNotes.filter(n => n.section !== secId);
+                state.activeSection = 'dashboard';
+                saveState();
+                renderSidebar();
+                renderActiveSection();
+            } else {
+                pendingDeleteSessionId = secId;
+                renderActiveSection();
+                clearTimeout(pendingDeleteSessionTimer);
+                pendingDeleteSessionTimer = setTimeout(() => {
+                    pendingDeleteSessionId = null;
+                    renderActiveSection();
+                }, 4000);
+            }
+        }
+
+        /* =========================================================
            3. NAVIGAZIONE, SETTIMANA BLOCCATA E CONTROLLI UI
            ========================================================= */
         function renderSidebar() {
             const nav = document.getElementById('nav-menu');
-            nav.innerHTML = SECTIONS_META.map(sec => {
+            const allSecs = getAllSectionsMeta();
+            nav.innerHTML = allSecs.map(sec => {
                 const active = state.activeSection === sec.id;
                 return `
-                    <button type="button" onclick="navigateTo('${sec.id}')" class="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-2xl text-left transition ${active ? 'bg-plum-700 text-white font-semibold shadow-xs' : 'text-plum-950 hover:bg-plum-100/70 font-medium'}">
+                    <button type="button" onclick="navigateTo('${sec.id}')" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-2xl text-left transition ${active ? 'bg-plum-700 text-white font-semibold shadow-xs' : 'text-plum-950 hover:bg-plum-100/70 font-medium'}">
                         <span class="w-7 h-7 rounded-xl flex items-center justify-center shrink-0 ${active ? 'bg-white/20 text-gold-200' : 'bg-plum-100 text-plum-800'}">
                             <i data-lucide="${sec.icon}" class="w-4 h-4"></i>
                         </span>
-                        <span class="truncate text-[13px]">${sec.title}</span>
+                        <span class="truncate text-[13px] flex-1">${escapeHtml(sec.title)}</span>
+                        ${sec.isCustom ? `<span class="text-[9px] px-1.5 py-0.5 rounded bg-burgundy-100 text-burgundy-700 font-bold shrink-0">Mia</span>` : ''}
                     </button>
                 `;
             }).join('');
 
-            ['dashboard', 'torre', 'pubblicazioni', 'appunti', 'studio_personale'].forEach(id => {
+            ['dashboard', 'torre', 'vita', 'studio_personale'].forEach(id => {
                 const btn = document.getElementById('bnav-' + id);
                 if (!btn) return;
                 if (state.activeSection === id) {
-                    btn.className = 'px-3.5 py-1.5 rounded-2xl bg-gradient-to-b from-[#6E2452] to-[#441132] text-[#ECCB9A] flex flex-col items-center justify-center gap-0.5 shadow-sm transition';
+                    btn.className = 'px-3 py-1 rounded-2xl bg-gradient-to-b from-[#6E2452] to-[#441132] text-[#ECCB9A] flex flex-col items-center justify-center gap-0.5 shadow-sm transition';
                 } else {
-                    btn.className = 'px-3 py-1.5 rounded-2xl text-plum-900 hover:bg-plum-100 flex flex-col items-center justify-center gap-0.5 transition';
+                    btn.className = 'px-2.5 py-1 rounded-2xl text-plum-900 hover:bg-plum-100 flex flex-col items-center justify-center gap-0.5 transition';
                 }
             });
         }
@@ -1231,44 +1458,44 @@
            ========================================================= */
         function renderRichTextToolbarHtml(targetDivId) {
             return `
-                <div class="no-print bg-plum-50 border border-plum-200 rounded-xl px-1.5 py-1 flex flex-wrap items-center gap-1 text-xs mb-1.5">
-                    <select onchange="execRichFontFamily('${targetDivId}', this.value)" class="bg-white border border-plum-200 rounded-lg px-1.5 py-1 text-[11px] font-medium text-plum-900">
+                <div class="no-print bg-plum-50 border border-plum-200 rounded-xl px-1.5 py-1 flex flex-wrap items-center gap-1 text-xs mb-1">
+                    <select onchange="execRichFontFamily('${targetDivId}', this.value)" class="bg-white border border-plum-200 rounded-lg px-1.5 py-0.5 text-[11px] font-medium text-plum-900">
                         <option value="Inter, sans-serif">Sans</option>
                         <option value="Lora, serif">Serif</option>
                         <option value="Merriweather, serif">Libro</option>
                         <option value="monospace">Mono</option>
                     </select>
-                    <select onchange="execRichFontSize('${targetDivId}', this.value)" class="bg-white border border-plum-200 rounded-lg px-1.5 py-1 text-[11px] font-medium text-plum-900">
+                    <select onchange="execRichFontSize('${targetDivId}', this.value)" class="bg-white border border-plum-200 rounded-lg px-1.5 py-0.5 text-[11px] font-medium text-plum-900">
                         <option value="3">Normale</option>
                         <option value="2">Piccolo</option>
                         <option value="4">Medio-Grande</option>
                         <option value="5">Grande</option>
                         <option value="6">Molto Grande</option>
                     </select>
-                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','bold')" class="px-2 py-1 rounded-lg bg-white border border-plum-200 font-bold hover:bg-plum-100">B</button>
-                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','italic')" class="px-2 py-1 rounded-lg bg-white border border-plum-200 italic font-serif hover:bg-plum-100">I</button>
-                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','underline')" class="px-2 py-1 rounded-lg bg-white border border-plum-200 underline hover:bg-plum-100">U</button>
-                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','insertUnorderedList')" class="p-1.5 rounded-lg bg-white border border-plum-200 hover:bg-plum-100">
+                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','bold')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-200 font-bold hover:bg-plum-100">B</button>
+                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','italic')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-200 italic font-serif hover:bg-plum-100">I</button>
+                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','underline')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-200 underline hover:bg-plum-100">U</button>
+                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','insertUnorderedList')" class="p-1 rounded-lg bg-white border border-plum-200 hover:bg-plum-100">
                         <i data-lucide="list" class="w-3.5 h-3.5"></i>
                     </button>
-                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','insertOrderedList')" class="p-1.5 rounded-lg bg-white border border-plum-200 hover:bg-plum-100">
+                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','insertOrderedList')" class="p-1 rounded-lg bg-white border border-plum-200 hover:bg-plum-100">
                         <i data-lucide="list-ordered" class="w-3.5 h-3.5"></i>
                     </button>
-                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','justifyLeft')" class="p-1.5 rounded-lg bg-white border border-plum-200 hover:bg-plum-100">
+                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','justifyLeft')" class="p-1 rounded-lg bg-white border border-plum-200 hover:bg-plum-100">
                         <i data-lucide="align-left" class="w-3.5 h-3.5"></i>
                     </button>
-                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','justifyCenter')" class="p-1.5 rounded-lg bg-white border border-plum-200 hover:bg-plum-100">
+                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','justifyCenter')" class="p-1 rounded-lg bg-white border border-plum-200 hover:bg-plum-100">
                         <i data-lucide="align-center" class="w-3.5 h-3.5"></i>
                     </button>
-                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','justifyRight')" class="p-1.5 rounded-lg bg-white border border-plum-200 hover:bg-plum-100">
+                    <button type="button" onmousedown="event.preventDefault(); focusAndExec('${targetDivId}','justifyRight')" class="p-1 rounded-lg bg-white border border-plum-200 hover:bg-plum-100">
                         <i data-lucide="align-right" class="w-3.5 h-3.5"></i>
                     </button>
-                    <input type="color" value="#4E1F3D" onchange="focusAndExec('${targetDivId}','foreColor', this.value)" class="w-6 h-6 rounded border border-plum-200 cursor-pointer">
+                    <input type="color" value="#4E1F3D" onchange="focusAndExec('${targetDivId}','foreColor', this.value)" class="w-5 h-5 rounded border border-plum-200 cursor-pointer">
                     <button type="button" onmousedown="event.preventDefault(); focusAndHighlight('${targetDivId}','#FEF08A')" class="w-5 h-5 rounded-full bg-[#FEF08A] border border-plum-300"></button>
                     <button type="button" onmousedown="event.preventDefault(); focusAndHighlight('${targetDivId}','#BBF7D0')" class="w-5 h-5 rounded-full bg-[#BBF7D0] border border-plum-300"></button>
                     <button type="button" onmousedown="event.preventDefault(); focusAndHighlight('${targetDivId}','#BAE6FD')" class="w-5 h-5 rounded-full bg-[#BAE6FD] border border-plum-300"></button>
                     <button type="button" onmousedown="event.preventDefault(); focusAndHighlight('${targetDivId}','#FBCFE8')" class="w-5 h-5 rounded-full bg-[#FBCFE8] border border-plum-300"></button>
-                    <button type="button" onclick="copyRichBoxText('${targetDivId}')" class="px-2 py-1 rounded-lg bg-white border border-plum-200 hover:bg-plum-100 text-[11px] font-semibold">Copia</button>
+                    <button type="button" onclick="copyRichBoxText('${targetDivId}')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-200 hover:bg-plum-100 text-[11px] font-semibold">Copia</button>
                 </div>
             `;
         }
@@ -1336,14 +1563,14 @@
         });
 
         /* =========================================================
-           5. PENNA DIGITALE VETTORIALE
+           5. PENNA DIGITALE ULTRA-FLUIDA (DISEGNO DIRETTO INCREMENTALE + COALESCED EVENTS)
            ========================================================= */
         const padControllers = {};
 
         function renderHandwritingPadHtml(padId, paperType, padHeight, title = 'Scrittura con Apple Pencil') {
             return `
                 <div class="flex flex-col border-2 border-plum-200 rounded-2xl overflow-hidden bg-ivory-50 shadow-2xs">
-                    <div class="no-print bg-plum-50 border-b border-plum-200 px-2 py-1 flex flex-wrap items-center justify-between gap-1">
+                    <div class="no-print bg-plum-50 border-b border-plum-200 px-1.5 py-1 flex flex-wrap items-center justify-between gap-1">
                         <span class="text-[11px] font-bold text-plum-900 flex items-center gap-1">
                             <i data-lucide="pen-tool" class="w-3.5 h-3.5 text-burgundy-600"></i> ${title}
                         </span>
@@ -1403,12 +1630,14 @@
                 const wrap = canvas.parentElement;
                 if (!wrap) return;
                 const rect = wrap.getBoundingClientRect();
-                const w = Math.max(200, Math.floor(rect.width));
-                const h = Math.max(140, Math.floor(rect.height));
+                const w = Math.max(160, Math.floor(rect.width));
+                const h = Math.max(120, Math.floor(rect.height));
                 const dpr = window.devicePixelRatio || 1;
 
-                canvas.width = w * dpr;
-                canvas.height = h * dpr;
+                if (canvas.width !== w * dpr || canvas.height !== h * dpr) {
+                    canvas.width = w * dpr;
+                    canvas.height = h * dpr;
+                }
 
                 const obj = findDataObjByPadId(padId);
                 if (!padControllers[padId]) {
@@ -1429,6 +1658,30 @@
             });
         }
 
+        function drawSmoothStrokeOnContext(ctx, st) {
+            if (!st.points || st.points.length < 1) return;
+            ctx.save();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = st.color;
+            ctx.lineWidth = st.width;
+            ctx.beginPath();
+            ctx.moveTo(st.points[0].x, st.points[0].y);
+            if (st.points.length === 1) {
+                ctx.lineTo(st.points[0].x + 0.2, st.points[0].y + 0.2);
+            } else {
+                for (let i = 1; i < st.points.length; i++) {
+                    const midX = (st.points[i - 1].x + st.points[i].x) / 2;
+                    const midY = (st.points[i - 1].y + st.points[i].y) / 2;
+                    ctx.quadraticCurveTo(st.points[i - 1].x, st.points[i - 1].y, midX, midY);
+                }
+                const last = st.points[st.points.length - 1];
+                ctx.lineTo(last.x, last.y);
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
+
         function redrawVectorPad(canvas, padId) {
             const ctrl = padControllers[padId];
             if (!ctrl) return;
@@ -1446,30 +1699,16 @@
             }
 
             ctrl.strokes.forEach((st, idx) => {
-                if (!st.points || st.points.length < 1) return;
-                ctx.save();
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = st.color;
-                ctx.lineWidth = st.width;
-                ctx.beginPath();
-                ctx.moveTo(st.points[0].x, st.points[0].y);
-                for (let i = 1; i < st.points.length; i++) {
-                    const midX = (st.points[i - 1].x + st.points[i].x) / 2;
-                    const midY = (st.points[i - 1].y + st.points[i].y) / 2;
-                    ctx.quadraticCurveTo(st.points[i - 1].x, st.points[i - 1].y, midX, midY);
-                }
-                if (st.points.length === 1) ctx.lineTo(st.points[0].x + 0.1, st.points[0].y + 0.1);
-                ctx.stroke();
-
+                drawSmoothStrokeOnContext(ctx, st);
                 if (ctrl.mode === 'move' && idx === ctrl.selectedIdx) {
                     const box = getStrokeBounds(st);
+                    ctx.save();
                     ctx.strokeStyle = '#8E2D45';
                     ctx.lineWidth = 1.5;
                     ctx.setLineDash([4, 4]);
                     ctx.strokeRect(box.minX - 6, box.minY - 6, (box.maxX - box.minX) + 12, (box.maxY - box.minY) + 12);
+                    ctx.restore();
                 }
-                ctx.restore();
             });
             ctx.restore();
         }
@@ -1489,50 +1728,99 @@
             if (canvas.dataset.bound === '1') return;
             canvas.dataset.bound = '1';
             let active = false;
+            let activePointerId = null;
             let currentStroke = null;
             let lastPt = null;
 
-            const getPt = (e) => {
+            // Impedisce a Safari iOS di intercettare il primo tocco della penna
+            canvas.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+
+            const getPtFromEvent = (ev) => {
                 const r = canvas.getBoundingClientRect();
-                return { x: e.clientX - r.left, y: e.clientY - r.top };
+                return { x: ev.clientX - r.left, y: ev.clientY - r.top };
             };
 
             canvas.addEventListener('pointerdown', (e) => {
+                if (active) return;
                 e.preventDefault();
-                canvas.setPointerCapture(e.pointerId);
+                try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+                activePointerId = e.pointerId;
                 const ctrl = padControllers[padId];
-                const pt = getPt(e);
+                const pt = getPtFromEvent(e);
                 active = true;
                 lastPt = pt;
 
                 if (ctrl.mode === 'pen') {
-                    const pressure = e.pressure && e.pressure > 0 ? e.pressure : 0.5;
-                    currentStroke = { color: ctrl.color, width: Math.max(1, ctrl.width * (0.7 + pressure * 0.6)), points: [pt] };
+                    const pressure = (e.pressure && e.pressure > 0 && e.pressure !== 0.5) ? e.pressure : 0.5;
+                    currentStroke = { color: ctrl.color, width: Math.max(1.2, ctrl.width * (0.75 + pressure * 0.5)), points: [pt] };
                     ctrl.strokes.push(currentStroke);
                     ctrl.redoStack = [];
-                    redrawVectorPad(canvas, padId);
+
+                    // Disegno immediato del punto iniziale senza ridisegnare tutto
+                    const dpr = window.devicePixelRatio || 1;
+                    const ctx = canvas.getContext('2d');
+                    ctx.save();
+                    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                    ctx.fillStyle = currentStroke.color;
+                    ctx.beginPath();
+                    ctx.arc(pt.x, pt.y, currentStroke.width / 2, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
                 } else if (ctrl.mode === 'eraser') {
                     eraseAtPoint(ctrl, pt, 16);
                     redrawVectorPad(canvas, padId);
                 } else if (ctrl.mode === 'move') {
-                    ctrl.selectedIdx = findStrokeAtPoint(ctrl.strokes, pt, 14);
+                    ctrl.selectedIdx = findStrokeAtPoint(ctrl.strokes, pt, 16);
                     redrawVectorPad(canvas, padId);
                 }
             });
 
             canvas.addEventListener('pointermove', (e) => {
-                if (!active) return;
+                if (!active || (activePointerId !== null && e.pointerId !== activePointerId)) return;
                 e.preventDefault();
                 const ctrl = padControllers[padId];
-                const pt = getPt(e);
+                const events = (typeof e.getCoalescedEvents === 'function') ? e.getCoalescedEvents() : [e];
 
                 if (ctrl.mode === 'pen' && currentStroke) {
-                    currentStroke.points.push(pt);
-                    redrawVectorPad(canvas, padId);
+                    const dpr = window.devicePixelRatio || 1;
+                    const ctx = canvas.getContext('2d');
+                    ctx.save();
+                    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                    ctx.lineCap = 'round';
+                    ctx.lineJoin = 'round';
+                    ctx.strokeStyle = currentStroke.color;
+                    ctx.lineWidth = currentStroke.width;
+
+                    events.forEach(ev => {
+                        const pt = getPtFromEvent(ev);
+                        const len = currentStroke.points.length;
+                        const p1 = currentStroke.points[len - 1];
+                        if (Math.hypot(pt.x - p1.x, pt.y - p1.y) < 0.4) return;
+                        currentStroke.points.push(pt);
+
+                        ctx.beginPath();
+                        if (len >= 2) {
+                            const p0 = currentStroke.points[len - 2];
+                            const mid1X = (p0.x + p1.x) / 2;
+                            const mid1Y = (p0.y + p1.y) / 2;
+                            const mid2X = (p1.x + pt.x) / 2;
+                            const mid2Y = (p1.y + pt.y) / 2;
+                            ctx.moveTo(mid1X, mid1Y);
+                            ctx.quadraticCurveTo(p1.x, p1.y, mid2X, mid2Y);
+                        } else {
+                            ctx.moveTo(p1.x, p1.y);
+                            ctx.lineTo(pt.x, pt.y);
+                        }
+                        ctx.stroke();
+                    });
+                    ctx.restore();
                 } else if (ctrl.mode === 'eraser') {
+                    const pt = getPtFromEvent(e);
                     eraseAtPoint(ctrl, pt, 16);
                     redrawVectorPad(canvas, padId);
                 } else if (ctrl.mode === 'move' && ctrl.selectedIdx >= 0) {
+                    const pt = getPtFromEvent(e);
                     const dx = pt.x - lastPt.x;
                     const dy = pt.y - lastPt.y;
                     ctrl.strokes[ctrl.selectedIdx].points.forEach(p => { p.x += dx; p.y += dy; });
@@ -1541,10 +1829,13 @@
                 }
             });
 
-            const finish = () => {
+            const finish = (e) => {
                 if (!active) return;
+                if (activePointerId !== null && e && e.pointerId !== undefined && e.pointerId !== activePointerId) return;
                 active = false;
+                activePointerId = null;
                 currentStroke = null;
+                redrawVectorPad(canvas, padId);
                 const ctrl = padControllers[padId];
                 const obj = findDataObjByPadId(padId);
                 if (obj) { obj.strokes = ctrl.strokes; obj.drawing = null; saveState(); }
@@ -1552,6 +1843,7 @@
 
             canvas.addEventListener('pointerup', finish);
             canvas.addEventListener('pointercancel', finish);
+            canvas.addEventListener('lostpointercapture', finish);
         }
 
         function eraseAtPoint(ctrl, pt, radius) {
@@ -1629,9 +1921,9 @@
             const sizeClassMap = { sm: 'max-w-[160px]', md: 'max-w-[260px]', lg: 'max-w-[380px]', full: 'w-full' };
 
             return `
-                <div class="space-y-2 pt-1.5">
+                <div class="space-y-1.5 pt-1">
                     <div class="flex items-center justify-between gap-2">
-                        <span class="text-xs font-bold text-plum-800 flex items-center gap-1.5">
+                        <span class="text-xs font-bold text-plum-800 flex items-center gap-1">
                             <i data-lucide="image" class="w-4 h-4 text-burgundy-600"></i>
                             ${isSingleSquare ? 'Infografica Quadrata 1:1' : 'Immagini e Infografiche (1:1 senza ritagli)'}
                         </span>
@@ -1643,12 +1935,12 @@
                     </div>
 
                     ${arr.length > 0 ? `
-                        <div class="grid ${isSingleSquare ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'} gap-2.5">
+                        <div class="grid ${isSingleSquare ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2'} gap-2">
                             ${arr.map((imgObj, idx) => `
-                                <div class="border border-plum-200 rounded-2xl bg-white p-2 space-y-1.5 shadow-2xs ${sizeClassMap[imgObj.size || 'md']}">
+                                <div class="border border-plum-200 rounded-2xl bg-white p-1.5 space-y-1.5 shadow-2xs ${sizeClassMap[imgObj.size || 'md']}">
                                     <div class="relative aspect-square w-full rounded-xl bg-ivory-50 border border-ivory-200 overflow-hidden">
                                         <img src="${imgObj.src}" alt="${escapeAttr(imgObj.caption || 'Immagine studio')}" onclick="openImageLightbox('${imgObj.src}', '${escapeAttr(imgObj.caption || '')}')" class="w-full h-full object-contain p-1 cursor-zoom-in">
-                                        <div class="no-print absolute top-1.5 right-1.5 flex items-center gap-1">
+                                        <div class="no-print absolute top-1 right-1 flex items-center gap-1">
                                             <button type="button" onclick="openImageLightbox('${imgObj.src}', '${escapeAttr(imgObj.caption || '')}')" class="p-1.5 rounded-lg bg-plum-900/85 text-white hover:bg-plum-950">
                                                 <i data-lucide="maximize-2" class="w-3.5 h-3.5"></i>
                                             </button>
@@ -1748,11 +2040,7 @@
             event.target.value = '';
         }
 
-        function resetCustomHeaderImage() {
-            state.customHeaderImage = null;
-            saveState();
-            renderActiveSection();
-        }
+        function resetCustomHeaderImage() { state.customHeaderImage = null; saveState(); renderActiveSection(); }
 
         function updateImageCaption(ownerPath, idx, val, isSingle) {
             const target = resolveImageOwner(ownerPath);
@@ -1807,7 +2095,7 @@
         }
 
         /* =========================================================
-           7. GESTIONE PDF SENZA LIMITI + STUDIO SCHERMO DIVISO (70%/30%)
+           7. GESTIONE PDF SENZA LIMITI + STUDIO SCHERMO DIVISO ADATTIVO + EVIDENZIATORE TRASPARENTE
            ========================================================= */
         let activePdfMeta = null;
         let activePdfInstance = null;
@@ -1817,6 +2105,7 @@
         let pdfRedoStack = [];
         let pdfNotesHidden = false;
         let pdfScrollLocked = false;
+        let pdfAutoFitEnabled = true;
 
         function formatBytesItalian(bytes) {
             if (!bytes) return '';
@@ -1827,7 +2116,7 @@
         function renderSectionPdfPanel(sectionId, labelTitle) {
             const sectionPdfs = state.pdfLibrary.filter(p => p.section === sectionId);
             return `
-                <div class="no-print card-box bg-ivory-50 border border-plum-200 rounded-2xl p-3 space-y-2.5">
+                <div class="no-print card-box bg-ivory-50 border border-plum-200 rounded-2xl p-2 space-y-2">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div class="flex items-center gap-2">
                             <div class="w-8 h-8 rounded-xl bg-plum-100 text-plum-800 flex items-center justify-center shrink-0">
@@ -1845,7 +2134,7 @@
                     </div>
 
                     ${sectionPdfs.length > 0 ? `
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-0.5">
                             ${sectionPdfs.map(pdf => `
                                 <div class="flex items-center justify-between gap-2 bg-white border border-plum-200 rounded-xl px-2.5 py-1.5">
                                     <div class="min-w-0">
@@ -1854,7 +2143,7 @@
                                     </div>
                                     <div class="flex items-center gap-1 shrink-0">
                                         <button type="button" onclick="openPdfInSplitStudio('${pdf.id}')" class="px-2.5 py-1 rounded-lg bg-burgundy-600 hover:bg-burgundy-700 text-white text-xs font-semibold">Apri Studio</button>
-                                        <button type="button" onclick="deletePdfFromLibrary('${pdf.id}')" class="p-1.5 rounded-lg text-red-600 hover:bg-red-50">
+                                        <button type="button" onclick="deletePdfFromLibrary('${pdf.id}')" class="p-1 rounded-lg text-red-600 hover:bg-red-50">
                                             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                         </button>
                                     </div>
@@ -1866,7 +2155,7 @@
             `;
         }
 
-        async function importPdfFileToLibrary(event, sectionId = 'pubblicazioni') {
+        async function importPdfFileToLibrary(event, sectionId = 'studio_personale') {
             const file = event.target.files[0];
             if (!file) return;
             const statusEl = document.getElementById('save-status-text');
@@ -1884,7 +2173,7 @@
                     sizeBytes: file.size,
                     section: sectionId,
                     lastPage: 1,
-                    zoom: 1.2,
+                    zoom: 1.0,
                     rotation: 0,
                     addedAt: new Date().toLocaleDateString('it-IT'),
                     annotations: {},
@@ -1922,6 +2211,7 @@
                 if (typeof activePdfMeta.rotation !== 'number') activePdfMeta.rotation = 0;
                 pdfRedoStack = [];
                 pdfScrollLocked = false;
+                pdfAutoFitEnabled = true;
                 updateLockPdfScrollUI();
 
                 document.getElementById('pdf-workspace-title').textContent = meta.title;
@@ -1934,7 +2224,7 @@
 
                 setPdfSplitRatio(state.pdfSplitPercent || 70);
                 renderPdfSideNotes();
-                await renderCurrentPdfPage();
+                await renderCurrentPdfPage(true);
             } catch (err) {
                 alert('Impossibile aprire questo documento PDF.');
             }
@@ -1960,6 +2250,9 @@
             if (window.innerWidth >= 480 && !pdfNotesHidden) {
                 leftPane.style.width = state.pdfSplitPercent + '%';
                 rightPane.style.width = (100 - state.pdfSplitPercent) + '%';
+            }
+            if (activePdfInstance && activePdfMeta && pdfAutoFitEnabled) {
+                setTimeout(() => renderCurrentPdfPage(true), 40);
             }
         }
 
@@ -1993,7 +2286,7 @@
             if (!activePdfMeta) return;
             activePdfMeta.rotation = ((activePdfMeta.rotation || 0) + degDelta + 360) % 360;
             saveState();
-            renderCurrentPdfPage();
+            renderCurrentPdfPage(pdfAutoFitEnabled);
         }
 
         function togglePdfNotesDrawer() {
@@ -2013,6 +2306,9 @@
                 resizer.classList.remove('hidden');
                 setPdfSplitRatio(state.pdfSplitPercent || 70);
                 lbl.textContent = 'Nascondi Note';
+            }
+            if (activePdfInstance && activePdfMeta && pdfAutoFitEnabled) {
+                setTimeout(() => renderCurrentPdfPage(true), 40);
             }
         }
 
@@ -2035,28 +2331,57 @@
             });
         })();
 
-        async function renderCurrentPdfPage() {
+        async function pdfFitToPaneWidth() {
+            pdfAutoFitEnabled = true;
+            await renderCurrentPdfPage(true);
+        }
+
+        async function renderCurrentPdfPage(fitToContainer = false) {
             if (!activePdfInstance || !activePdfMeta) return;
             const pageNum = Math.max(1, Math.min(activePdfInstance.numPages, activePdfMeta.lastPage || 1));
             activePdfMeta.lastPage = pageNum;
             saveState();
 
             document.getElementById('pdf-page-input').value = pageNum;
-            document.getElementById('pdf-zoom-text').textContent = Math.round((activePdfMeta.zoom || 1.2) * 100) + '%';
 
             const page = await activePdfInstance.getPage(pageNum);
-            const scale = activePdfMeta.zoom || 1.2;
             const totalRotation = ((page.rotate || 0) + (activePdfMeta.rotation || 0)) % 360;
+            const baseViewport = page.getViewport({ scale: 1.0, rotation: totalRotation });
+
+            // Calcola automaticamente la scala ideale per adattare il PDF sia in orizzontale che in verticale
+            const leftPane = document.getElementById('pdf-left-pane');
+            if (fitToContainer && leftPane) {
+                const availW = Math.max(200, leftPane.clientWidth - 14);
+                const fitScale = availW / baseViewport.width;
+                activePdfMeta.zoom = Math.max(0.35, Math.min(2.5, +fitScale.toFixed(3)));
+            }
+
+            const scale = activePdfMeta.zoom || 1.0;
+            document.getElementById('pdf-zoom-text').textContent = Math.round(scale * 100) + '%';
+
             const viewport = page.getViewport({ scale: scale, rotation: totalRotation });
+            const dpr = Math.min(2, window.devicePixelRatio || 1);
 
             const baseCanvas = document.getElementById('pdf-base-canvas');
             const drawCanvas = document.getElementById('pdf-draw-canvas');
-            baseCanvas.width = viewport.width;
-            baseCanvas.height = viewport.height;
-            drawCanvas.width = viewport.width;
-            drawCanvas.height = viewport.height;
+            const wrapper = document.getElementById('pdf-page-wrapper');
 
-            await page.render({ canvasContext: baseCanvas.getContext('2d'), viewport: viewport }).promise;
+            wrapper.style.width = Math.floor(viewport.width) + 'px';
+            wrapper.style.height = Math.floor(viewport.height) + 'px';
+
+            baseCanvas.width = Math.floor(viewport.width * dpr);
+            baseCanvas.height = Math.floor(viewport.height * dpr);
+            baseCanvas.style.width = Math.floor(viewport.width) + 'px';
+            baseCanvas.style.height = Math.floor(viewport.height) + 'px';
+
+            drawCanvas.width = Math.floor(viewport.width * dpr);
+            drawCanvas.height = Math.floor(viewport.height * dpr);
+            drawCanvas.style.width = Math.floor(viewport.width) + 'px';
+            drawCanvas.style.height = Math.floor(viewport.height) + 'px';
+
+            const baseCtx = baseCanvas.getContext('2d');
+            baseCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            await page.render({ canvasContext: baseCtx, viewport: viewport }).promise;
 
             redrawPdfAnnotations();
             renderPdfPageOverlays();
@@ -2069,7 +2394,7 @@
             if (next >= 1 && next <= activePdfInstance.numPages) {
                 activePdfMeta.lastPage = next;
                 pdfRedoStack = [];
-                renderCurrentPdfPage();
+                renderCurrentPdfPage(pdfAutoFitEnabled);
                 if (!pdfScrollLocked) document.getElementById('pdf-left-pane').scrollTo({ top: 0, behavior: 'smooth' });
             }
         }
@@ -2080,14 +2405,15 @@
             if (num >= 1 && num <= activePdfInstance.numPages) {
                 activePdfMeta.lastPage = num;
                 pdfRedoStack = [];
-                renderCurrentPdfPage();
+                renderCurrentPdfPage(pdfAutoFitEnabled);
             }
         }
 
         function pdfChangeZoom(delta) {
             if (!activePdfMeta) return;
-            activePdfMeta.zoom = Math.max(0.5, Math.min(2.8, +((activePdfMeta.zoom || 1.2) + delta).toFixed(2)));
-            renderCurrentPdfPage();
+            pdfAutoFitEnabled = false;
+            activePdfMeta.zoom = Math.max(0.35, Math.min(2.8, +((activePdfMeta.zoom || 1.0) + delta).toFixed(2)));
+            renderCurrentPdfPage(false);
         }
 
         async function searchInsidePdf() {
@@ -2108,7 +2434,7 @@
                 if (fullText.includes(query)) {
                     activePdfMeta.lastPage = pNum;
                     status.textContent = 'Pag. ' + pNum;
-                    await renderCurrentPdfPage();
+                    await renderCurrentPdfPage(pdfAutoFitEnabled);
                     return;
                 }
             }
@@ -2147,7 +2473,7 @@
         function addTextBoxToPdfPage() {
             if (!activePdfMeta) return;
             const overlays = getCurrentPdfPageOverlays();
-            overlays.push({ id: 'ov_txt_' + Date.now(), kind: 'text', nx: 0.15, ny: 0.18, nw: 0.42, text: 'Scrivi qui sul PDF...', color: '#4E1F3D', fontSize: 15 });
+            overlays.push({ id: 'ov_txt_' + Date.now(), kind: 'text', nx: 0.12, ny: 0.15, nw: 0.44, text: 'Scrivi qui sul PDF...', color: '#4E1F3D', fontSize: 15 });
             saveState();
             renderPdfPageOverlays();
             if (window.lucide) lucide.createIcons();
@@ -2172,7 +2498,7 @@
                     c.getContext('2d').drawImage(img, 0, 0, w, h);
                     const dataUrl = c.toDataURL('image/webp', 0.88);
                     const overlays = getCurrentPdfPageOverlays();
-                    overlays.push({ id: 'ov_img_' + Date.now(), kind: 'image', nx: 0.18, ny: 0.22, nw: 0.34, src: dataUrl });
+                    overlays.push({ id: 'ov_img_' + Date.now(), kind: 'image', nx: 0.16, ny: 0.20, nw: 0.36, src: dataUrl });
                     saveState();
                     renderPdfPageOverlays();
                     if (window.lucide) lucide.createIcons();
@@ -2195,8 +2521,8 @@
 
                 if (ov.kind === 'text') {
                     return `
-                        <div data-ov-idx="${idx}" style="left:${leftPct}; top:${topPct}; width:${widthPct};" class="pointer-events-auto absolute bg-ivory-50/95 border-2 border-plum-500 rounded-xl shadow-md p-1.5 group">
-                            <div class="flex items-center justify-between gap-1 pb-1 mb-1 border-b border-plum-200 cursor-move bg-plum-100/80 rounded-lg px-1.5 py-0.5" onpointerdown="startDragPdfOverlay(event, ${idx})">
+                        <div data-ov-idx="${idx}" style="left:${leftPct}; top:${topPct}; width:${widthPct};" class="pointer-events-auto absolute bg-ivory-50/95 border-2 border-plum-500 rounded-xl shadow-md p-1 group">
+                            <div class="flex items-center justify-between gap-1 pb-0.5 mb-0.5 border-b border-plum-200 cursor-move bg-plum-100/80 rounded-lg px-1 py-0.5" onpointerdown="startDragPdfOverlay(event, ${idx})">
                                 <span class="text-[10px] font-bold text-plum-900 select-none">✥ Sposta</span>
                                 <div class="flex items-center gap-1">
                                     <button type="button" onclick="resizePdfOverlay(${idx}, -0.06)" class="px-1 text-[10px] font-bold bg-white rounded border border-plum-300">−</button>
@@ -2204,14 +2530,14 @@
                                     <button type="button" onclick="deletePdfOverlay(${idx})" class="px-1 text-[10px] font-bold bg-red-600 text-white rounded">✕</button>
                                 </div>
                             </div>
-                            <div contenteditable="true" oninput="updatePdfOverlayText(${idx}, this.innerText)" style="color:${ov.color || '#4E1F3D'}; font-size:${ov.fontSize || 15}px;" class="font-sans font-semibold leading-snug outline-none min-h-[26px] whitespace-pre-wrap">${escapeHtml(ov.text || '')}</div>
+                            <div contenteditable="true" oninput="updatePdfOverlayText(${idx}, this.innerText)" style="color:${ov.color || '#4E1F3D'}; font-size:${ov.fontSize || 15}px;" class="font-sans font-semibold leading-snug outline-none min-h-[24px] whitespace-pre-wrap">${escapeHtml(ov.text || '')}</div>
                         </div>
                     `;
                 } else {
                     return `
                         <div data-ov-idx="${idx}" style="left:${leftPct}; top:${topPct}; width:${widthPct};" class="pointer-events-auto absolute border-2 border-burgundy-500 rounded-xl bg-white/95 shadow-lg overflow-hidden">
-                            <div class="flex items-center justify-between gap-1 cursor-move bg-plum-800 text-white px-2 py-1" onpointerdown="startDragPdfOverlay(event, ${idx})">
-                                <span class="text-[10px] font-bold select-none">✥ Sposta immagine</span>
+                            <div class="flex items-center justify-between gap-1 cursor-move bg-plum-800 text-white px-1.5 py-0.5" onpointerdown="startDragPdfOverlay(event, ${idx})">
+                                <span class="text-[10px] font-bold select-none">✥ Sposta foto</span>
                                 <div class="flex items-center gap-1">
                                     <button type="button" onclick="resizePdfOverlay(${idx}, -0.07)" class="px-1.5 text-[11px] font-bold bg-plum-700 rounded">−</button>
                                     <button type="button" onclick="resizePdfOverlay(${idx}, 0.07)" class="px-1.5 text-[11px] font-bold bg-plum-700 rounded">+</button>
@@ -2252,6 +2578,7 @@
             window.addEventListener('pointerup', onUp);
         }
 
+        /* Ridisegno PDF con evidenziatore trasparente che non copre il testo */
         function redrawPdfAnnotations() {
             const canvas = document.getElementById('pdf-draw-canvas');
             if (!canvas || !activePdfMeta) return;
@@ -2265,10 +2592,13 @@
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
                 if (st.tool === 'highlight') {
-                    ctx.globalCompositeOperation = 'multiply';
+                    // Evidenziatore trasparente così il testo nero sottostante rimane sempre nitido
+                    ctx.globalAlpha = 0.34;
+                    ctx.globalCompositeOperation = 'source-over';
                     ctx.strokeStyle = st.color;
-                    ctx.lineWidth = Math.max(16, st.width * 4.5) * (w / 800);
+                    ctx.lineWidth = Math.max(15, st.width * 4.2) * (w / 800);
                 } else {
+                    ctx.globalAlpha = 1.0;
                     ctx.globalCompositeOperation = 'source-over';
                     ctx.strokeStyle = st.color;
                     ctx.lineWidth = st.width * (w / 800);
@@ -2294,12 +2624,15 @@
             canvas.dataset.bound = '1';
             let drawing = false, curr = null;
 
+            canvas.addEventListener('touchstart', (e) => { if (pdfAnnotTool !== 'scroll') e.preventDefault(); }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => { if (pdfAnnotTool !== 'scroll') e.preventDefault(); }, { passive: false });
+
             const getNormPt = (e) => { const r = canvas.getBoundingClientRect(); return { nx: (e.clientX - r.left) / r.width, ny: (e.clientY - r.top) / r.height }; };
 
             canvas.addEventListener('pointerdown', (e) => {
                 if (pdfAnnotTool === 'scroll') return;
                 e.preventDefault();
-                canvas.setPointerCapture(e.pointerId);
+                try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
                 drawing = true;
                 const pt = getNormPt(e);
                 const strokes = getCurrentPdfPageStrokes();
@@ -2329,8 +2662,12 @@
                     return;
                 }
                 if (curr) {
-                    if (curr.tool === 'line' || curr.tool === 'circle') curr.points[1] = pt;
-                    else curr.points.push(pt);
+                    const events = (typeof e.getCoalescedEvents === 'function') ? e.getCoalescedEvents() : [e];
+                    if (curr.tool === 'line' || curr.tool === 'circle') {
+                        curr.points[1] = pt;
+                    } else {
+                        events.forEach(ev => curr.points.push(getNormPt(ev)));
+                    }
                     redrawPdfAnnotations();
                 }
             });
@@ -2338,6 +2675,7 @@
             const stop = () => { if (!drawing) return; drawing = false; curr = null; saveState(); };
             canvas.addEventListener('pointerup', stop);
             canvas.addEventListener('pointercancel', stop);
+            canvas.addEventListener('lostpointercapture', stop);
         }
 
         function pdfUndoStroke() { const strokes = getCurrentPdfPageStrokes(); if (!strokes.length) return; pdfRedoStack.push(strokes.pop()); saveState(); redrawPdfAnnotations(); }
@@ -2373,8 +2711,8 @@
                         ctx.lineCap = 'round';
                         ctx.lineJoin = 'round';
                         ctx.strokeStyle = st.color;
-                        ctx.globalAlpha = st.tool === 'highlight' ? 0.38 : 1.0;
-                        ctx.lineWidth = (st.tool === 'highlight' ? Math.max(16, st.width * 4.5) : st.width) * (w / 800);
+                        ctx.globalAlpha = st.tool === 'highlight' ? 0.34 : 1.0;
+                        ctx.lineWidth = (st.tool === 'highlight' ? Math.max(15, st.width * 4.2) : st.width) * (w / 800);
 
                         if (st.tool === 'line' && st.points.length >= 2) {
                             ctx.beginPath(); ctx.moveTo(st.points[0].nx * w, st.points[0].ny * h); ctx.lineTo(st.points[st.points.length - 1].nx * w, st.points[st.points.length - 1].ny * h); ctx.stroke();
@@ -2450,21 +2788,14 @@
             renderActiveSection();
         }
 
-        function renamePdfInLibrary(pdfId) {
-            const meta = state.pdfLibrary.find(p => p.id === pdfId);
-            if (!meta) return;
-            const next = prompt('Nuovo titolo del documento PDF:', meta.title);
-            if (next && next.trim()) { meta.title = next.trim(); saveState(); renderActiveSection(); }
-        }
-
         /* =========================================================
            8. SISTEMA NOTE PERSONALIZZABILI
            ========================================================= */
-        let pendingNoteContext = { section: 'appunti', pdfId: null, weekKey: null };
+        let pendingNoteContext = { section: 'studio_personale', pdfId: null, weekKey: null };
 
         function openNewNoteModal(contextKey, forcedType = null) {
             if (contextKey === 'pdf_active' && activePdfMeta) {
-                pendingNoteContext = { section: activePdfMeta.section || 'pubblicazioni', pdfId: activePdfMeta.id, weekKey: state.currentWeekKey };
+                pendingNoteContext = { section: activePdfMeta.section || 'studio_personale', pdfId: activePdfMeta.id, weekKey: state.currentWeekKey };
             } else {
                 const weeklySections = ['torre', 'tesori', 'gemme', 'vita', 'studio_libro', 'broadcasting', 'discorso'];
                 pendingNoteContext = { section: contextKey, pdfId: null, weekKey: weeklySections.includes(contextKey) ? state.currentWeekKey : null };
@@ -2525,18 +2856,12 @@
 
         function renameCustomNote(noteId) {
             const inputEl = document.getElementById('note_title_input_' + noteId);
-            if (inputEl) {
-                inputEl.focus();
-                inputEl.select();
-            }
+            if (inputEl) { inputEl.focus(); inputEl.select(); }
         }
 
         function updateCustomNoteTitle(noteId, newTitle) {
             const n = state.customNotes.find(x => x.id === noteId);
-            if (n) {
-                n.title = newTitle;
-                saveState();
-            }
+            if (n) { n.title = newTitle; saveState(); }
         }
 
         let pendingDeleteNoteId = null;
@@ -2575,35 +2900,35 @@
         function renderCustomNotesListHtml(notesArray, emptyMsg = 'Nessuna nota presente. Clicca su "+ Aggiungi Nota" per crearne una.') {
             if (!notesArray.length) {
                 return emptyMsg ? `
-                    <div class="card-box bg-ivory-50 border-2 border-dashed border-plum-200 rounded-2xl p-5 text-center">
+                    <div class="card-box bg-ivory-50 border-2 border-dashed border-plum-200 rounded-2xl p-4 text-center">
                         <p class="text-sm text-plum-700">${emptyMsg}</p>
                     </div>
                 ` : '';
             }
             return `
-                <div class="space-y-3">
+                <div class="space-y-2.5">
                     ${notesArray.map(n => {
                         const isConfirming = pendingDeleteNoteId === n.id;
                         return `
-                        <div class="card-box bg-white border-2 border-plum-200 rounded-2xl p-3 space-y-2.5 shadow-2xs">
-                            <div class="flex flex-wrap items-center justify-between gap-2 border-b border-ivory-200 pb-2">
+                        <div class="card-box bg-white border-2 border-plum-200 rounded-2xl p-2 space-y-2 shadow-2xs">
+                            <div class="flex flex-wrap items-center justify-between gap-1.5 border-b border-ivory-200 pb-1.5">
                                 <div class="min-w-0 flex-1">
-                                    <div class="flex items-center gap-2">
-                                        <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase shrink-0 ${n.type === 'pen' ? 'bg-burgundy-100 text-burgundy-700' : 'bg-plum-100 text-plum-800'}">
+                                    <div class="flex items-center gap-1.5">
+                                        <span class="px-1.5 py-0.5 rounded-md text-[10px] font-bold uppercase shrink-0 ${n.type === 'pen' ? 'bg-burgundy-100 text-burgundy-700' : 'bg-plum-100 text-plum-800'}">
                                             ${n.type === 'pen' ? 'Penna' : 'Tastiera'}
                                         </span>
-                                        <input type="text" id="note_title_input_${n.id}" value="${escapeAttr(n.title)}" oninput="updateCustomNoteTitle('${n.id}', this.value)" placeholder="Scrivi titolo (es. Paragrafo, Commento...)" class="font-serif font-bold text-base text-plum-950 bg-transparent border-b border-transparent focus:border-plum-500 outline-none w-full min-w-[140px]">
+                                        <input type="text" id="note_title_input_${n.id}" value="${escapeAttr(n.title)}" oninput="updateCustomNoteTitle('${n.id}', this.value)" placeholder="Scrivi titolo (es. Paragrafo, Commento...)" class="font-serif font-bold text-base text-plum-950 bg-transparent border-b border-transparent focus:border-plum-500 outline-none w-full min-w-[130px]">
                                     </div>
-                                    <span class="text-[11px] text-plum-500">Creata il ${escapeHtml(n.createdAt)} • Tocca il titolo per rinominare</span>
+                                    <span class="text-[10px] text-plum-500">Creata il ${escapeHtml(n.createdAt)}</span>
                                 </div>
-                                <div class="no-print flex items-center gap-1.5 shrink-0">
-                                    <button type="button" onclick="renameCustomNote('${n.id}')" class="px-2.5 py-1.5 rounded-xl bg-plum-50 hover:bg-plum-100 border border-plum-200 text-plum-800 text-xs font-semibold flex items-center gap-1">
-                                        <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                                <div class="no-print flex items-center gap-1 shrink-0">
+                                    <button type="button" onclick="renameCustomNote('${n.id}')" class="px-2 py-1 rounded-xl bg-plum-50 hover:bg-plum-100 border border-plum-200 text-plum-800 text-xs font-semibold flex items-center gap-1">
+                                        <i data-lucide="pencil" class="w-3 h-3"></i>
                                         <span>Rinomina</span>
                                     </button>
-                                    <button type="button" onclick="requestDeleteCustomNote('${n.id}')" class="px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1 transition ${isConfirming ? 'bg-red-600 border-red-700 text-white animate-pulse' : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700'}">
-                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                        <span>${isConfirming ? 'Conferma elimina' : 'Elimina'}</span>
+                                    <button type="button" onclick="requestDeleteCustomNote('${n.id}')" class="px-2 py-1 rounded-xl border text-xs font-bold flex items-center gap-1 transition ${isConfirming ? 'bg-red-600 border-red-700 text-white animate-pulse' : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700'}">
+                                        <i data-lucide="trash-2" class="w-3 h-3"></i>
+                                        <span>${isConfirming ? 'Conferma' : 'Elimina'}</span>
                                     </button>
                                 </div>
                             </div>
@@ -2611,7 +2936,7 @@
                             ${n.type === 'keyboard' ? `
                                 <div>
                                     ${renderRichTextToolbarHtml('rich_note_' + n.id)}
-                                    <div id="rich_note_${n.id}" contenteditable="true" oninput="updateCustomNoteHtml('${n.id}', this.innerHTML)" data-placeholder="Scrivi qui il contenuto della nota..." class="study-text resizable-box rounded-xl border border-plum-200 bg-ivory-50/40 p-2.5">${n.htmlContent || ''}</div>
+                                    <div id="rich_note_${n.id}" contenteditable="true" oninput="updateCustomNoteHtml('${n.id}', this.innerHTML)" data-placeholder="Scrivi qui il contenuto della nota..." class="study-text resizable-box rounded-xl border border-plum-200 bg-ivory-50/40 p-2">${n.htmlContent || ''}</div>
                                 </div>
                             ` : `
                                 ${renderHandwritingPadHtml('custom_note_' + n.id, n.paperType, n.padHeight, n.title)}
@@ -2639,7 +2964,7 @@
         }
 
         /* =========================================================
-           9. RENDERING DELLE SEZIONI (HOMEPAGE FEDELE + MARGINI STRETTI NELLE SESSIONI)
+           9. RENDERING DELLE SEZIONI (CON MARGINI STRETTISSIMI)
            ========================================================= */
         function renderActiveSection() {
             const container = document.getElementById('section-container');
@@ -2649,19 +2974,24 @@
                 container.className = 'flex-1 w-full';
                 container.innerHTML = renderHomepageSection(wd);
             } else {
-                container.className = 'flex-1 px-2 py-3 sm:px-3 sm:py-4 w-full space-y-4';
-                switch (state.activeSection) {
-                    case 'torre': container.innerHTML = renderTorreSection(wd); break;
-                    case 'tesori': container.innerHTML = renderNotesOnlySection(wd, 'tesori', 'Tesori della Parola di Dio', 'Giovedì ore 19:00', 'PDF di riferimento — Tesori'); break;
-                    case 'gemme': container.innerHTML = renderNotesOnlySection(wd, 'gemme', 'Gemme spirituali', 'Giovedì ore 19:00', 'PDF di riferimento — Gemme spirituali'); break;
-                    case 'vita': container.innerHTML = renderNotesOnlySection(wd, 'vita', 'Vita cristiana', 'Seconda parte adunanza infrasettimanale (Giovedì ore 19:00)', 'PDF di riferimento — Vita cristiana'); break;
-                    case 'studio_libro': container.innerHTML = renderStudioLibroSection(wd); break;
-                    case 'broadcasting': container.innerHTML = renderNotesOnlySection(wd, 'broadcasting', 'JW Broadcasting', 'Programmi e approfondimenti', 'PDF di riferimento — JW Broadcasting'); break;
-                    case 'appunti': container.innerHTML = renderLeMieNoteSection(); break;
-                    case 'studio_personale': container.innerHTML = renderNotesOnlySection(wd, 'studio_personale', 'Studio personale', 'Approfondimenti, pubblicazioni e note dimostrazioni', 'PDF allegati allo Studio personale', false); break;
-                    case 'pubblicazioni': container.innerHTML = renderPubblicazioniSection(); break;
-                    case 'discorso': container.innerHTML = renderNotesOnlySection(wd, 'discorso', 'Discorso pubblico', 'Sabato ore 18:00', 'PDF di riferimento — Discorso pubblico'); break;
-                    case 'archivio': container.innerHTML = renderArchivioSection(); break;
+                // Margini strettissimi in tutte le sessioni per la massima visibilità di PDF e note
+                container.className = 'flex-1 px-1 py-2 sm:px-2 sm:py-2.5 w-full space-y-2.5';
+                const customSec = (state.customSessions || []).find(s => s.id === state.activeSection);
+                if (customSec) {
+                    container.innerHTML = renderCustomUserSection(customSec);
+                } else {
+                    switch (state.activeSection) {
+                        case 'torre': container.innerHTML = renderTorreSection(wd); break;
+                        case 'tesori': container.innerHTML = renderNotesOnlySection(wd, 'tesori', 'Tesori della Parola di Dio', 'Giovedì ore 19:00', 'PDF di riferimento — Tesori'); break;
+                        case 'gemme': container.innerHTML = renderNotesOnlySection(wd, 'gemme', 'Gemme spirituali', 'Giovedì ore 19:00', 'PDF di riferimento — Gemme spirituali'); break;
+                        case 'vita': container.innerHTML = renderNotesOnlySection(wd, 'vita', 'Vita cristiana', 'Seconda parte adunanza infrasettimanale (Giovedì ore 19:00)', 'PDF di riferimento — Vita cristiana'); break;
+                        case 'studio_libro': container.innerHTML = renderStudioLibroSection(wd); break;
+                        case 'broadcasting': container.innerHTML = renderNotesOnlySection(wd, 'broadcasting', 'JW Broadcasting', 'Programmi e approfondimenti', 'PDF di riferimento — JW Broadcasting'); break;
+                        case 'studio_personale': container.innerHTML = renderNotesOnlySection(wd, 'studio_personale', 'Studio personale', 'Approfondimenti, pubblicazioni e note dimostrazioni', 'PDF allegati allo Studio personale', false); break;
+                        case 'discorso': container.innerHTML = renderNotesOnlySection(wd, 'discorso', 'Discorso pubblico', 'Sabato ore 18:00', 'PDF di riferimento — Discorso pubblico'); break;
+                        case 'archivio': container.innerHTML = renderArchivioSection(); break;
+                        default: container.innerHTML = renderHomepageSection(wd); break;
+                    }
                 }
             }
 
@@ -2669,29 +2999,67 @@
             setTimeout(initAllHandwritingPads, 45);
         }
 
+        function renderCustomUserSection(secObj) {
+            const notes = getNotesForSection(secObj.id);
+            const isConfirmingDel = pendingDeleteSessionId === secObj.id;
+            return `
+                <div class="space-y-2.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2 bg-ivory-50 border border-plum-200 rounded-2xl p-2">
+                        <div class="min-w-0 flex-1">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-burgundy-600 block">Sessione personalizzata • Tocca il nome per rinominare</span>
+                            <input type="text" value="${escapeAttr(secObj.title)}" oninput="updateCustomSessionTitle('${secObj.id}', this.value)" class="font-serif text-lg sm:text-xl font-bold text-plum-950 bg-transparent border-b border-transparent focus:border-plum-600 outline-none w-full">
+                        </div>
+                        <div class="flex flex-wrap items-center gap-1">
+                            <button type="button" onclick="openNewNoteModal('${secObj.id}', 'keyboard')" class="px-3 py-1.5 rounded-xl bg-plum-700 hover:bg-plum-800 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i> + Nota Tastiera
+                            </button>
+                            <button type="button" onclick="openNewNoteModal('${secObj.id}', 'pen')" class="px-3 py-1.5 rounded-xl bg-burgundy-600 hover:bg-burgundy-700 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs">
+                                <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> + Nota Pencil
+                            </button>
+                            <button type="button" onclick="requestDeleteCustomSession('${secObj.id}')" class="px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1 transition ${isConfirmingDel ? 'bg-red-600 border-red-700 text-white animate-pulse' : 'bg-red-50 hover:bg-red-100 border-red-200 text-red-700'}">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                <span>${isConfirmingDel ? 'Conferma' : 'Elimina sessione'}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    ${renderSectionPdfPanel(secObj.id, 'PDF di riferimento — ' + secObj.title)}
+
+                    ${renderCustomNotesListHtml(notes, 'Nessuna nota in questa sessione. Importa un PDF qui sopra oppure premi "+ Nota Tastiera" o "+ Nota Pencil".')}
+                </div>
+            `;
+        }
+
         function renderHomepageSection(wd) {
-            const homeCards = [
-                { id: 'dashboard', title: 'Adunanza settimanale', sub: 'Preparazione completa', icon: 'calendar', action: "navigateTo('torre')" },
+            const baseCards = [
                 { id: 'torre', title: 'Torre di Guardia', sub: "Studio dell'articolo", icon: 'castle', action: "navigateTo('torre')" },
                 { id: 'tesori', title: 'Tesori della Parola di Dio', sub: 'Punti principali e applicazioni', icon: 'gem', action: "navigateTo('tesori')" },
                 { id: 'gemme', title: 'Gemme spirituali', sub: 'Spunti e risposte', icon: 'sprout', action: "navigateTo('gemme')" },
                 { id: 'vita', title: 'Vita cristiana', sub: 'Preparazione e idee', icon: 'users', action: "navigateTo('vita')" },
                 { id: 'studio_libro', title: 'Studio del libro', sub: 'Capitolo per capitolo', icon: 'book-open', action: "navigateTo('studio_libro')" },
                 { id: 'broadcasting', title: 'JW Broadcasting', sub: 'Riassunti e spunti', icon: 'film', action: "navigateTo('broadcasting')" },
-                { id: 'appunti', title: 'Le mie note', sub: 'Appunti, esperienze e idee', icon: 'bookmark', action: "navigateTo('appunti')" },
                 { id: 'studio_personale', title: 'Studio personale', sub: 'Approfondimenti e note', icon: 'graduation-cap', action: "navigateTo('studio_personale')" },
-                { id: 'pubblicazioni', title: 'Pubblicazioni', sub: 'PDF caricati e annotati', icon: 'file-text', action: "navigateTo('pubblicazioni')" },
-                { id: 'discorso', title: 'Discorso pubblico', sub: 'Appunti del discorso', icon: 'mic', action: "navigateTo('discorso')" },
-                { id: 'archivio', title: 'Archivio settimane', sub: 'Settimane precedenti', icon: 'archive', action: "navigateTo('archivio')" }
+                { id: 'discorso', title: 'Discorso pubblico', sub: 'Appunti del discorso', icon: 'mic', action: "navigateTo('discorso')" }
             ];
 
+            const userCards = (state.customSessions || []).map(cs => ({
+                id: cs.id,
+                title: cs.title,
+                sub: cs.sub || 'Sessione personalizzata',
+                icon: cs.icon || 'calendar-heart',
+                action: `navigateTo('${cs.id}')`,
+                isCustom: true
+            }));
+
+            const archiveCard = { id: 'archivio', title: 'Archivio settimane', sub: 'Settimane precedenti', icon: 'archive', action: "navigateTo('archivio')" };
+            const allCards = [...baseCards, ...userCards, archiveCard];
+
             return `
-                <div class="relative min-h-[calc(100vh-52px)] flex flex-col justify-between overflow-hidden bg-[#FAF6F1]">
-                    <!-- INTESTAZIONE SUPERIORE IDENTICA ALL'IMMAGINE ALLEGATA -->
+                <div class="relative min-h-[calc(100vh-48px)] flex flex-col justify-between overflow-hidden bg-[#FAF6F1]">
                     <div class="relative w-full overflow-hidden">
                         ${state.customHeaderImage ? `
                             <div class="relative max-w-5xl mx-auto">
-                                <img src="${state.customHeaderImage}" alt="Quaderno per lo studio" class="w-full max-h-64 object-cover object-top block">
+                                <img src="${state.customHeaderImage}" alt="Quaderno per lo studio" class="w-full max-h-60 object-cover object-top block">
                                 <div class="no-print absolute top-2 right-2 flex items-center gap-1.5">
                                     <label class="px-2.5 py-1 rounded-xl bg-plum-900/80 text-white text-[11px] font-semibold cursor-pointer">
                                         Cambia immagine
@@ -2701,7 +3069,7 @@
                                 </div>
                             </div>
                         ` : `
-                            <svg viewBox="0 0 900 250" preserveAspectRatio="none" class="w-full h-48 sm:h-60 block">
+                            <svg viewBox="0 0 900 250" preserveAspectRatio="none" class="w-full h-44 sm:h-56 block">
                                 <defs>
                                     <linearGradient id="softLavenderBg" x1="0%" y1="0%" x2="100%" y2="100%">
                                         <stop offset="0%" stop-color="#BA88A8"/>
@@ -2728,56 +3096,38 @@
                                 <rect x="0" y="226" width="900" height="24" fill="#FAF6F1" opacity="0.9"/>
                             </svg>
 
-                            <div class="max-w-5xl mx-auto px-3 sm:px-6 -mt-40 sm:-mt-52 pb-2 flex items-center justify-between gap-2 sm:gap-5 relative">
-                                <!-- Pulsante discreto per caricare direttamente l'immagine originale se si desidera -->
-                                <label class="no-print absolute top-0 right-3 px-2 py-0.5 rounded-lg bg-white/70 hover:bg-white text-plum-800 border border-plum-200 text-[10px] font-semibold cursor-pointer flex items-center gap-1" title="Carica la tua immagine intestazione">
+                            <div class="max-w-5xl mx-auto px-2 sm:px-5 -mt-36 sm:-mt-48 pb-1 flex items-center justify-between gap-2 sm:gap-5 relative">
+                                <label class="no-print absolute top-0 right-2 px-2 py-0.5 rounded-lg bg-white/70 hover:bg-white text-plum-800 border border-plum-200 text-[10px] font-semibold cursor-pointer flex items-center gap-1" title="Carica la tua immagine intestazione">
                                     <i data-lucide="image" class="w-3 h-3"></i>
                                     <span class="hidden sm:inline">Personalizza foto</span>
                                     <input type="file" accept="image/*" onchange="handleUploadCustomHeaderImage(event)" class="hidden">
                                 </label>
 
-                                <!-- 4 LIBRI IMPILATI ESATTAMENTE COME NELL'IMMAGINE:
-                                     1° in alto: Viola scuro con 2 fasce dorate + stella floreale dorata + pagine crema a sinistra
-                                     2°: Crema/Avorio chiaro con rilegatura a destra e pagine a sinistra
-                                     3°: Bordeaux scuro con nervi dorati a destra e pagine a sinistra
-                                     4° in basso: Viola ametista luminoso con nervi dorati a destra e pagine a sinistra -->
                                 <div class="shrink-0">
-                                    <svg class="w-[180px] sm:w-[245px] h-auto" viewBox="0 0 260 185" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Quattro libri impilati con dettagli floreali">
-                                        <!-- Ombra morbida sotto i libri -->
+                                    <svg class="w-[170px] sm:w-[235px] h-auto" viewBox="0 0 260 185" fill="none" xmlns="http://www.w3.org/2000/svg" aria-label="Quattro libri impilati con dettagli floreali">
                                         <ellipse cx="136" cy="167" rx="102" ry="9" fill="#5D2649" opacity="0.20"/>
-
-                                        <!-- LIBRO 4 (In basso - Viola ametista con rilegatura a destra e pagine crema a sinistra) -->
                                         <g>
-                                            <!-- Copertina viola -->
                                             <rect x="44" y="135" width="174" height="25" rx="6" fill="#703075" stroke="#47184B" stroke-width="1.1"/>
-                                            <!-- Blocco pagine crema a sinistra -->
                                             <path d="M51 139 L152 139 L152 156 L51 156 C47 156 47 139 51 139 Z" fill="#F6EFE6"/>
                                             <line x1="53" y1="143.5" x2="150" y2="143.5" stroke="#D8C9B8" stroke-width="1.1"/>
                                             <line x1="53" y1="147.5" x2="150" y2="147.5" stroke="#D8C9B8" stroke-width="1.1"/>
                                             <line x1="53" y1="151.5" x2="150" y2="151.5" stroke="#D8C9B8" stroke-width="1.1"/>
-                                            <!-- Dorso/angolo viola a destra con filetti dorati -->
                                             <path d="M150 135 L212 135 C216 135 218 138 218 142 L218 153 C218 157 216 160 212 160 L150 160 Z" fill="#743279"/>
                                             <line x1="164" y1="135" x2="164" y2="160" stroke="#E8C68E" stroke-width="1.6"/>
                                             <line x1="176" y1="135" x2="176" y2="160" stroke="#E8C68E" stroke-width="1.6"/>
                                             <line x1="202" y1="135" x2="202" y2="160" stroke="#E8C68E" stroke-width="1.5"/>
                                         </g>
-
-                                        <!-- LIBRO 3 (Bordeaux intenso con nervi dorati a destra e pagine a sinistra) -->
                                         <g>
                                             <rect x="42" y="109" width="172" height="25" rx="6" fill="#7D1D38" stroke="#4D0E21" stroke-width="1.1"/>
-                                            <!-- Pagine crema a sinistra -->
                                             <path d="M49 113 L156 113 L156 130 L49 130 C45 130 45 113 49 113 Z" fill="#F5EDE3"/>
                                             <line x1="51" y1="117.5" x2="154" y2="117.5" stroke="#D6C6B4" stroke-width="1.1"/>
                                             <line x1="51" y1="121.5" x2="154" y2="121.5" stroke="#D6C6B4" stroke-width="1.1"/>
                                             <line x1="51" y1="125.5" x2="154" y2="125.5" stroke="#D6C6B4" stroke-width="1.1"/>
-                                            <!-- Dorso bordeaux a destra con filetti dorati -->
                                             <path d="M154 109 L208 109 C212 109 214 112 214 116 L214 127 C214 131 212 134 208 134 L154 134 Z" fill="#821F3B"/>
                                             <line x1="168" y1="109" x2="168" y2="134" stroke="#E8C68E" stroke-width="1.6"/>
                                             <line x1="180" y1="109" x2="180" y2="134" stroke="#E8C68E" stroke-width="1.6"/>
                                             <line x1="198" y1="109" x2="198" y2="134" stroke="#E8C68E" stroke-width="1.5"/>
                                         </g>
-
-                                        <!-- LIBRO 2 (Crema / Avorio chiaro) -->
                                         <g>
                                             <rect x="50" y="84" width="156" height="24" rx="6" fill="#EFE4D4" stroke="#C5B096" stroke-width="1.2"/>
                                             <rect x="56" y="88" width="144" height="16" rx="3" fill="#FAF5EE"/>
@@ -2788,20 +3138,15 @@
                                             <line x1="170" y1="84" x2="170" y2="108" stroke="#C7A36B" stroke-width="1.4"/>
                                             <line x1="182" y1="84" x2="182" y2="108" stroke="#C7A36B" stroke-width="1.4"/>
                                         </g>
-
-                                        <!-- LIBRO 1 (In cima - Viola scuro con 2 fasce dorate e stella floreale d'oro a destra, pagine a sinistra) -->
                                         <g>
                                             <rect x="64" y="59" width="132" height="24" rx="6" fill="#5D224A" stroke="#3B112E" stroke-width="1.1"/>
-                                            <!-- Pagine crema a sinistra -->
                                             <path d="M70 63 L112 63 L112 79 L70 79 C66 79 66 63 70 63 Z" fill="#F5EDE3"/>
                                             <line x1="72" y1="67" x2="110" y2="67" stroke="#D6C6B4" stroke-width="1"/>
                                             <line x1="72" y1="71" x2="110" y2="71" stroke="#D6C6B4" stroke-width="1"/>
                                             <line x1="72" y1="75" x2="110" y2="75" stroke="#D6C6B4" stroke-width="1"/>
-                                            <!-- Copertina/dorso viola con due filetti dorati e rosone stellato d'oro -->
                                             <path d="M110 59 L190 59 C194 59 196 62 196 66 L196 76 C196 80 194 83 190 83 L110 83 Z" fill="#63254F"/>
                                             <line x1="122" y1="59" x2="122" y2="83" stroke="#E6C38E" stroke-width="1.7"/>
                                             <line x1="130" y1="59" x2="130" y2="83" stroke="#E6C38E" stroke-width="1.7"/>
-                                            <!-- Rosone floreale dorato -->
                                             <g transform="translate(162, 71)">
                                                 <ellipse cx="0" cy="0" rx="13" ry="2.2" fill="#E6C38E"/>
                                                 <ellipse cx="0" cy="0" rx="2.2" ry="8.5" fill="#E6C38E"/>
@@ -2810,8 +3155,6 @@
                                                 <circle cx="0" cy="0" r="2.6" fill="#63254F"/>
                                             </g>
                                         </g>
-
-                                        <!-- RAMETTO DI FOGLIE VERDI E FIORELLINI BIANCHI IN BASSO A SINISTRA -->
                                         <g>
                                             <path d="M10 152 C28 144, 48 146, 74 158" stroke="#4D5F36" stroke-width="2.4" stroke-linecap="round"/>
                                             <path d="M22 148 C28 130, 30 112, 24 92" stroke="#5A6E40" stroke-width="2" stroke-linecap="round"/>
@@ -2841,12 +3184,11 @@
                                     </svg>
                                 </div>
 
-                                <!-- Titolo corsivo viola scuro "Quaderno per lo studio" + svolazzo con cuoricino come nell'immagine -->
                                 <div class="flex-1 flex flex-col items-center sm:items-start text-center sm:text-left pr-1">
-                                    <h1 class="font-serif italic font-bold text-[28px] sm:text-[43px] text-[#4E143B] leading-[1.05] tracking-tight drop-shadow-[0_1px_0_rgba(255,255,255,0.75)]">
+                                    <h1 class="font-serif italic font-bold text-[26px] sm:text-[42px] text-[#4E143B] leading-[1.05] tracking-tight drop-shadow-[0_1px_0_rgba(255,255,255,0.75)]">
                                         Quaderno<br>per lo studio
                                     </h1>
-                                    <svg class="w-40 sm:w-52 h-7 mt-0.5" viewBox="0 0 210 30" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <svg class="w-36 sm:w-52 h-6 mt-0.5" viewBox="0 0 210 30" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                                         <path d="M6 16 C48 8, 92 14, 134 22 C152 25, 168 20, 166 11 C164 4, 155 4, 151 10 C147 4, 138 4, 136 11 C134 19, 148 25, 162 24 C178 23, 192 16, 204 10" stroke="#6E2452" stroke-width="2.2" stroke-linecap="round"/>
                                     </svg>
                                 </div>
@@ -2854,33 +3196,46 @@
                         `}
                     </div>
 
-                    <!-- GRIGLIA A 2 COLONNE DI SCHEDE BIANCHE CON BORDO VIOLA E RIQUADRO ICONA VIOLA/ORO -->
-                    <div class="max-w-5xl w-full mx-auto px-3 sm:px-5 pt-1 pb-2 flex-1">
-                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            ${homeCards.map(card => `
-                                <button type="button" onclick="${card.action}" class="home-tile px-3 py-2.5 flex items-center justify-between gap-2.5 text-left w-full">
-                                    <div class="flex items-center gap-3 min-w-0">
+                    <!-- GRIGLIA A 2 COLONNE DELLE SESSIONI + SCHEDA AGGIUNGI SESSIONE -->
+                    <div class="max-w-6xl w-full mx-auto px-1.5 sm:px-3 pt-1 pb-2 flex-1">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            ${allCards.map(card => `
+                                <button type="button" onclick="${card.action}" class="home-tile px-2.5 py-2 flex items-center justify-between gap-2 text-left w-full">
+                                    <div class="flex items-center gap-2.5 min-w-0">
                                         <div class="home-icon-box">
                                             <i data-lucide="${card.icon}" class="w-6 h-6"></i>
                                         </div>
                                         <div class="min-w-0">
-                                            <h2 class="font-sans font-bold text-[15px] sm:text-base text-[#350D28] leading-snug">${card.title}</h2>
-                                            <p class="text-xs text-[#5E3750] mt-0.5 leading-tight">${card.sub}</p>
+                                            <h2 class="font-sans font-bold text-[15px] sm:text-base text-[#350D28] leading-snug truncate">${escapeHtml(card.title)}</h2>
+                                            <p class="text-xs text-[#5E3750] mt-0.5 leading-tight truncate">${escapeHtml(card.sub)}</p>
                                         </div>
                                     </div>
                                     <i data-lucide="chevron-right" class="w-4 h-4 text-[#4E143B] shrink-0"></i>
                                 </button>
                             `).join('')}
+
+                            <button type="button" onclick="openNewSessionModal()" class="home-tile !border-dashed !border-2 !border-[#8E2D45] !bg-plum-50/70 hover:!bg-white px-2.5 py-2 flex items-center justify-between gap-2 text-left w-full">
+                                <div class="flex items-center gap-2.5 min-w-0">
+                                    <div class="home-icon-box !bg-gradient-to-br !from-[#8E2D45] !to-[#5C1829]">
+                                        <i data-lucide="folder-plus" class="w-6 h-6"></i>
+                                    </div>
+                                    <div class="min-w-0">
+                                        <h2 class="font-sans font-bold text-[15px] sm:text-base text-[#5C1829] leading-snug">+ Aggiungi sessione</h2>
+                                        <p class="text-xs text-[#6E2452] mt-0.5 leading-tight">Crea tu una nuova sezione (Assemblee, Congressi...)</p>
+                                    </div>
+                                </div>
+                                <i data-lucide="plus" class="w-5 h-5 text-[#752136] shrink-0"></i>
+                            </button>
                         </div>
                     </div>
 
-                    <!-- MENSOLA CHIARA E RAMETTI DI LAVANDA IN BASSO A DESTRA COME NELL'IMMAGINE -->
-                    <div class="w-full pt-3 mt-3 border-t border-[#E6D7C5] bg-gradient-to-b from-[#F5ECE1] to-[#EADBC9]">
-                        <div class="max-w-5xl mx-auto px-3 sm:px-5 flex items-center justify-between">
+                    <!-- MENSOLA CHIARA E RAMETTI DI LAVANDA IN BASSO -->
+                    <div class="w-full pt-2 mt-2 border-t border-[#E6D7C5] bg-gradient-to-b from-[#F5ECE1] to-[#EADBC9]">
+                        <div class="max-w-6xl mx-auto px-2 sm:px-4 flex items-center justify-between">
                             <span class="text-[11px] font-semibold text-[#5E3750]">
                                 Giovedì ore 19:00 • Sabato ore 18:00
                             </span>
-                            <svg width="155" height="46" viewBox="0 0 170 50" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                            <svg width="150" height="42" viewBox="0 0 170 50" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                                 <path d="M164 40 C124 34, 86 24, 38 14" stroke="#5A6E40" stroke-width="2.2" stroke-linecap="round"/>
                                 <path d="M156 44 C118 40, 82 35, 48 30" stroke="#6B804D" stroke-width="2" stroke-linecap="round"/>
                                 <ellipse cx="28" cy="24" rx="11" ry="4" transform="rotate(-14 28 24)" fill="#6B804D"/>
@@ -2904,22 +3259,22 @@
         function renderNotesOnlySection(wd, secKey, title, subtitle, pdfLabel, hasCompletionToggle = true) {
             const notes = getNotesForSection(secKey);
             return `
-                <div class="space-y-3.5">
+                <div class="space-y-2.5">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            <span class="text-xs font-bold uppercase tracking-wider text-burgundy-600">${subtitle}</span>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-burgundy-600">${subtitle}</span>
                             <h2 class="font-serif text-xl sm:text-2xl font-bold text-plum-950">${title}</h2>
                         </div>
-                        <div class="flex flex-wrap items-center gap-1.5">
-                            <button type="button" onclick="openNewNoteModal('${secKey}', 'keyboard')" class="px-3.5 py-2 rounded-xl bg-plum-700 hover:bg-plum-800 text-white text-xs font-semibold flex items-center gap-1.5 shadow-2xs">
-                                <i data-lucide="plus" class="w-4 h-4"></i> + Nota con Tastiera
+                        <div class="flex flex-wrap items-center gap-1">
+                            <button type="button" onclick="openNewNoteModal('${secKey}', 'keyboard')" class="px-3 py-1.5 rounded-xl bg-plum-700 hover:bg-plum-800 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i> + Nota Tastiera
                             </button>
-                            <button type="button" onclick="openNewNoteModal('${secKey}', 'pen')" class="px-3.5 py-2 rounded-xl bg-burgundy-600 hover:bg-burgundy-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-2xs">
-                                <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> + Nota con Apple Pencil
+                            <button type="button" onclick="openNewNoteModal('${secKey}', 'pen')" class="px-3 py-1.5 rounded-xl bg-burgundy-600 hover:bg-burgundy-700 text-white text-xs font-semibold flex items-center gap-1 shadow-2xs">
+                                <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> + Nota Pencil
                             </button>
                             ${hasCompletionToggle ? `
-                                <button type="button" onclick="toggleSectionDone('${secKey}')" class="px-3 py-2 rounded-xl text-xs font-semibold ${wd.completed[secKey] ? 'bg-plum-700 text-white' : 'bg-white border border-plum-300 text-plum-900'}">
-                                    ${wd.completed[secKey] ? '✓ Completata' : 'Segna Completata'}
+                                <button type="button" onclick="toggleSectionDone('${secKey}')" class="px-2.5 py-1.5 rounded-xl text-xs font-semibold ${wd.completed[secKey] ? 'bg-plum-700 text-white' : 'bg-white border border-plum-300 text-plum-900'}">
+                                    ${wd.completed[secKey] ? '✓ Completata' : 'Completa'}
                                 </button>
                             ` : ''}
                         </div>
@@ -2927,7 +3282,7 @@
 
                     ${renderSectionPdfPanel(secKey, pdfLabel)}
 
-                    ${renderCustomNotesListHtml(notes, 'Nessuna nota in questa sessione. Premi "+ Nota con Tastiera" o "+ Nota con Apple Pencil" per aggiungerne una, ed eliminala quando vuoi.')}
+                    ${renderCustomNotesListHtml(notes, 'Nessuna nota in questa sessione. Premi "+ Nota Tastiera" o "+ Nota Pencil" per aggiungerne una, ed eliminala quando vuoi.')}
                 </div>
             `;
         }
@@ -2942,23 +3297,23 @@
         function renderTorreSection(wd) {
             const tg = wd.torre;
             return `
-                <div class="space-y-4">
+                <div class="space-y-3">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            <span class="text-xs font-bold uppercase tracking-wider text-burgundy-600">Sabato ore 18:00</span>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-burgundy-600">Sabato ore 18:00</span>
                             <h2 class="font-serif text-xl sm:text-2xl font-bold text-plum-950">Torre di Guardia</h2>
                         </div>
-                        <div class="flex flex-wrap items-center gap-1.5">
+                        <div class="flex flex-wrap items-center gap-1">
                             <button type="button" onclick="cycleColumnRatio()" class="px-2.5 py-1.5 rounded-xl bg-white border border-plum-300 text-plum-900 text-xs font-semibold flex items-center gap-1">
                                 <i data-lucide="sliders-horizontal" class="w-3.5 h-3.5 text-plum-700"></i> Colonne
                             </button>
-                            <button type="button" onclick="openBulkPasteModal()" class="px-3 py-1.5 rounded-xl bg-plum-100 hover:bg-plum-200 text-plum-950 border border-plum-300 text-xs font-semibold flex items-center gap-1">
+                            <button type="button" onclick="openBulkPasteModal()" class="px-2.5 py-1.5 rounded-xl bg-plum-100 hover:bg-plum-200 text-plum-950 border border-plum-300 text-xs font-semibold flex items-center gap-1">
                                 <i data-lucide="clipboard-paste" class="w-3.5 h-3.5 text-plum-800"></i> Incolla Preparazione
                             </button>
-                            <button type="button" onclick="openNewNoteModal('torre')" class="px-3 py-1.5 rounded-xl bg-burgundy-600 hover:bg-burgundy-700 text-white text-xs font-semibold flex items-center gap-1">
+                            <button type="button" onclick="openNewNoteModal('torre')" class="px-2.5 py-1.5 rounded-xl bg-burgundy-600 hover:bg-burgundy-700 text-white text-xs font-semibold flex items-center gap-1">
                                 <i data-lucide="plus" class="w-3.5 h-3.5"></i> Nuova Nota
                             </button>
-                            <button type="button" onclick="toggleSectionDone('torre')" class="px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 ${wd.completed.torre ? 'bg-plum-700 text-white' : 'bg-white border border-plum-300 text-plum-900'}">
+                            <button type="button" onclick="toggleSectionDone('torre')" class="px-2.5 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1 ${wd.completed.torre ? 'bg-plum-700 text-white' : 'bg-white border border-plum-300 text-plum-900'}">
                                 <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> ${wd.completed.torre ? 'Completata' : 'Completa'}
                             </button>
                         </div>
@@ -2966,32 +3321,32 @@
 
                     ${renderSectionPdfPanel('torre', 'PDF Articolo Torre di Guardia')}
 
-                    <div class="space-y-3.5">
+                    <div class="space-y-2.5">
                         <div class="flex flex-wrap items-center justify-between gap-2">
-                            <h3 class="font-serif font-bold text-lg text-plum-950">Paragrafi (${tg.paragraphs.length})</h3>
-                            <div class="flex flex-wrap items-center gap-1.5">
-                                <button type="button" onclick="addParagraphItem('torre')" class="px-3.5 py-1.5 rounded-xl bg-plum-700 hover:bg-plum-800 text-white text-xs font-semibold flex items-center gap-1">
-                                    <i data-lucide="plus" class="w-4 h-4"></i> + Aggiungi Paragrafo
+                            <h3 class="font-serif font-bold text-base text-plum-950">Paragrafi (${tg.paragraphs.length})</h3>
+                            <div class="flex flex-wrap items-center gap-1">
+                                <button type="button" onclick="addParagraphItem('torre')" class="px-3 py-1.5 rounded-xl bg-plum-700 hover:bg-plum-800 text-white text-xs font-semibold flex items-center gap-1">
+                                    <i data-lucide="plus" class="w-3.5 h-3.5"></i> + Aggiungi Paragrafo
                                 </button>
-                                <button type="button" onclick="openNewNoteModal('torre', 'keyboard')" class="px-3 py-1.5 rounded-xl bg-plum-100 hover:bg-plum-200 text-plum-950 border border-plum-300 text-xs font-semibold">
+                                <button type="button" onclick="openNewNoteModal('torre', 'keyboard')" class="px-2.5 py-1.5 rounded-xl bg-plum-100 hover:bg-plum-200 text-plum-950 border border-plum-300 text-xs font-semibold">
                                     + Nota Tastiera
                                 </button>
-                                <button type="button" onclick="openNewNoteModal('torre', 'pen')" class="px-3 py-1.5 rounded-xl bg-burgundy-600 hover:bg-burgundy-700 text-white text-xs font-semibold">
-                                    + Nota Apple Pencil
+                                <button type="button" onclick="openNewNoteModal('torre', 'pen')" class="px-2.5 py-1.5 rounded-xl bg-burgundy-600 hover:bg-burgundy-700 text-white text-xs font-semibold">
+                                    + Nota Pencil
                                 </button>
                             </div>
                         </div>
 
                         ${tg.paragraphs.length === 0 ? `
-                            <div class="card-box bg-ivory-50 border-2 border-dashed border-plum-200 rounded-2xl p-5 text-center space-y-2">
+                            <div class="card-box bg-ivory-50 border-2 border-dashed border-plum-200 rounded-2xl p-4 text-center space-y-1.5">
                                 <p class="text-sm text-plum-800 font-medium">Nessun paragrafo o nota fissa preimpostata.</p>
-                                <p class="text-xs text-plum-600">Usa i pulsanti qui sopra per aggiungere liberamente i paragrafi o le tue note personalizzate (e rinominarle come vuoi: Paragrafo, Commento, Spunto...).</p>
+                                <p class="text-xs text-plum-600">Usa i pulsanti qui sopra per aggiungere liberamente i paragrafi o le tue note personalizzate.</p>
                             </div>
                         ` : tg.paragraphs.map((p, idx) => renderParagraphBlockHtml('torre', p, idx, tg.paragraphs.length)).join('')}
                     </div>
 
                     ${getNotesForSection('torre').length > 0 ? `
-                        <div class="space-y-2.5 pt-1">
+                        <div class="space-y-2 pt-1">
                             <h3 class="font-serif font-bold text-base text-plum-950">Le mie note — Torre di Guardia</h3>
                             ${renderCustomNotesListHtml(getNotesForSection('torre'), '')}
                         </div>
@@ -3006,41 +3361,41 @@
             const arrExpr = secKey === 'torre' ? `getWeekData().torre.paragraphs[${idx}]` : `getWeekData().studio_libro.paragraphs[${idx}]`;
 
             return `
-                <article class="card-box bg-ivory-50 border ${p.commented ? 'border-plum-500 bg-plum-50/40' : 'border-plum-200'} rounded-2xl p-2.5 sm:p-3.5 space-y-2.5 shadow-2xs">
-                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-ivory-300 pb-2">
-                        <div class="flex items-center gap-2">
+                <article class="card-box bg-ivory-50 border ${p.commented ? 'border-plum-500 bg-plum-50/40' : 'border-plum-200'} rounded-2xl p-2 sm:p-2.5 space-y-2 shadow-2xs">
+                    <div class="flex flex-wrap items-center justify-between gap-2 border-b border-ivory-300 pb-1.5">
+                        <div class="flex items-center gap-1.5">
                             <span class="text-xs font-bold uppercase text-plum-800">Paragrafo</span>
-                            <input type="text" value="${escapeAttr(String(p.num))}" oninput="${arrExpr}.num=this.value; saveState()" class="w-12 text-center font-serif font-bold text-sm bg-plum-700 text-white rounded-xl py-0.5 px-1.5">
-                            <button type="button" onclick="${arrExpr}.commented=!${arrExpr}.commented; saveState(); renderActiveSection()" class="px-2.5 py-1 rounded-xl text-xs font-semibold border transition ${p.commented ? 'bg-burgundy-600 text-white border-burgundy-600' : 'bg-white text-plum-900 border-plum-200'}">
+                            <input type="text" value="${escapeAttr(String(p.num))}" oninput="${arrExpr}.num=this.value; saveState()" class="w-11 text-center font-serif font-bold text-sm bg-plum-700 text-white rounded-xl py-0.5 px-1">
+                            <button type="button" onclick="${arrExpr}.commented=!${arrExpr}.commented; saveState(); renderActiveSection()" class="px-2 py-0.5 rounded-xl text-xs font-semibold border transition ${p.commented ? 'bg-burgundy-600 text-white border-burgundy-600' : 'bg-white text-plum-900 border-plum-200'}">
                                 ${p.commented ? '✓ Già commentato' : 'Alzata di mano'}
                             </button>
                         </div>
 
                         <div class="no-print flex items-center gap-1">
-                            <button type="button" onclick="moveParagraphItem('${secKey}', ${idx}, -1)" ${idx === 0 ? 'disabled' : ''} class="p-1.5 rounded-xl bg-white border border-plum-200 text-plum-800 disabled:opacity-30">
+                            <button type="button" onclick="moveParagraphItem('${secKey}', ${idx}, -1)" ${idx === 0 ? 'disabled' : ''} class="p-1 rounded-xl bg-white border border-plum-200 text-plum-800 disabled:opacity-30">
                                 <i data-lucide="arrow-up" class="w-3.5 h-3.5"></i>
                             </button>
-                            <button type="button" onclick="moveParagraphItem('${secKey}', ${idx}, 1)" ${idx === total - 1 ? 'disabled' : ''} class="p-1.5 rounded-xl bg-white border border-plum-200 text-plum-800 disabled:opacity-30">
+                            <button type="button" onclick="moveParagraphItem('${secKey}', ${idx}, 1)" ${idx === total - 1 ? 'disabled' : ''} class="p-1 rounded-xl bg-white border border-plum-200 text-plum-800 disabled:opacity-30">
                                 <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>
                             </button>
-                            <button type="button" onclick="deleteParagraphItem('${secKey}', ${idx})" class="px-2 py-1 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-1">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            <button type="button" onclick="deleteParagraphItem('${secKey}', ${idx})" class="px-2 py-0.5 rounded-xl bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 text-xs font-semibold flex items-center gap-1">
+                                <i data-lucide="trash-2" class="w-3 h-3"></i>
                                 <span>Elimina</span>
                             </button>
                         </div>
                     </div>
 
                     <div class="split-grid items-start">
-                        <div class="space-y-2.5">
-                            <div class="bg-plum-50/80 border border-plum-200 rounded-xl p-2.5">
+                        <div class="space-y-2">
+                            <div class="bg-plum-50/80 border border-plum-200 rounded-xl p-2">
                                 <label class="block text-[10px] font-bold uppercase tracking-wider text-plum-800 mb-0.5">Domanda:</label>
-                                <div contenteditable="true" oninput="${arrExpr}.question=this.innerHTML; saveState()" data-placeholder="Scrivi o incolla la domanda..." class="study-text font-semibold text-plum-950 min-h-[30px]">${p.question || ''}</div>
+                                <div contenteditable="true" oninput="${arrExpr}.question=this.innerHTML; saveState()" data-placeholder="Scrivi o incolla la domanda..." class="study-text font-semibold text-plum-950 min-h-[28px]">${p.question || ''}</div>
                             </div>
 
                             <div>
-                                <label class="block text-[10px] font-bold uppercase tracking-wider text-plum-800 mb-1">Il mio commento:</label>
+                                <label class="block text-[10px] font-bold uppercase tracking-wider text-plum-800 mb-0.5">Il mio commento:</label>
                                 ${renderRichTextToolbarHtml('comment_box_' + p.id)}
-                                <div id="comment_box_${p.id}" contenteditable="true" oninput="${arrExpr}.comment=this.innerHTML; saveState()" data-placeholder="Scrivi o incolla il tuo commento..." class="study-text resizable-box rounded-xl border border-plum-200 bg-white p-2.5">${p.comment || ''}</div>
+                                <div id="comment_box_${p.id}" contenteditable="true" oninput="${arrExpr}.comment=this.innerHTML; saveState()" data-placeholder="Scrivi o incolla il tuo commento..." class="study-text resizable-box rounded-xl border border-plum-200 bg-white p-2">${p.comment || ''}</div>
                             </div>
 
                             ${renderImagesBlockHtml(imgPrefix + p.id, p.images, false)}
@@ -3119,16 +3474,16 @@
         function renderStudioLibroSection(wd) {
             const sb = wd.studio_libro;
             return `
-                <div class="space-y-4">
+                <div class="space-y-2.5">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                         <div>
-                            <span class="text-xs font-bold uppercase tracking-wider text-burgundy-600">Giovedì ore 19:00</span>
+                            <span class="text-[11px] font-bold uppercase tracking-wider text-burgundy-600">Giovedì ore 19:00</span>
                             <h2 class="font-serif text-xl sm:text-2xl font-bold text-plum-950">Studio del libro</h2>
                         </div>
-                        <div class="flex flex-wrap items-center gap-1.5">
+                        <div class="flex flex-wrap items-center gap-1">
                             <button type="button" onclick="addParagraphItem('studio_libro')" class="px-3 py-1.5 rounded-xl bg-plum-700 text-white text-xs font-semibold">+ Aggiungi Paragrafo</button>
                             <button type="button" onclick="openNewNoteModal('studio_libro')" class="px-3 py-1.5 rounded-xl bg-burgundy-600 text-white text-xs font-semibold">+ Nuova Nota</button>
-                            <button type="button" onclick="toggleSectionDone('studio_libro')" class="px-3 py-1.5 rounded-xl text-xs font-semibold ${wd.completed.studio_libro ? 'bg-plum-700 text-white' : 'bg-white border border-plum-300 text-plum-900'}">
+                            <button type="button" onclick="toggleSectionDone('studio_libro')" class="px-2.5 py-1.5 rounded-xl text-xs font-semibold ${wd.completed.studio_libro ? 'bg-plum-700 text-white' : 'bg-white border border-plum-300 text-plum-900'}">
                                 ${wd.completed.studio_libro ? '✓ Completata' : 'Completa'}
                             </button>
                         </div>
@@ -3136,91 +3491,11 @@
 
                     ${renderSectionPdfPanel('studio_libro', 'PDF del Libro — Studio del libro')}
 
-                    <div class="space-y-3.5">
+                    <div class="space-y-2.5">
                         ${sb.paragraphs.map((p, idx) => renderParagraphBlockHtml('studio_libro', p, idx, sb.paragraphs.length)).join('')}
                     </div>
 
                     ${renderCustomNotesListHtml(getNotesForSection('studio_libro'), '')}
-                </div>
-            `;
-        }
-
-        function renderLeMieNoteSection() {
-            return `
-                <div class="space-y-4">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                            <span class="text-xs font-bold uppercase tracking-wider text-burgundy-600">Tastiera &amp; Penna digitale</span>
-                            <h2 class="font-serif text-xl sm:text-2xl font-bold text-plum-950">Le mie note</h2>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-1.5">
-                            <button type="button" onclick="openNewNoteModal('appunti', 'keyboard')" class="px-3.5 py-2 rounded-xl bg-plum-700 hover:bg-plum-800 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs">
-                                <i data-lucide="plus" class="w-4 h-4"></i> + Nota con Tastiera
-                            </button>
-                            <button type="button" onclick="openNewNoteModal('appunti', 'pen')" class="px-3.5 py-2 rounded-xl bg-burgundy-600 hover:bg-burgundy-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-xs">
-                                <i data-lucide="pen-tool" class="w-4 h-4"></i> + Nota con Apple Pencil
-                            </button>
-                        </div>
-                    </div>
-
-                    ${renderCustomNotesListHtml(state.customNotes, 'Non hai ancora creato note. Premi "+ Nota con Tastiera" o "+ Nota con Apple Pencil" per aggiungerle ed eliminarle quando vuoi.')}
-                </div>
-            `;
-        }
-
-        function renderPubblicazioniSection() {
-            return `
-                <div class="space-y-4">
-                    <div class="flex flex-wrap items-center justify-between gap-2">
-                        <div>
-                            <span class="text-xs font-bold uppercase tracking-wider text-burgundy-600">Raccolta dei tuoi documenti PDF salvati</span>
-                            <h2 class="font-serif text-xl sm:text-2xl font-bold text-plum-950">Pubblicazioni</h2>
-                        </div>
-                        <label class="px-3.5 py-2 rounded-xl bg-plum-700 hover:bg-plum-800 text-white text-xs font-semibold cursor-pointer flex items-center gap-1.5 shadow-xs">
-                            <i data-lucide="file-plus" class="w-4 h-4"></i> Importa Nuovo PDF
-                            <input type="file" accept="application/pdf" onchange="importPdfFileToLibrary(event, 'pubblicazioni')" class="hidden">
-                        </label>
-                    </div>
-
-                    ${state.pdfLibrary.length === 0 ? `
-                        <div class="card-box bg-ivory-50 border-2 border-dashed border-plum-300 rounded-2xl p-6 text-center space-y-2">
-                            <div class="w-11 h-11 rounded-2xl bg-plum-100 text-plum-800 flex items-center justify-center mx-auto">
-                                <i data-lucide="file-text" class="w-5 h-5"></i>
-                            </div>
-                            <h3 class="font-serif text-base font-bold text-plum-950">Nessun documento PDF caricato</h3>
-                            <p class="text-xs text-plum-700 max-w-md mx-auto">Importa dal tuo dispositivo i PDF che desideri studiare: potrai evidenziare frasi, scrivere con Apple Pencil, inserire caselle di testo e aggiungere immagini direttamente sopra le pagine.</p>
-                        </div>
-                    ` : `
-                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                            ${state.pdfLibrary.map(pdf => {
-                                const secLabel = SECTIONS_META.find(s => s.id === pdf.section)?.title || 'Pubblicazioni';
-                                return `
-                                    <div class="card-box bg-ivory-50 border-2 border-plum-200 rounded-2xl p-3 flex flex-col justify-between gap-2.5 shadow-2xs">
-                                        <div class="space-y-1">
-                                            <div class="flex items-center justify-between gap-2">
-                                                <span class="px-2 py-0.5 rounded-md bg-plum-100 text-plum-800 text-[10px] font-bold">${escapeHtml(secLabel)}</span>
-                                                <span class="text-[11px] text-plum-500">${formatBytesItalian(pdf.sizeBytes)}</span>
-                                            </div>
-                                            <h3 class="font-serif font-bold text-base text-plum-950 line-clamp-2">${escapeHtml(pdf.title)}</h3>
-                                            <p class="text-xs text-burgundy-600 font-semibold">Segnalibro: Pagina ${pdf.lastPage || 1}</p>
-                                        </div>
-
-                                        <div class="flex items-center justify-between gap-1.5 pt-2 border-t border-ivory-300">
-                                            <button type="button" onclick="openPdfInSplitStudio('${pdf.id}')" class="flex-1 px-2.5 py-1.5 rounded-xl bg-plum-700 hover:bg-plum-800 text-white text-xs font-semibold flex items-center justify-center gap-1">
-                                                <i data-lucide="book-open" class="w-3.5 h-3.5"></i> Apri (70% / 30%)
-                                            </button>
-                                            <button type="button" onclick="renamePdfInLibrary('${pdf.id}')" class="p-1.5 rounded-xl bg-white border border-plum-200 text-plum-800 hover:bg-plum-50">
-                                                <i data-lucide="pencil" class="w-4 h-4"></i>
-                                            </button>
-                                            <button type="button" onclick="deletePdfFromLibrary('${pdf.id}')" class="p-1.5 rounded-xl bg-white border border-red-200 text-red-600 hover:bg-red-50">
-                                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('')}
-                        </div>
-                    `}
                 </div>
             `;
         }
@@ -3233,33 +3508,33 @@
             const filtered = keys.filter(k => !q || (JSON.stringify(state.weeks[k]).toLowerCase() + ' ' + formatWeekItalian(k).toLowerCase()).includes(q));
 
             return `
-                <div class="space-y-4">
+                <div class="space-y-2.5">
                     <div>
-                        <span class="text-xs font-bold uppercase tracking-wider text-burgundy-600">Cronologia dello studio</span>
+                        <span class="text-[11px] font-bold uppercase tracking-wider text-burgundy-600">Cronologia dello studio</span>
                         <h2 class="font-serif text-xl sm:text-2xl font-bold text-plum-950">Archivio delle settimane precedenti</h2>
                     </div>
 
-                    <div class="card-box bg-ivory-50 border border-plum-200 rounded-2xl p-2.5 flex items-center gap-2.5">
+                    <div class="card-box bg-ivory-50 border border-plum-200 rounded-2xl p-2 flex items-center gap-2">
                         <i data-lucide="search" class="w-4 h-4 text-plum-700"></i>
                         <input type="text" value="${escapeAttr(archiveSearchText)}" oninput="archiveSearchText=this.value; renderActiveSection()" placeholder="Cerca per data o parole nei commenti..." class="w-full bg-transparent text-sm text-plum-950 outline-none">
                     </div>
 
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
                         ${filtered.map(wk => {
                             const isCurrent = wk === state.currentWeekKey;
                             const weekNotesCount = state.customNotes.filter(n => n.weekKey === wk).length;
                             return `
-                                <div class="card-box bg-ivory-50 border-2 ${isCurrent ? 'border-plum-600' : 'border-plum-200'} rounded-2xl p-3 flex flex-col justify-between gap-2.5">
+                                <div class="card-box bg-ivory-50 border-2 ${isCurrent ? 'border-plum-600' : 'border-plum-200'} rounded-2xl p-2.5 flex flex-col justify-between gap-2">
                                     <div>
                                         <div class="flex items-center justify-between">
                                             <span class="text-xs font-bold text-burgundy-600">${formatWeekItalian(wk)}</span>
                                             ${isCurrent ? '<span class="px-2 py-0.5 rounded-full bg-plum-700 text-white text-[10px] font-semibold">Attiva</span>' : ''}
                                         </div>
-                                        <p class="text-xs text-plum-700 mt-1">Note salvate in questa settimana: <strong>${weekNotesCount}</strong></p>
+                                        <p class="text-xs text-plum-700 mt-0.5">Note salvate in questa settimana: <strong>${weekNotesCount}</strong></p>
                                     </div>
-                                    <div class="flex items-center justify-between pt-2 border-t border-ivory-300">
+                                    <div class="flex items-center justify-between pt-1.5 border-t border-ivory-300">
                                         <button type="button" onclick="openWeekFromArchive('${wk}', 'torre')" class="text-xs font-bold text-plum-800 hover:underline">Apri Torre di Guardia →</button>
-                                        <button type="button" onclick="openWeekFromArchive('${wk}', 'dashboard')" class="px-3 py-1 rounded-xl bg-plum-100 hover:bg-plum-200 text-plum-950 text-xs font-semibold">Apri settimana</button>
+                                        <button type="button" onclick="openWeekFromArchive('${wk}', 'dashboard')" class="px-2.5 py-1 rounded-xl bg-plum-100 hover:bg-plum-200 text-plum-950 text-xs font-semibold">Apri settimana</button>
                                     </div>
                                 </div>
                             `;
@@ -3313,6 +3588,17 @@
         function escapeHtml(str) { if (!str) return ''; return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
         function escapeAttr(str) { if (!str) return ''; return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
+        function handleViewportAndOrientationChange() {
+            clearTimeout(window.__resizePadTimer);
+            window.__resizePadTimer = setTimeout(() => {
+                initAllHandwritingPads();
+                if (activePdfInstance && activePdfMeta) {
+                    setPdfSplitRatio(state.pdfSplitPercent || 70);
+                    renderCurrentPdfPage(pdfAutoFitEnabled);
+                }
+            }, 140);
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
             await loadAllData();
             document.documentElement.style.setProperty('--study-font-size', state.fontSize + 'px');
@@ -3328,10 +3614,8 @@
             }
         });
 
-        window.addEventListener('resize', () => {
-            clearTimeout(window.__resizePadTimer);
-            window.__resizePadTimer = setTimeout(initAllHandwritingPads, 150);
-        });
+        window.addEventListener('resize', handleViewportAndOrientationChange);
+        window.addEventListener('orientationchange', handleViewportAndOrientationChange);
     </script>
 </body>
 </html>
