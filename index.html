@@ -171,9 +171,9 @@
             <!-- Controlli Pagina, Zoom e Layout -->
             <div class="flex flex-wrap items-center gap-1.5">
                 <div class="flex items-center bg-white border border-plum-300 rounded-xl px-1.5 py-0.5 text-xs font-bold">
-                    <button type="button" onclick="pdfChangePage(-1)" class="p-1 hover:bg-plum-100 rounded-lg"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
-                    <span class="px-1.5">Pag. <span id="pdf-page-num">1</span> / <span id="pdf-page-total">1</span></span>
-                    <button type="button" onclick="pdfChangePage(1)" class="p-1 hover:bg-plum-100 rounded-lg"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+                    <button type="button" onclick="pdfChangePage(-1)" class="p-1 hover:bg-plum-100 rounded-lg" title="Pagina precedente"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
+                    <span class="px-1.5 flex items-center gap-1">Pag. <input id="pdf-page-input" type="number" min="1" value="1" onchange="pdfGoToPage(this.value)" onkeydown="if(event.key==='Enter'){pdfGoToPage(this.value);this.blur();}" class="w-11 text-center border border-plum-200 rounded-md py-0.5 text-xs font-extrabold text-plum-900 bg-ivory-50 outline-none focus:border-plum-600"> / <span id="pdf-page-total">1</span></span>
+                    <button type="button" onclick="pdfChangePage(1)" class="p-1 hover:bg-plum-100 rounded-lg" title="Pagina successiva"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
                 </div>
 
                 <div class="flex items-center bg-white border border-plum-300 rounded-xl px-1.5 py-0.5 text-xs font-bold">
@@ -217,7 +217,6 @@
             </div>
             <div id="pdf-scriptures-list" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
         </div>
-        </div>
 
         <!-- Barra strumenti Apple Pencil sul PDF (nascosta in Adunanza) -->
         <div id="pdf-annot-toolbar" class="prep-only bg-white border-b border-plum-200 px-3 py-1.5 flex flex-wrap items-center gap-1.5 text-xs font-bold">
@@ -242,6 +241,7 @@
                     <canvas id="pdf-annot-canvas" class="absolute inset-0 w-full h-full"></canvas>
                     <div id="pdf-images-overlay-layer" class="absolute inset-0 pointer-events-none"></div>
                 </div>
+                <div id="pdf-native-container" class="hidden w-full h-full"></div>
             </div>
 
             <!-- Barra divisoria trascinabile -->
@@ -364,6 +364,7 @@
         let activePdfMeta = null;
         let activePdfPage = 1;
         let activePdfZoom = 1.1;
+        let activePdfBlobUrl = null;
         let pdfAnnotTool = 'scroll';
         let pdfScrollLocked = false;
         let inMemoryPdfBuffers = {};
@@ -1056,11 +1057,16 @@
         }
 
         async function savePdfBinary(id, arrayBuffer) {
-            inMemoryPdfBuffers[id] = arrayBuffer.slice(0);
+            const copy = arrayBuffer.slice(0);
+            inMemoryPdfBuffers[id] = copy;
             try {
                 const db = await openPdfDB();
-                const tx = db.transaction(DB_STORE, 'readwrite');
-                tx.objectStore(DB_STORE).put(arrayBuffer.slice(0), id);
+                await new Promise((resolve) => {
+                    const tx = db.transaction(DB_STORE, 'readwrite');
+                    tx.objectStore(DB_STORE).put(copy.slice(0), id);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => resolve();
+                });
             } catch (_) {}
         }
 
@@ -1071,7 +1077,14 @@
                 return await new Promise((resolve) => {
                     const tx = db.transaction(DB_STORE, 'readonly');
                     const req = tx.objectStore(DB_STORE).get(id);
-                    req.onsuccess = () => resolve(req.result ? req.result.slice(0) : null);
+                    req.onsuccess = () => {
+                        if (req.result) {
+                            inMemoryPdfBuffers[id] = req.result.slice(0);
+                            resolve(req.result.slice(0));
+                        } else {
+                            resolve(null);
+                        }
+                    };
                     req.onerror = () => resolve(null);
                 });
             } catch (_) {
@@ -1079,27 +1092,43 @@
             }
         }
 
-        async function handlePdfUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const buffer = await file.arrayBuffer();
-            const pdfId = 'pdf_' + Date.now();
-            await savePdfBinary(pdfId, buffer);
-            state.pdfs.push({
-                id: pdfId,
-                name: file.name,
-                section: state.activeSection,
-                lastPage: 1,
-                annotations: {}
+        function readFileAsArrayBuffer(file) {
+            if (file.arrayBuffer) return file.arrayBuffer();
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error);
+                reader.readAsArrayBuffer(file);
             });
-            saveState();
-            renderActiveSection();
-            openPdfInWorkspace(pdfId);
-            event.target.value = '';
+        }
+
+        async function handlePdfUpload(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            try {
+                const buffer = await readFileAsArrayBuffer(file);
+                const pdfId = 'pdf_' + Date.now();
+                await savePdfBinary(pdfId, buffer);
+                state.pdfs.push({
+                    id: pdfId,
+                    name: file.name,
+                    section: state.activeSection,
+                    lastPage: 1,
+                    annotations: {}
+                });
+                saveState();
+                renderActiveSection();
+                await openPdfInWorkspace(pdfId);
+            } catch (err) {
+                console.error('Errore importazione PDF:', err);
+            } finally {
+                event.target.value = '';
+            }
         }
 
         function deletePdfDocument(pdfId) {
             state.pdfs = state.pdfs.filter(p => p.id !== pdfId);
+            delete inMemoryPdfBuffers[pdfId];
             saveState();
             renderActiveSection();
         }
@@ -1108,25 +1137,68 @@
             const meta = state.pdfs.find(p => p.id === pdfId);
             if (!meta) return;
             const buffer = await loadPdfBinary(pdfId);
-            if (!buffer) return;
+            if (!buffer) {
+                const msg = document.getElementById('save-status-pill');
+                if (msg) msg.textContent = 'Reimporta il PDF (+ Importa PDF)';
+                return;
+            }
 
             activePdfMeta = meta;
             activePdfPage = meta.lastPage || 1;
+            if (activePdfBlobUrl) {
+                try { URL.revokeObjectURL(activePdfBlobUrl); } catch (_) {}
+            }
+            activePdfBlobUrl = URL.createObjectURL(new Blob([buffer.slice(0)], { type: 'application/pdf' }));
+
             document.getElementById('pdf-active-title').textContent = meta.name;
             document.getElementById('pdf-workspace-overlay').classList.add('open');
 
-            if (window.pdfjsLib) {
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                activePdfDoc = await pdfjsLib.getDocument({ data: buffer, disableWorker: true }).promise;
-                document.getElementById('pdf-page-total').textContent = activePdfDoc.numPages;
-                await renderCurrentPdfPage();
+            const canvasWrapper = document.getElementById('pdf-canvas-wrapper');
+            const nativeContainer = document.getElementById('pdf-native-container');
+            if (canvasWrapper) canvasWrapper.classList.remove('hidden');
+            if (nativeContainer) {
+                nativeContainer.classList.add('hidden');
+                nativeContainer.innerHTML = '';
             }
+
+            try {
+                if (!window.pdfjsLib) throw new Error('pdf.js non caricato');
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                const loadingTask = pdfjsLib.getDocument({
+                    data: new Uint8Array(buffer.slice(0)),
+                    disableWorker: true,
+                    isEvalSupported: false
+                });
+                activePdfDoc = await loadingTask.promise;
+                const total = activePdfDoc.numPages || 1;
+                document.getElementById('pdf-page-total').textContent = total;
+                const pageInp = document.getElementById('pdf-page-input');
+                if (pageInp) pageInp.max = total;
+                await renderCurrentPdfPage();
+            } catch (err) {
+                console.warn('Fallback visualizzatore nativo PDF:', err);
+                activePdfDoc = null;
+                document.getElementById('pdf-page-total').textContent = '—';
+                if (canvasWrapper) canvasWrapper.classList.add('hidden');
+                renderNativePdfPage();
+            }
+
             renderPdfSideNotes();
+            renderPdfScripturesDrawer();
             if (window.lucide) lucide.createIcons();
+        }
+
+        function renderNativePdfPage() {
+            const nativeContainer = document.getElementById('pdf-native-container');
+            if (!nativeContainer || !activePdfBlobUrl) return;
+            nativeContainer.classList.remove('hidden');
+            nativeContainer.innerHTML = `<embed src="${activePdfBlobUrl}#page=${activePdfPage}" type="application/pdf" class="w-full h-full rounded-lg border border-plum-200 bg-white">`;
         }
 
         function closePdfWorkspace() {
             saveState();
+            const nativeContainer = document.getElementById('pdf-native-container');
+            if (nativeContainer) nativeContainer.innerHTML = '';
             document.getElementById('pdf-workspace-overlay').classList.remove('open');
             activePdfMeta = null;
             activePdfDoc = null;
@@ -1134,11 +1206,22 @@
         }
 
         async function renderCurrentPdfPage() {
-            if (!activePdfDoc || !activePdfMeta) return;
-            activePdfPage = Math.max(1, Math.min(activePdfDoc.numPages, activePdfPage));
+            if (!activePdfMeta) return;
+            const maxPages = activePdfDoc ? activePdfDoc.numPages : 9999;
+            activePdfPage = Math.max(1, Math.min(maxPages, parseInt(activePdfPage, 10) || 1));
             activePdfMeta.lastPage = activePdfPage;
-            document.getElementById('pdf-page-num').textContent = activePdfPage;
+
+            const pageInp = document.getElementById('pdf-page-input');
+            if (pageInp) pageInp.value = activePdfPage;
             document.getElementById('pdf-zoom-label').textContent = Math.round(activePdfZoom * 100) + '%';
+
+            if (!activePdfDoc) {
+                renderNativePdfPage();
+                renderPdfSideNotes();
+                renderPdfScripturesDrawer();
+                saveState();
+                return;
+            }
 
             const page = await activePdfDoc.getPage(activePdfPage);
             const viewport = page.getViewport({ scale: activePdfZoom });
@@ -1158,8 +1241,23 @@
         }
 
         function pdfChangePage(delta) {
-            if (!activePdfDoc) return;
+            if (!activePdfMeta) return;
             activePdfPage += delta;
+            renderCurrentPdfPage();
+        }
+
+        function pdfGoToPage(pageNum) {
+            if (!activePdfMeta) return;
+            const parsed = parseInt(pageNum, 10);
+            if (!isNaN(parsed) && parsed >= 1) {
+                activePdfPage = parsed;
+                renderCurrentPdfPage();
+            }
+        }
+
+        function pdfChangeZoom(delta) {
+            if (!activePdfMeta) return;
+            activePdfZoom = Math.max(0.5, Math.min(2.6, +(activePdfZoom + delta).toFixed(2)));
             renderCurrentPdfPage();
         }
 
