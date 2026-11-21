@@ -228,9 +228,24 @@
             <button type="button" id="tool-pdf-scroll" onclick="setPdfAnnotTool('scroll')" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-plum-100 text-plum-900">Sfoglia</button>
             <button type="button" id="tool-pdf-pen" onclick="setPdfAnnotTool('pen')" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Penna</button>
             <button type="button" id="tool-pdf-highlight" onclick="setPdfAnnotTool('highlight')" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Evidenzia</button>
+
+            <!-- 3 colori evidenziatore -->
+            <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-xl bg-ivory-100 border border-plum-200" title="Colore evidenziatore">
+                <button type="button" id="hl-color-yellow" onclick="setPdfHighlightColor('yellow')" class="w-5 h-5 rounded-full bg-yellow-300 border-2 border-plum-900" title="Evidenziatore Giallo"></button>
+                <button type="button" id="hl-color-green" onclick="setPdfHighlightColor('green')" class="w-5 h-5 rounded-full bg-emerald-300 border border-plum-400" title="Evidenziatore Verde"></button>
+                <button type="button" id="hl-color-pink" onclick="setPdfHighlightColor('pink')" class="w-5 h-5 rounded-full bg-pink-300 border border-plum-400" title="Evidenziatore Rosa"></button>
+            </div>
+
+            <!-- Scelta spessore tratto -->
+            <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-xl bg-ivory-100 border border-plum-200" title="Spessore penna ed evidenziatore">
+                <button type="button" id="stroke-size-thin" onclick="setPdfStrokeSize('thin')" class="px-1.5 py-0.5 rounded-lg bg-white text-plum-900 text-[11px]">Sottile</button>
+                <button type="button" id="stroke-size-medium" onclick="setPdfStrokeSize('medium')" class="px-1.5 py-0.5 rounded-lg bg-plum-700 text-white text-[11px]">Medio</button>
+                <button type="button" id="stroke-size-thick" onclick="setPdfStrokeSize('thick')" class="px-1.5 py-0.5 rounded-lg bg-white text-plum-900 text-[11px]">Largo</button>
+            </div>
+
             <button type="button" id="tool-pdf-eraser" onclick="setPdfAnnotTool('eraser')" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Gomma</button>
             <button type="button" onclick="pdfUndoStroke()" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Annulla</button>
-            <button type="button" id="btn-pdf-lock-scroll" onclick="togglePdfScrollLock()" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Solo penna</button>
+            <button type="button" id="btn-pdf-pencil-only" onclick="togglePdfPencilOnly()" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-plum-200 text-plum-900" title="Ignora le dita e scrive solo con Apple Pencil">Solo Apple Pencil ✓</button>
             <label class="px-2.5 py-1 rounded-xl border border-plum-300 bg-plum-50 text-plum-900 hover:bg-plum-100 cursor-pointer">
                 + Foto PDF
                 <input type="file" accept="image/*" onchange="handlePdfOverlayImageUpload(event)" class="hidden">
@@ -334,6 +349,29 @@
         <img id="image-lightbox-img" src="" alt="Anteprima immagine" class="max-w-full max-h-full rounded-2xl shadow-2xl border-2 border-white">
     </div>
 
+    <!-- FINESTRA GRANDE A SCHERMO INTERO PER LEGGERE LA SCRITTURA -->
+    <div id="scripture-reader-overlay" onclick="if(event.target===this)closeScriptureReaderOverlay()" class="fixed inset-0 z-[90] bg-black/75 hidden items-center justify-center p-3 sm:p-6">
+        <div class="bg-ivory-50 border-2 border-plum-400 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
+            <div class="bg-plum-100 border-b border-plum-300 px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2.5 flex-wrap">
+                    <span class="px-2.5 py-1 rounded-xl bg-plum-700 text-white text-xs font-extrabold uppercase">Scrittura</span>
+                    <h3 id="reader-scr-ref" class="text-xl sm:text-2xl font-extrabold text-plum-900"></h3>
+                    <button type="button" id="reader-scr-page-btn" class="hidden px-3 py-1.5 rounded-xl bg-white border border-plum-400 text-xs sm:text-sm font-extrabold text-plum-900 hover:bg-plum-200"></button>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="changeReaderScriptureFontSize(-2)" class="px-3 py-1.5 rounded-xl bg-white border border-plum-300 text-sm font-extrabold text-plum-900 hover:bg-plum-100" title="Riduci carattere">A−</button>
+                    <button type="button" onclick="changeReaderScriptureFontSize(2)" class="px-3 py-1.5 rounded-xl bg-white border border-plum-300 text-sm font-extrabold text-plum-900 hover:bg-plum-100" title="Ingrandisci carattere">A+</button>
+                    <button type="button" onclick="closeScriptureReaderOverlay()" class="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-plum-700 text-white text-sm font-extrabold hover:bg-plum-800">
+                        <i data-lucide="x" class="w-4 h-4"></i> Chiudi
+                    </button>
+                </div>
+            </div>
+            <div class="p-5 sm:p-8 overflow-y-auto flex-1 bg-white">
+                <p id="reader-scr-text" style="font-size: 24px;" class="text-zinc-900 leading-relaxed whitespace-pre-wrap font-medium"></p>
+            </div>
+        </div>
+    </div>
+
     <!-- MODALE AGGIUNGI / MODIFICA SCRITTURA COLLEGATA AL PDF -->
     <div id="scripture-modal" class="fixed inset-0 z-[65] bg-black/50 hidden items-center justify-center p-4">
         <div class="bg-white border border-plum-300 rounded-2xl max-w-xl w-full p-5 space-y-3.5 shadow-xl">
@@ -398,6 +436,9 @@
         let activePdfZoom = 1.1;
         let activePdfBlobUrl = null;
         let pdfAnnotTool = 'scroll';
+        let pdfHighlightColor = 'yellow';
+        let pdfStrokeSize = 'medium';
+        let pdfPencilOnly = true;
         let pdfScrollLocked = false;
         let inMemoryPdfBuffers = {};
         let pasteFromPdfContext = false;
@@ -405,6 +446,7 @@
         let editingScriptureId = null;
         let pdfScripturesOnlyCurrentPage = false;
         let editingSessionId = null;
+        let readerScriptureFontSize = 24;
 
         function getWeekKey(offset = 0) {
             const now = new Date();
@@ -1210,6 +1252,7 @@
                 let currentStroke = null;
 
                 canvas.onpointerdown = (e) => {
+                    if (pdfPencilOnly && e.pointerType === 'touch') return;
                     e.preventDefault();
                     canvas.setPointerCapture(e.pointerId);
                     drawing = true;
@@ -1220,6 +1263,7 @@
                 };
                 canvas.onpointermove = (e) => {
                     if (!drawing || !currentStroke) return;
+                    if (pdfPencilOnly && e.pointerType === 'touch') return;
                     const r = canvas.getBoundingClientRect();
                     currentStroke.push({ x: e.clientX - r.left, y: e.clientY - r.top });
                     redrawNoteStrokes(ctx, canvas, note.strokes);
@@ -1616,13 +1660,60 @@
             renderPdfScripturesDrawer();
         }
 
+        function openScriptureReaderOverlay(scrId) {
+            const scr = state.scriptures.find(s => s.id === scrId);
+            if (!scr) return;
+            const overlay = document.getElementById('scripture-reader-overlay');
+            const refEl = document.getElementById('reader-scr-ref');
+            const textEl = document.getElementById('reader-scr-text');
+            const pageBtn = document.getElementById('reader-scr-page-btn');
+            if (!overlay || !refEl || !textEl) return;
+
+            refEl.textContent = scr.ref || 'Scrittura';
+            textEl.textContent = scr.text && scr.text.trim() ? scr.text : '(Nessun testo inserito per questa scrittura)';
+            textEl.style.fontSize = readerScriptureFontSize + 'px';
+
+            if (pageBtn) {
+                if (typeof scr.pdfPage === 'number' && scr.pdfPage > 0) {
+                    pageBtn.classList.remove('hidden');
+                    pageBtn.textContent = `Vai a pag. ${scr.pdfPage}`;
+                    pageBtn.onclick = () => {
+                        closeScriptureReaderOverlay();
+                        jumpToPdfPageFromScripture(scr.id);
+                    };
+                } else {
+                    pageBtn.classList.add('hidden');
+                }
+            }
+
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function closeScriptureReaderOverlay() {
+            const overlay = document.getElementById('scripture-reader-overlay');
+            if (overlay) {
+                overlay.classList.add('hidden');
+                overlay.classList.remove('flex');
+            }
+        }
+
+        function changeReaderScriptureFontSize(delta) {
+            readerScriptureFontSize = Math.max(16, Math.min(44, readerScriptureFontSize + delta));
+            const textEl = document.getElementById('reader-scr-text');
+            if (textEl) textEl.style.fontSize = readerScriptureFontSize + 'px';
+        }
+
         function renderSingleScriptureCardHtml(scr, compact = false) {
             const hasPage = typeof scr.pdfPage === 'number' && scr.pdfPage > 0;
             return `
-                <div class="bg-white border border-plum-200 rounded-xl p-3 shadow-sm space-y-1.5">
+                <div class="bg-white border border-plum-200 hover:border-plum-400 rounded-xl p-3 shadow-sm space-y-1.5 transition">
                     <div class="flex flex-wrap items-center justify-between gap-1.5">
                         <div class="flex items-center gap-1.5 flex-wrap">
-                            <span class="text-xs sm:text-sm font-extrabold text-plum-900">${escapeAttr(scr.ref)}</span>
+                            <button type="button" onclick="openScriptureReaderOverlay('${scr.id}')" class="text-left text-xs sm:text-sm font-extrabold text-plum-900 hover:text-plum-700 underline decoration-plum-300 underline-offset-2">
+                                ${escapeAttr(scr.ref)}
+                            </button>
                             ${hasPage ? `
                                 <button type="button" onclick="jumpToPdfPageFromScripture('${scr.id}')" class="px-2 py-0.5 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-[11px] font-bold">
                                     Vai a pag. ${scr.pdfPage}
@@ -1630,6 +1721,7 @@
                             ` : `<span class="px-2 py-0.5 rounded-lg bg-ivory-100 text-plum-700 text-[11px] font-semibold">Nessuna pag.</span>`}
                         </div>
                         <div class="flex items-center gap-1">
+                            <button type="button" onclick="openScriptureReaderOverlay('${scr.id}')" class="px-2 py-0.5 rounded-lg bg-plum-700 hover:bg-plum-800 text-[11px] font-bold text-white">Leggi grande</button>
                             <button type="button" onclick="openScriptureModal(${compact}, '${scr.id}')" class="px-2 py-0.5 rounded-lg bg-ivory-100 hover:bg-plum-100 text-[11px] font-bold text-plum-900">Modifica</button>
                             ${!state.meetingMode ? `
                                 <button type="button" onclick="deleteScriptureEntry('${scr.id}')" class="p-1 rounded-lg text-rose-700 hover:bg-rose-50" title="Elimina scrittura">
@@ -1639,7 +1731,7 @@
                         </div>
                     </div>
                     ${scr.text ? `
-                        <p style="font-size: ${state.scriptureFontSize || 16}px;" class="text-zinc-800 leading-relaxed whitespace-pre-wrap">${escapeAttr(scr.text)}</p>
+                        <p onclick="openScriptureReaderOverlay('${scr.id}')" style="font-size: ${state.scriptureFontSize || 16}px;" class="text-zinc-800 leading-relaxed whitespace-pre-wrap cursor-pointer hover:bg-plum-50/60 rounded-lg p-1 -m-1 transition">${escapeAttr(scr.text)}</p>
                     ` : ''}
                 </div>
             `;
@@ -1825,23 +1917,43 @@
                 const canDraw = (tool !== 'scroll' && !state.meetingMode);
                 annotCanvas.style.pointerEvents = canDraw ? 'auto' : 'none';
                 annotCanvas.style.touchAction = canDraw ? 'none' : 'auto';
-                // Attiva automaticamente il blocco scorrimento quando scegli Penna/Evidenzia così puoi scrivere senza spostare la pagina
-                if (canDraw && !pdfScrollLocked) {
-                    pdfScrollLocked = true;
-                    document.getElementById('pdf-left-pane')?.classList.add('pdf-scroll-locked');
-                    document.getElementById('btn-pdf-lock-scroll')?.classList.add('bg-plum-200');
-                } else if (!canDraw && pdfScrollLocked) {
-                    pdfScrollLocked = false;
-                    document.getElementById('pdf-left-pane')?.classList.remove('pdf-scroll-locked');
-                    document.getElementById('btn-pdf-lock-scroll')?.classList.remove('bg-plum-200');
-                }
+                pdfScrollLocked = canDraw;
+                document.getElementById('pdf-left-pane')?.classList.toggle('pdf-scroll-locked', canDraw);
             }
         }
 
-        function togglePdfScrollLock() {
-            pdfScrollLocked = !pdfScrollLocked;
-            document.getElementById('pdf-left-pane').classList.toggle('pdf-scroll-locked', pdfScrollLocked);
-            document.getElementById('btn-pdf-lock-scroll').classList.toggle('bg-plum-200', pdfScrollLocked);
+        function setPdfHighlightColor(colorKey) {
+            pdfHighlightColor = colorKey;
+            ['yellow', 'green', 'pink'].forEach(c => {
+                const btn = document.getElementById('hl-color-' + c);
+                if (!btn) return;
+                btn.classList.toggle('border-2', c === colorKey);
+                btn.classList.toggle('border-plum-900', c === colorKey);
+                btn.classList.toggle('scale-110', c === colorKey);
+            });
+            if (pdfAnnotTool !== 'highlight') setPdfAnnotTool('highlight');
+        }
+
+        function setPdfStrokeSize(sizeKey) {
+            pdfStrokeSize = sizeKey;
+            ['thin', 'medium', 'thick'].forEach(s => {
+                const btn = document.getElementById('stroke-size-' + s);
+                if (!btn) return;
+                btn.classList.toggle('bg-plum-700', s === sizeKey);
+                btn.classList.toggle('text-white', s === sizeKey);
+                btn.classList.toggle('bg-white', s !== sizeKey);
+                btn.classList.toggle('text-plum-900', s !== sizeKey);
+            });
+        }
+
+        function togglePdfPencilOnly() {
+            pdfPencilOnly = !pdfPencilOnly;
+            const btn = document.getElementById('btn-pdf-pencil-only');
+            if (btn) {
+                btn.textContent = pdfPencilOnly ? 'Solo Apple Pencil ✓' : 'Penna + Dita';
+                btn.classList.toggle('bg-plum-200', pdfPencilOnly);
+                btn.classList.toggle('bg-white', !pdfPencilOnly);
+            }
         }
 
         /* IMMAGINI E INFOGRAFICHE SUL PDF */
@@ -1948,6 +2060,7 @@
 
             canvas.onpointerdown = (e) => {
                 if (state.meetingMode || pdfAnnotTool === 'scroll') return;
+                if (pdfPencilOnly && e.pointerType === 'touch') return;
                 e.preventDefault();
                 canvas.setPointerCapture(e.pointerId);
                 const r = canvas.getBoundingClientRect();
@@ -1961,12 +2074,18 @@
                 }
 
                 drawing = true;
-                activeStroke = { tool: pdfAnnotTool, points: [pt] };
+                activeStroke = {
+                    tool: pdfAnnotTool,
+                    color: pdfHighlightColor,
+                    size: pdfStrokeSize,
+                    points: [pt]
+                };
                 strokes.push(activeStroke);
             };
 
             canvas.onpointermove = (e) => {
                 if (!drawing || !activeStroke) return;
+                if (pdfPencilOnly && e.pointerType === 'touch') return;
                 const r = canvas.getBoundingClientRect();
                 const pt = { x: (e.clientX - r.left) * (canvas.width / r.width), y: (e.clientY - r.top) * (canvas.height / r.height) };
                 activeStroke.points.push(pt);
@@ -1982,17 +2101,26 @@
 
         function redrawPdfStrokes(ctx, canvas, strokes) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const hlMap = {
+                yellow: 'rgba(253, 224, 71, 0.45)',
+                green: 'rgba(110, 231, 183, 0.45)',
+                pink: 'rgba(249, 168, 212, 0.48)'
+            };
+            const penWidths = { thin: 1.6, medium: 2.6, thick: 4.5 };
+            const hlWidths = { thin: 11, medium: 17, thick: 25 };
+
             strokes.forEach(st => {
                 if (!st.points || st.points.length < 2) return;
                 ctx.save();
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
+                const sz = st.size || 'medium';
                 if (st.tool === 'highlight') {
-                    ctx.strokeStyle = 'rgba(253, 224, 71, 0.45)';
-                    ctx.lineWidth = 16;
+                    ctx.strokeStyle = hlMap[st.color || 'yellow'] || hlMap.yellow;
+                    ctx.lineWidth = hlWidths[sz] || 17;
                 } else {
                     ctx.strokeStyle = '#6D2E5B';
-                    ctx.lineWidth = 2.5;
+                    ctx.lineWidth = penWidths[sz] || 2.6;
                 }
                 ctx.beginPath();
                 ctx.moveTo(st.points[0].x, st.points[0].y);
