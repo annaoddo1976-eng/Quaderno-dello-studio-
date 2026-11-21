@@ -439,6 +439,55 @@
                 .replace(/"/g, '&quot;');
         }
 
+        function extractImportedNoteHtml(n) {
+            if (!n || typeof n !== 'object') return '';
+            const directKeys = [
+                'html', 'htmlContent', 'noteHtml', 'editorHtml', 'richText', 'richContent', 'formattedText',
+                'content', 'noteContent', 'text', 'noteText', 'rawText', 'plainText',
+                'body', 'noteBody', 'note', 'value', 'comment', 'commentText', 'answer', 'answerText',
+                'paragraphText', 'summary', 'description', 'details', 'message', 'scriptureText'
+            ];
+            for (const key of directKeys) {
+                const val = n[key];
+                if (typeof val === 'string' && val.trim()) {
+                    return /<[a-z][\s\S]*>/i.test(val) ? val : escapeHtml(val).replace(/\n/g, '<br>');
+                }
+                if (Array.isArray(val) && val.length > 0) {
+                    const joined = val.map(p => {
+                        if (typeof p === 'string') return escapeHtml(p);
+                        if (p && typeof p === 'object') return extractImportedNoteHtml(p);
+                        return '';
+                    }).filter(Boolean).join('<br>');
+                    if (joined.trim()) return joined;
+                }
+            }
+            for (const key of ['paragraphs', 'blocks', 'items', 'lines', 'entries', 'children', 'ops']) {
+                if (Array.isArray(n[key]) && n[key].length > 0) {
+                    const joined = n[key].map(p => {
+                        if (typeof p === 'string') return escapeHtml(p);
+                        if (p && typeof p === 'object') return extractImportedNoteHtml(p);
+                        return '';
+                    }).filter(Boolean).join('<br>');
+                    if (joined.trim()) return joined;
+                }
+            }
+            const ignoredKeyPattern = /(id|title|heading|name|date|time|created|updated|modified|week|key|icon|color|type|status|mode|page|font|size|order|index|collapsed|locked|quick|image|img|src|url|session|section|version|app)/i;
+            const isoDatePattern = /^\d{4}-\d{2}-\d{2}(?:[T\s]\d{2}:\d{2}.*)?$/;
+            let bestCandidate = '';
+            for (const [k, v] of Object.entries(n)) {
+                if (ignoredKeyPattern.test(k)) continue;
+                if (typeof v === 'string') {
+                    const trimmed = v.trim();
+                    if (!trimmed || trimmed.startsWith('data:image') || isoDatePattern.test(trimmed)) continue;
+                    const formatted = /<[a-z][\s\S]*>/i.test(trimmed) ? trimmed : escapeHtml(trimmed).replace(/\n/g, '<br>');
+                    if (formatted.length > bestCandidate.length) {
+                        bestCandidate = formatted;
+                    }
+                }
+            }
+            return bestCandidate;
+        }
+
         /* NAVIGAZIONE HOME E SESSIONI */
         function goHome() {
             state.view = 'home';
@@ -677,7 +726,8 @@
                     }
                     canvas.width = w;
                     canvas.height = h;
-                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
                     callback(canvas.toDataURL('image/jpeg', 0.82));
                 };
                 img.src = e.target.result;
@@ -686,60 +736,63 @@
         }
 
         function openLightbox(src) {
+            if (!src) return;
             document.getElementById('lightbox-img').src = src;
             document.getElementById('image-lightbox-modal').classList.remove('hidden');
         }
 
-        function renderNoteCardHtml(note, idx, total) {
-            const locked = state.studyMode === 'adunanza' && !note.isQuickNote;
-            const fontSize = note.fontSize || 17;
+        function renderNoteCardHtml(n, idx, total) {
+            const locked = state.studyMode === 'adunanza' && !n.isQuickNote;
+            const fontSize = n.fontSize || 17;
             return `
-                <div class="bg-white rounded-2xl border ${note.isQuickNote ? 'border-amber-300 ring-1 ring-amber-200' : 'plum-border'} shadow-2xs p-4 space-y-2.5">
+                <div class="bg-white rounded-3xl border ${n.isQuickNote ? 'border-amber-300 bg-amber-50/30' : 'plum-border'} p-4 shadow-2xs space-y-3">
                     <div class="flex flex-wrap items-center justify-between gap-2">
-                        <input type="text" value="${escapeHtml(note.title)}" ${locked ? 'readonly' : ''}
-                            oninput="updateNoteTitle('${note.id}', this.value)"
-                            class="font-bold text-[#261822] text-base bg-transparent border-b border-transparent focus:border-[#6b2d5c] outline-none flex-1 min-w-[140px]">
+                        <div class="flex items-center gap-2 flex-1 min-w-[180px]">
+                            <button type="button" onclick="toggleNoteCollapse('${n.id}')" class="w-7 h-7 rounded-lg bg-[#f6eef4] text-[#6b2d5c] font-bold text-xs flex items-center justify-center shrink-0">
+                                ${n.collapsed ? '▶' : '▼'}
+                            </button>
+                            <input type="text" value="${escapeHtml(n.title)}" oninput="updateNoteTitle('${n.id}', this.value)"
+                                class="font-extrabold text-base text-[#261822] bg-transparent border-b border-transparent focus:border-[#6b2d5c] outline-none w-full">
+                        </div>
 
-                        <div class="flex flex-wrap items-center gap-1">
-                            <button type="button" onpointerdown="event.preventDefault(); changeNoteFontSize('${note.id}', -2)" class="px-2.5 py-1 rounded-lg bg-[#f6eef4] hover:bg-[#eadbe6] text-[#6b2d5c] font-bold text-xs">A−</button>
-                            <button type="button" onpointerdown="event.preventDefault(); changeNoteFontSize('${note.id}', 2)" class="px-2.5 py-1 rounded-lg bg-[#f6eef4] hover:bg-[#eadbe6] text-[#6b2d5c] font-bold text-xs">A+</button>
-                            ${!locked ? `<button type="button" onpointerdown="event.preventDefault(); toggleNoteBold('${note.id}')" class="px-2.5 py-1 rounded-lg bg-[#f6eef4] hover:bg-[#eadbe6] text-[#6b2d5c] font-extrabold text-xs">B</button>` : ''}
+                        <div class="flex flex-wrap items-center gap-1.5">
+                            <div class="flex items-center gap-1 bg-[#f6eef4] px-2 py-1 rounded-xl text-xs font-bold text-[#6b2d5c]">
+                                <span>Pag. PDF:</span>
+                                <input type="number" min="1" value="${n.pdfPage || ''}" placeholder="-" onchange="setNotePdfPage('${n.id}', this.value)"
+                                    class="w-11 text-center bg-white border plum-border rounded-md py-0.5 text-xs font-bold">
+                                ${n.pdfPage && activePdfBytes ? `
+                                    <button type="button" onclick="openPdfWorkspace(${n.pdfPage})" class="ml-1 px-2 py-0.5 rounded-md plum-primary text-[11px]">Vai</button>
+                                ` : ''}
+                            </div>
 
                             ${!locked ? `
-                                <label class="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 font-bold text-xs cursor-pointer">
-                                    + Foto
-                                    <input type="file" accept="image/*" onchange="attachImageToNote('${note.id}', event)" class="hidden">
+                                <button type="button" onclick="toggleNoteBold('${n.id}')" title="Grassetto" class="px-2.5 py-1 rounded-xl bg-[#f6eef4] text-[#261822] font-extrabold text-xs">B</button>
+                                <button type="button" onclick="changeNoteFontSize('${n.id}', -2)" title="Riduci testo" class="px-2 py-1 rounded-xl bg-[#f6eef4] text-[#261822] font-bold text-xs">A−</button>
+                                <button type="button" onclick="changeNoteFontSize('${n.id}', 2)" title="Ingrandisci testo" class="px-2 py-1 rounded-xl bg-[#f6eef4] text-[#261822] font-bold text-xs">A+</button>
+                                <label title="Allega foto" class="px-2.5 py-1 rounded-xl bg-sky-50 text-sky-700 font-bold text-xs cursor-pointer">
+                                    📷
+                                    <input type="file" accept="image/*" onchange="attachImageToNote('${n.id}', event)" class="hidden">
                                 </label>
-                            ` : ''}
+                            ` : `<span class="text-[11px] font-bold px-2 py-1 rounded-lg bg-amber-100 text-amber-900">🔒 Protetta</span>`}
 
-                            <button type="button" onclick="moveNote('${note.id}', -1)" ${idx === 0 ? 'disabled' : ''} class="px-2 py-1 rounded-lg bg-[#f6eef4] text-[#6b2d5c] text-xs font-bold disabled:opacity-30">↑</button>
-                            <button type="button" onclick="moveNote('${note.id}', 1)" ${idx === total - 1 ? 'disabled' : ''} class="px-2 py-1 rounded-lg bg-[#f6eef4] text-[#6b2d5c] text-xs font-bold disabled:opacity-30">↓</button>
-                            <button type="button" onclick="toggleNoteCollapse('${note.id}')" class="px-2.5 py-1 rounded-lg bg-[#f6eef4] text-[#6b2d5c] text-xs font-bold">${note.collapsed ? 'Apri' : 'Chiudi'}</button>
-                            ${!locked ? `<button type="button" onclick="deleteNote('${note.id}')" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold">✕</button>` : ''}
+                            <button type="button" onclick="moveNote('${n.id}', -1)" ${idx === 0 ? 'disabled' : ''} class="px-2 py-1 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold disabled:opacity-30">↑</button>
+                            <button type="button" onclick="moveNote('${n.id}', 1)" ${idx === total - 1 ? 'disabled' : ''} class="px-2 py-1 rounded-xl bg-slate-100 text-slate-600 text-xs font-bold disabled:opacity-30">↓</button>
+                            <button type="button" onclick="deleteNote('${n.id}')" class="px-2 py-1 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold">✕</button>
                         </div>
                     </div>
 
-                    <!-- Collegamento pagina PDF -->
-                    <div class="flex flex-wrap items-center gap-2 text-xs">
-                        <span class="text-[#7c6575] font-semibold">Pagina PDF:</span>
-                        <input type="number" min="1" value="${note.pdfPage || ''}" placeholder="—" ${locked ? 'readonly' : ''}
-                            onchange="setNotePdfPage('${note.id}', this.value)"
-                            class="w-14 px-2 py-0.5 border plum-border rounded-lg font-bold text-center">
-                        ${note.pdfPage ? `<button type="button" onclick="goToLinkedPdfPage(${note.pdfPage})" class="px-2.5 py-1 rounded-lg plum-soft font-bold">Vai a pag. ${note.pdfPage} →</button>` : ''}
-                    </div>
+                    ${!n.collapsed ? `
+                        <div data-note-editor="${n.id}"
+                             contenteditable="${locked ? 'false' : 'true'}"
+                             oninput="updateNoteHtml('${n.id}', this)"
+                             data-placeholder="Scrivi qui i tuoi appunti..."
+                             style="font-size: ${fontSize}px;"
+                             class="note-editor bg-[#fbf9fa] border plum-border rounded-2xl p-3.5 text-[#261822]">${n.html || ''}</div>
 
-                    ${!note.collapsed ? `
-                        <div data-note-editor="${note.id}" contenteditable="${locked ? 'false' : 'true'}"
-                            oninput="updateNoteHtml('${note.id}', this)"
-                            onblur="updateNoteHtml('${note.id}', this)"
-                            data-placeholder="Scrivi qui la tua nota..."
-                            style="font-size: ${fontSize}px;"
-                            class="note-editor bg-[#fbf9fa] rounded-xl p-3 border plum-border text-[#261822]">${note.html || ''}</div>
-
-                        ${note.image ? `
-                            <div class="relative inline-block mt-2">
-                                <img src="${note.image}" onclick="openLightbox('${note.image}')" alt="Immagine nota" class="max-h-56 rounded-xl border plum-border cursor-zoom-in">
-                                ${!locked ? `<button type="button" onclick="removeNoteImage('${note.id}')" class="absolute top-2 right-2 bg-rose-600 text-white rounded-full w-6 h-6 text-xs font-bold shadow">✕</button>` : ''}
+                        ${n.image ? `
+                            <div class="relative inline-block">
+                                <img src="${n.image}" onclick="openLightbox('${n.image}')" alt="Immagine allegata" class="max-h-48 rounded-2xl border plum-border cursor-zoom-in">
+                                <button type="button" onclick="removeNoteImage('${n.id}')" class="absolute top-2 right-2 w-7 h-7 rounded-full bg-rose-600 text-white font-bold text-xs shadow-md">✕</button>
                             </div>
                         ` : ''}
                     ` : ''}
@@ -749,10 +802,10 @@
 
         /* INCOLLA PREPARAZIONE */
         function openPastePrepModal() {
-            document.getElementById('paste-prep-error').classList.add('hidden');
             document.getElementById('paste-prep-textarea').value = '';
+            document.getElementById('paste-prep-error').classList.add('hidden');
             document.getElementById('paste-prep-modal').classList.remove('hidden');
-            document.getElementById('paste-prep-textarea').focus();
+            setTimeout(() => document.getElementById('paste-prep-textarea').focus(), 50);
         }
 
         function closePastePrepModal() {
@@ -761,8 +814,13 @@
 
         async function pasteFromClipboardToPrep() {
             try {
-                const txt = await navigator.clipboard.readText();
-                if (txt) document.getElementById('paste-prep-textarea').value = txt;
+                if (navigator.clipboard && navigator.clipboard.readText) {
+                    const txt = await navigator.clipboard.readText();
+                    if (txt) {
+                        document.getElementById('paste-prep-textarea').value = txt;
+                        document.getElementById('paste-prep-error').classList.add('hidden');
+                    }
+                }
             } catch (e) {
                 document.getElementById('paste-prep-textarea').focus();
             }
@@ -777,46 +835,66 @@
             const s = getActiveSession();
             let blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
             if (blocks.length <= 1) {
-                blocks = raw.split(/\n+/).map(b => b.trim()).filter(Boolean);
+                const lines = raw.split(/\n/).map(l => l.trim()).filter(Boolean);
+                if (lines.length > 1) {
+                    const grouped = [];
+                    let current = '';
+                    lines.forEach(line => {
+                        if (/^(?:\d+[\.\)\-:]|\(?par\.?\s*\d+|paragrafo\s*\d+|domanda\s*\d+)/i.test(line) && current) {
+                            grouped.push(current.trim());
+                            current = line;
+                        } else {
+                            current = current ? current + '\n' + line : line;
+                        }
+                    });
+                    if (current) grouped.push(current.trim());
+                    blocks = grouped.length > 1 ? grouped : lines;
+                }
             }
-            const startNum = s.notes.length + 1;
-            blocks.forEach((text, idx) => {
+
+            blocks.forEach((blk, i) => {
+                const numMatch = blk.match(/^(?:paragrafo\s*|par\.?\s*)?(\d+)[\.\)\-:\s]+([\s\S]*)$/i);
+                const title = numMatch ? `Paragrafo ${numMatch[1]}` : `Paragrafo ${s.notes.length + 1}`;
+                const content = numMatch && numMatch[2].trim() ? numMatch[2].trim() : blk;
                 s.notes.push({
-                    id: 'note_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5),
-                    title: 'Paragrafo ' + (startNum + idx),
-                    html: escapeHtml(text).replace(/\n/g, '<br>'),
+                    id: 'note_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2, 5),
+                    title: title,
+                    html: escapeHtml(content).replace(/\n/g, '<br>'),
                     fontSize: 17,
-                    pdfPage: activePdfDoc ? activePdfPage : null,
+                    pdfPage: null,
                     collapsed: false,
                     image: null,
                     isQuickNote: false
                 });
             });
-            saveState();
+
             closePastePrepModal();
+            saveState();
             renderApp();
             if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
                 renderPdfSideNotes();
             }
+            showToast(`${blocks.length} paragrafi creati dalla tua preparazione!`);
         }
 
-        /* SCRITTURE BIBLICHE (CLICCABILI PER LEGGERE A SCHERMO INTERO) */
+        /* SCRITTURE BIBLICHE E LETTURA A SCHERMO INTERO */
         function addScripture() {
-            const ref = document.getElementById('new-scr-ref').value.trim();
-            const text = document.getElementById('new-scr-text').value.trim();
-            const pageVal = parseInt(document.getElementById('new-scr-page').value, 10);
+            const refInput = document.getElementById('new-scr-ref');
+            const pageInput = document.getElementById('new-scr-page');
+            const textInput = document.getElementById('new-scr-text');
+            const ref = refInput.value.trim();
             if (!ref) return;
-
+            const pageNum = parseInt(pageInput.value, 10);
             const s = getActiveSession();
             s.scriptures.push({
-                id: 'scr_' + Date.now(),
+                id: 'scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
                 ref: ref,
-                text: text || '(Nessun testo inserito per questa scrittura)',
-                pdfPage: isNaN(pageVal) || pageVal < 1 ? null : pageVal
+                text: textInput.value.trim() || '(Testo della scrittura non inserito)',
+                pdfPage: isNaN(pageNum) || pageNum < 1 ? null : pageNum
             });
-            document.getElementById('new-scr-ref').value = '';
-            document.getElementById('new-scr-text').value = '';
-            document.getElementById('new-scr-page').value = '';
+            refInput.value = '';
+            pageInput.value = '';
+            textInput.value = '';
             saveState();
             renderApp();
         }
@@ -827,7 +905,6 @@
             s.scriptures = s.scriptures.filter(x => x.id !== scrId);
             saveState();
             renderApp();
-            renderPdfScripturesDrawer();
         }
 
         function openScriptureModal(scrId) {
@@ -842,10 +919,12 @@
             const gotoBtn = document.getElementById('scr-modal-goto-pdf');
             if (scr.pdfPage) {
                 gotoBtn.classList.remove('hidden');
-                gotoBtn.textContent = 'Vai a pag. ' + scr.pdfPage + ' del PDF →';
+                gotoBtn.textContent = `Vai a pag. ${scr.pdfPage}`;
                 gotoBtn.onclick = () => {
                     closeScriptureModal();
-                    goToLinkedPdfPage(scr.pdfPage);
+                    if (activePdfBytes) {
+                        openPdfWorkspace(scr.pdfPage);
+                    }
                 };
             } else {
                 gotoBtn.classList.add('hidden');
@@ -863,57 +942,64 @@
             saveState();
         }
 
-        /* LETTORE PDF AD ALTA DEFINIZIONE RETINA + APPLE PENCIL */
+        /* LETTORE PDF, APPLE PENCIL, EVIDENZIATORI E BARRA DIVISORIA */
         async function handlePdfFileUpload(event) {
             const file = event.target.files[0];
             if (!file) return;
-            const arrayBuffer = await file.arrayBuffer();
-            activePdfBytes = new Uint8Array(arrayBuffer);
             const s = getActiveSession();
             s.pdfMeta = { name: file.name };
             saveState();
-            await openPdfWorkspace(1);
+
+            const arrayBuffer = await file.arrayBuffer();
+            activePdfBytes = arrayBuffer;
+            document.getElementById('pdf-doc-title').textContent = file.name;
+
+            if (window.pdfjsLib) {
+                try {
+                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer.slice(0) });
+                    activePdfDoc = await loadingTask.promise;
+                    activePdfTotalPages = activePdfDoc.numPages;
+                    document.getElementById('pdf-canvas-wrapper').classList.remove('hidden');
+                    document.getElementById('pdf-fallback-frame').classList.add('hidden');
+                    openPdfWorkspace(1);
+                } catch (err) {
+                    console.warn('Fallback visualizzatore nativo PDF:', err);
+                    openFallbackPdf(file, 1);
+                }
+            } else {
+                openFallbackPdf(file, 1);
+            }
+            renderApp();
             event.target.value = '';
         }
 
-        async function openPdfWorkspace(startPage = 1) {
-            const s = getActiveSession();
-            document.getElementById('pdf-doc-title').textContent = s.pdfMeta ? s.pdfMeta.name : 'Documento PDF';
-            document.getElementById('pdf-workspace-overlay').classList.remove('hidden');
-            document.getElementById('pdf-left-pane').style.flex = `0 0 ${state.pdfSplitPercent || 54}%`;
-
-            if (activePdfBytes && window.pdfjsLib) {
-                try {
-                    const loadingTask = pdfjsLib.getDocument({
-                        data: activePdfBytes.slice(0),
-                        disableWorker: true,
-                        isEvalSupported: false
-                    });
-                    activePdfDoc = await loadingTask.promise;
-                    activePdfTotalPages = activePdfDoc.numPages;
-                    document.getElementById('pdf-total-pages').textContent = '/ ' + activePdfTotalPages;
-                    document.getElementById('pdf-canvas-wrapper').classList.remove('hidden');
-                    document.getElementById('pdf-fallback-frame').classList.add('hidden');
-                    await jumpToPdfPage(startPage);
-                } catch (err) {
-                    console.warn('Fallback PDF nativo:', err);
-                    showFallbackPdf(startPage);
-                }
-            } else if (activePdfBytes) {
-                showFallbackPdf(startPage);
-            }
-            renderPdfSideNotes();
-            renderPdfScripturesDrawer();
-        }
-
-        function showFallbackPdf(page) {
-            if (!activePdfBytes) return;
-            const blob = new Blob([activePdfBytes], { type: 'application/pdf' });
-            const url = URL.createObjectURL(blob) + '#page=' + page;
+        function openFallbackPdf(file, page) {
+            activePdfDoc = null;
+            const url = URL.createObjectURL(file);
             document.getElementById('pdf-canvas-wrapper').classList.add('hidden');
             const frame = document.getElementById('pdf-fallback-frame');
             frame.classList.remove('hidden');
-            frame.src = url;
+            frame.src = url + '#page=' + page;
+            document.getElementById('pdf-workspace-overlay').classList.remove('hidden');
+            renderPdfSideNotes();
+        }
+
+        function openPdfWorkspace(page = 1) {
+            const overlay = document.getElementById('pdf-workspace-overlay');
+            overlay.classList.remove('hidden');
+            const leftPane = document.getElementById('pdf-left-pane');
+            if (leftPane) {
+                leftPane.style.flex = `0 0 ${state.pdfSplitPercent || 54}%`;
+            }
+            activePdfPage = Math.max(1, Math.min(activePdfTotalPages, page));
+            document.getElementById('pdf-page-input').value = activePdfPage;
+            document.getElementById('pdf-total-pages').textContent = '/ ' + activePdfTotalPages;
+            document.getElementById('btn-add-note-page-num').textContent = activePdfPage;
+
+            if (activePdfDoc) {
+                renderPdfPage(activePdfPage);
+            }
+            renderPdfSideNotes();
         }
 
         function closePdfWorkspace() {
@@ -921,92 +1007,66 @@
             renderApp();
         }
 
-        async function jumpToPdfPage(pageNum) {
-            const p = Math.max(1, Math.min(activePdfTotalPages || 999, parseInt(pageNum, 10) || 1));
-            activePdfPage = p;
-            document.getElementById('pdf-page-input').value = p;
-            document.getElementById('btn-add-note-page-num').textContent = p;
-
-            if (activePdfDoc) {
-                await renderCurrentPdfPage();
-            } else if (activePdfBytes) {
-                showFallbackPdf(p);
-            }
-            renderPdfSideNotes();
-        }
-
         function changePdfPage(delta) {
-            jumpToPdfPage(activePdfPage + delta);
+            const target = activePdfPage + delta;
+            if (target < 1 || target > activePdfTotalPages) return;
+            openPdfWorkspace(target);
         }
 
-        async function changePdfZoom(delta) {
-            activePdfZoom = Math.max(0.6, Math.min(2.6, activePdfZoom + delta));
-            if (activePdfDoc) await renderCurrentPdfPage();
+        function jumpToPdfPage(val) {
+            const num = parseInt(val, 10);
+            if (!isNaN(num)) openPdfWorkspace(num);
         }
 
-        function goToLinkedPdfPage(pageNum) {
-            if (!activePdfBytes) return;
-            if (document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
-                openPdfWorkspace(pageNum);
-            } else {
-                jumpToPdfPage(pageNum);
-            }
+        function changePdfZoom(delta) {
+            activePdfZoom = Math.max(0.6, Math.min(2.8, +(activePdfZoom + delta).toFixed(2)));
+            if (activePdfDoc) renderPdfPage(activePdfPage);
         }
 
-        async function renderCurrentPdfPage() {
+        async function renderPdfPage(pageNum) {
             if (!activePdfDoc) return;
-            const page = await activePdfDoc.getPage(activePdfPage);
-            const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3);
-            const cssViewport = page.getViewport({ scale: activePdfZoom });
-            const renderViewport = page.getViewport({ scale: activePdfZoom * dpr });
+            const page = await activePdfDoc.getPage(pageNum);
+            const viewport = page.getViewport({ scale: activePdfZoom });
+            const dpr = Math.min(window.devicePixelRatio || 1, 3);
 
             const canvas = document.getElementById('pdf-render-canvas');
             const annotCanvas = document.getElementById('pdf-annot-canvas');
             const wrapper = document.getElementById('pdf-canvas-wrapper');
-            if (!canvas || !annotCanvas) return;
+            if (!canvas || !annotCanvas || !wrapper) return;
 
-            const cssWidth = Math.max(1, Math.floor(cssViewport.width));
-            const cssHeight = Math.max(1, Math.floor(cssViewport.height));
-            const renderWidth = Math.max(1, Math.floor(renderViewport.width));
-            const renderHeight = Math.max(1, Math.floor(renderViewport.height));
+            const cssW = Math.max(1, Math.round(viewport.width));
+            const cssH = Math.max(1, Math.round(viewport.height));
 
-            canvas.width = renderWidth;
-            canvas.height = renderHeight;
-            canvas.style.width = cssWidth + 'px';
-            canvas.style.height = cssHeight + 'px';
+            wrapper.style.width = cssW + 'px';
+            wrapper.style.height = cssH + 'px';
 
-            annotCanvas.width = cssWidth;
-            annotCanvas.height = cssHeight;
-            annotCanvas.style.width = cssWidth + 'px';
-            annotCanvas.style.height = cssHeight + 'px';
+            canvas.width = Math.round(cssW * dpr);
+            canvas.height = Math.round(cssH * dpr);
+            canvas.style.width = cssW + 'px';
+            canvas.style.height = cssH + 'px';
 
-            if (wrapper) {
-                wrapper.style.width = cssWidth + 'px';
-                wrapper.style.height = cssHeight + 'px';
-            }
+            annotCanvas.width = Math.round(cssW * dpr);
+            annotCanvas.height = Math.round(cssH * dpr);
+            annotCanvas.style.width = cssW + 'px';
+            annotCanvas.style.height = cssH + 'px';
 
             const ctx = canvas.getContext('2d');
-            if (ctx) {
-                ctx.setTransform(1, 0, 0, 1, 0, 0);
-                ctx.clearRect(0, 0, renderWidth, renderHeight);
-                await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
-            }
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, cssW, cssH);
 
+            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
             redrawPdfAnnotations();
             renderPdfOverlayImages();
         }
 
-        /* STRUMENTI DISEGNO APPLE PENCIL SUL PDF */
         function setPdfTool(tool) {
             pdfTool = tool;
             ['none', 'pen', 'highlighter', 'eraser'].forEach(t => {
                 const btn = document.getElementById('tool-' + t);
                 if (!btn) return;
-                if (t === tool) {
-                    btn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-bold plum-primary';
-                } else {
-                    btn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#4a3343]';
-                }
+                btn.className = t === tool
+                    ? 'px-2.5 py-1.5 rounded-lg text-xs font-bold plum-primary'
+                    : 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#4a3343]';
             });
             const annotCanvas = document.getElementById('pdf-annot-canvas');
             if (annotCanvas) {
@@ -1024,28 +1084,22 @@
         function togglePencilOnly() {
             pencilOnly = !pencilOnly;
             const btn = document.getElementById('btn-pencil-only');
-            btn.textContent = pencilOnly ? 'Solo Apple Pencil ✓' : 'Pencil + Dita';
-            btn.className = pencilOnly
-                ? 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800'
-                : 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-800';
+            if (pencilOnly) {
+                btn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800';
+                btn.textContent = 'Solo Apple Pencil ✓';
+            } else {
+                btn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-slate-200 text-slate-700';
+                btn.textContent = 'Penna + Dita';
+            }
         }
 
         function isStylusInput(e) {
             if (!pencilOnly) return true;
-            if (e.pointerType === 'pen' || e.pointerType === 'mouse') return true;
-            if (e.touches && e.touches[0] && e.touches[0].touchType === 'stylus') return true;
+            if (e.pointerType === 'mouse' || e.pointerType === 'pen') return true;
+            if (e.touchType === 'stylus') return true;
             if (typeof e.pressure === 'number' && e.pressure > 0 && e.pressure !== 0.5 && e.pressure !== 1) return true;
+            if (e.touches && e.touches[0] && e.touches[0].touchType === 'stylus') return true;
             return false;
-        }
-
-        function getNormalizedCanvasPos(e, canvas) {
-            const rect = canvas.getBoundingClientRect();
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            return {
-                x: (clientX - rect.left) / rect.width,
-                y: (clientY - rect.top) / rect.height
-            };
         }
 
         function setupPdfAnnotCanvas() {
@@ -1053,67 +1107,74 @@
             if (!canvas) return;
             canvas.style.pointerEvents = 'none';
 
+            const getRelPos = (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                return {
+                    x: (clientX - rect.left) / rect.width,
+                    y: (clientY - rect.top) / rect.height
+                };
+            };
+
             const startDraw = (e) => {
-                if (pdfTool === 'none') return;
-                if (!isStylusInput(e)) return;
+                if (pdfTool === 'none' || !isStylusInput(e)) return;
                 e.preventDefault();
                 isDrawingPdf = true;
-                const pos = getNormalizedCanvasPos(e, canvas);
-                const s = getActiveSession();
-                if (!s.pdfAnnotations[activePdfPage]) s.pdfAnnotations[activePdfPage] = [];
-
+                const pos = getRelPos(e);
                 if (pdfTool === 'eraser') {
-                    eraseNearPoint(pos);
+                    eraseAtPoint(pos);
                     return;
                 }
-
                 currentStroke = {
                     tool: pdfTool,
                     color: pdfTool === 'highlighter' ? pdfHighlighterColor : '#6b2d5c',
                     width: pdfTool === 'highlighter' ? pdfStrokeWidth * 3.5 : pdfStrokeWidth,
                     points: [pos]
                 };
-                s.pdfAnnotations[activePdfPage].push(currentStroke);
-                redrawPdfAnnotations();
             };
 
             const moveDraw = (e) => {
                 if (!isDrawingPdf || pdfTool === 'none') return;
-                if (!isStylusInput(e)) return;
                 e.preventDefault();
-                const pos = getNormalizedCanvasPos(e, canvas);
+                const pos = getRelPos(e);
                 if (pdfTool === 'eraser') {
-                    eraseNearPoint(pos);
+                    eraseAtPoint(pos);
                     return;
                 }
                 if (currentStroke) {
                     currentStroke.points.push(pos);
-                    redrawPdfAnnotations();
+                    redrawPdfAnnotations(currentStroke);
                 }
             };
 
             const endDraw = () => {
-                if (isDrawingPdf) {
-                    isDrawingPdf = false;
-                    currentStroke = null;
+                if (!isDrawingPdf) return;
+                isDrawingPdf = false;
+                if (currentStroke && currentStroke.points.length > 0) {
+                    const s = getActiveSession();
+                    if (!s.pdfAnnotations[activePdfPage]) s.pdfAnnotations[activePdfPage] = [];
+                    s.pdfAnnotations[activePdfPage].push(currentStroke);
                     saveState();
                 }
+                currentStroke = null;
+                redrawPdfAnnotations();
             };
 
             canvas.addEventListener('pointerdown', startDraw);
             canvas.addEventListener('pointermove', moveDraw);
             window.addEventListener('pointerup', endDraw);
-            canvas.addEventListener('touchstart', startDraw, { passive: false });
-            canvas.addEventListener('touchmove', moveDraw, { passive: false });
-            window.addEventListener('touchend', endDraw);
         }
 
-        function eraseNearPoint(pos) {
+        function eraseAtPoint(pos) {
             const s = getActiveSession();
-            const list = s.pdfAnnotations[activePdfPage] || [];
-            s.pdfAnnotations[activePdfPage] = list.filter(stroke => {
-                return !stroke.points.some(pt => Math.hypot(pt.x - pos.x, pt.y - pos.y) < 0.025);
-            });
+            const list = s.pdfAnnotations[activePdfPage];
+            if (!list || list.length === 0) return;
+            const threshold = 0.03;
+            s.pdfAnnotations[activePdfPage] = list.filter(stroke =>
+                !stroke.points.some(pt => Math.hypot(pt.x - pos.x, pt.y - pos.y) < threshold)
+            );
+            saveState();
             redrawPdfAnnotations();
         }
 
@@ -1127,44 +1188,49 @@
             }
         }
 
-        function redrawPdfAnnotations() {
+        function redrawPdfAnnotations(previewStroke = null) {
             const canvas = document.getElementById('pdf-annot-canvas');
             if (!canvas) return;
+            const dpr = Math.min(window.devicePixelRatio || 1, 3);
+            const cssW = canvas.width / dpr;
+            const cssH = canvas.height / dpr;
             const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, cssW, cssH);
 
             const s = getActiveSession();
-            const strokes = s.pdfAnnotations[activePdfPage] || [];
+            const strokes = [...(s.pdfAnnotations[activePdfPage] || [])];
+            if (previewStroke) strokes.push(previewStroke);
+
             strokes.forEach(st => {
                 if (!st.points || st.points.length === 0) return;
                 ctx.save();
-                ctx.beginPath();
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
                 ctx.strokeStyle = st.color;
                 ctx.lineWidth = st.width;
-                ctx.moveTo(st.points[0].x * canvas.width, st.points[0].y * canvas.height);
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.beginPath();
+                ctx.moveTo(st.points[0].x * cssW, st.points[0].y * cssH);
                 for (let i = 1; i < st.points.length; i++) {
-                    ctx.lineTo(st.points[i].x * canvas.width, st.points[i].y * canvas.height);
+                    ctx.lineTo(st.points[i].x * cssW, st.points[i].y * cssH);
                 }
                 ctx.stroke();
                 ctx.restore();
             });
         }
 
-        /* IMMAGINI SOVRAPPOSTE SUL PDF */
         function addPdfOverlayImage(event) {
             const file = event.target.files[0];
             if (!file) return;
-            compressImageFile(file, 700, (dataUrl) => {
+            compressImageFile(file, 600, (dataUrl) => {
                 const s = getActiveSession();
                 if (!s.pdfImages[activePdfPage]) s.pdfImages[activePdfPage] = [];
                 s.pdfImages[activePdfPage].push({
                     id: 'pimg_' + Date.now(),
                     src: dataUrl,
-                    x: 10,
-                    y: 10,
-                    width: 180
+                    x: 15,
+                    y: 15,
+                    width: 30
                 });
                 saveState();
                 renderPdfOverlayImages();
@@ -1175,283 +1241,315 @@
         function renderPdfOverlayImages() {
             const layer = document.getElementById('pdf-images-layer');
             if (!layer) return;
-            layer.innerHTML = '';
             const s = getActiveSession();
             const imgs = s.pdfImages[activePdfPage] || [];
+            layer.innerHTML = imgs.map(im => `
+                <div class="overlay-img-box pointer-events-auto" style="left:${im.x}%; top:${im.y}%; width:${im.width}%;" data-pimg-id="${im.id}">
+                    <img src="${im.src}" class="w-full h-auto rounded-lg pointer-events-none">
+                    <button type="button" onclick="deletePdfOverlayImage('${im.id}')" class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-600 text-white text-xs font-bold">✕</button>
+                </div>
+            `).join('');
 
-            imgs.forEach(item => {
-                const box = document.createElement('div');
-                box.className = 'overlay-img-box pointer-events-auto';
-                box.style.left = item.x + 'px';
-                box.style.top = item.y + 'px';
-                box.style.width = item.width + 'px';
-                box.innerHTML = `
-                    <img src="${item.src}" class="w-full h-auto rounded-lg pointer-events-none">
-                    <div class="flex justify-between bg-[#261822]/85 text-white text-xs px-1.5 py-0.5 rounded-b-lg">
-                        <button type="button" onclick="resizePdfImg('${item.id}', -25)">−</button>
-                        <button type="button" onclick="resizePdfImg('${item.id}', 25)">+</button>
-                        <button type="button" onclick="removePdfImg('${item.id}')" class="text-rose-300 font-bold">✕</button>
-                    </div>
-                `;
-
-                let startX = 0, startY = 0, origX = item.x, origY = item.y;
+            layer.querySelectorAll('.overlay-img-box').forEach(box => {
+                let dragging = false, startX = 0, startY = 0, origX = 0, origY = 0;
                 box.addEventListener('pointerdown', (e) => {
                     if (e.target.tagName === 'BUTTON') return;
+                    dragging = true;
                     startX = e.clientX;
                     startY = e.clientY;
-                    origX = item.x;
-                    origY = item.y;
+                    origX = parseFloat(box.style.left);
+                    origY = parseFloat(box.style.top);
                     box.setPointerCapture(e.pointerId);
                 });
                 box.addEventListener('pointermove', (e) => {
-                    if (!box.hasPointerCapture(e.pointerId)) return;
-                    item.x = Math.max(0, origX + (e.clientX - startX));
-                    item.y = Math.max(0, origY + (e.clientY - startY));
-                    box.style.left = item.x + 'px';
-                    box.style.top = item.y + 'px';
+                    if (!dragging) return;
+                    const parentRect = layer.getBoundingClientRect();
+                    const dx = ((e.clientX - startX) / parentRect.width) * 100;
+                    const dy = ((e.clientY - startY) / parentRect.height) * 100;
+                    box.style.left = Math.max(0, Math.min(80, origX + dx)) + '%';
+                    box.style.top = Math.max(0, Math.min(85, origY + dy)) + '%';
                 });
-                box.addEventListener('pointerup', () => saveState());
-                layer.appendChild(box);
+                box.addEventListener('pointerup', () => {
+                    if (!dragging) return;
+                    dragging = false;
+                    const id = box.getAttribute('data-pimg-id');
+                    const item = imgs.find(x => x.id === id);
+                    if (item) {
+                        item.x = parseFloat(box.style.left);
+                        item.y = parseFloat(box.style.top);
+                        saveState();
+                    }
+                });
             });
         }
 
-        function resizePdfImg(id, delta) {
+        function deletePdfOverlayImage(id) {
             const s = getActiveSession();
-            const item = (s.pdfImages[activePdfPage] || []).find(x => x.id === id);
-            if (item) {
-                item.width = Math.max(80, Math.min(500, item.width + delta));
+            if (s.pdfImages[activePdfPage]) {
+                s.pdfImages[activePdfPage] = s.pdfImages[activePdfPage].filter(x => x.id !== id);
                 saveState();
                 renderPdfOverlayImages();
             }
         }
 
-        function removePdfImg(id) {
-            const s = getActiveSession();
-            s.pdfImages[activePdfPage] = (s.pdfImages[activePdfPage] || []).filter(x => x.id !== id);
-            saveState();
-            renderPdfOverlayImages();
+        function togglePdfScripturesDrawer() {
+            const drawer = document.getElementById('pdf-scriptures-drawer');
+            drawer.classList.toggle('hidden');
+            if (!drawer.classList.contains('hidden')) {
+                const s = getActiveSession();
+                const chips = document.getElementById('pdf-scriptures-chips');
+                chips.innerHTML = s.scriptures.length === 0
+                    ? '<span class="text-xs text-amber-800">Nessuna scrittura salvata in questa sessione.</span>'
+                    : s.scriptures.map(scr => `
+                        <button type="button" onclick="openScriptureModal('${scr.id}')" class="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-xs font-extrabold text-[#6b2d5c] shadow-2xs">
+                            📖 ${escapeHtml(scr.ref)}
+                        </button>
+                    `).join('');
+            }
         }
 
-        /* NOTE E SCRITTURE NEL PANNELLO LATERALE PDF */
-        function setPdfNotesFilter(filter) {
-            pdfNotesFilter = filter;
-            document.getElementById('filter-page-notes').className = filter === 'page'
+        function setPdfNotesFilter(mode) {
+            pdfNotesFilter = mode;
+            document.getElementById('filter-page-notes').className = mode === 'page'
                 ? 'px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#6b2d5c] shadow-2xs'
                 : 'px-2.5 py-1 rounded-md text-xs font-bold text-[#7c6575]';
-            document.getElementById('filter-all-notes').className = filter === 'all'
+            document.getElementById('filter-all-notes').className = mode === 'all'
                 ? 'px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#6b2d5c] shadow-2xs'
                 : 'px-2.5 py-1 rounded-md text-xs font-bold text-[#7c6575]';
             renderPdfSideNotes();
         }
 
         function renderPdfSideNotes() {
+            const s = getActiveSession();
             const container = document.getElementById('pdf-side-notes-list');
             if (!container) return;
-            const s = getActiveSession();
             const filtered = pdfNotesFilter === 'page'
-                ? s.notes.filter(n => Number(n.pdfPage) === Number(activePdfPage))
+                ? s.notes.filter(n => n.pdfPage === activePdfPage || !n.pdfPage)
                 : s.notes;
-
-            if (filtered.length === 0) {
-                container.innerHTML = `<div class="text-center text-[#7c6575] text-sm py-8">Nessuna nota collegata a questa vista. Tocca <strong>+ Nota</strong> in alto.</div>`;
-                return;
-            }
-            container.innerHTML = filtered.map((n, idx) => renderNoteCardHtml(n, idx, filtered.length)).join('');
+            container.innerHTML = filtered.length === 0
+                ? `<div class="bg-white rounded-2xl border border-dashed plum-border p-6 text-center text-xs text-[#7c6575]">
+                    Nessuna nota per questa pagina. Tocca <strong>+ Nota (Pag. ${activePdfPage})</strong> per scriverne una.
+                   </div>`
+                : filtered.map((n, idx) => renderNoteCardHtml(n, idx, filtered.length)).join('');
         }
 
-        function togglePdfScripturesDrawer() {
-            const drawer = document.getElementById('pdf-scriptures-drawer');
-            drawer.classList.toggle('hidden');
-            renderPdfScripturesDrawer();
-        }
-
-        function renderPdfScripturesDrawer() {
-            const box = document.getElementById('pdf-scriptures-chips');
-            if (!box) return;
-            const s = getActiveSession();
-            if (s.scriptures.length === 0) {
-                box.innerHTML = '<span class="text-xs text-amber-800">Nessuna scrittura aggiunta in questa sessione.</span>';
-                return;
-            }
-            box.innerHTML = s.scriptures.map(scr => `
-                <button type="button" onclick="openScriptureModal('${scr.id}')" class="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-950 font-bold text-xs shadow-2xs hover:bg-amber-100">
-                    📖 ${escapeHtml(scr.ref)} ${scr.pdfPage ? `(Pag. ${scr.pdfPage})` : ''}
-                </button>
-            `).join('');
-        }
-
-        /* BARRA DIVISORIA TRASCINABILE TRA PDF E NOTE */
         function setupPdfResizer() {
             const resizer = document.getElementById('pdf-resizer');
             const container = document.getElementById('pdf-split-container');
             const leftPane = document.getElementById('pdf-left-pane');
-            const frame = document.getElementById('pdf-fallback-frame');
+            const fallbackFrame = document.getElementById('pdf-fallback-frame');
             if (!resizer || !container || !leftPane) return;
 
-            let dragging = false;
+            let isResizing = false;
+
+            const onMove = (e) => {
+                if (!isResizing) return;
+                const rect = container.getBoundingClientRect();
+                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                const pct = Math.max(15, Math.min(85, ((clientX - rect.left) / rect.width) * 100));
+                state.pdfSplitPercent = Math.round(pct * 10) / 10;
+                leftPane.style.flex = `0 0 ${state.pdfSplitPercent}%`;
+            };
+
+            const onUp = () => {
+                if (!isResizing) return;
+                isResizing = false;
+                resizer.classList.remove('dragging');
+                if (fallbackFrame) fallbackFrame.style.pointerEvents = 'auto';
+                saveState();
+            };
 
             resizer.addEventListener('pointerdown', (e) => {
-                dragging = true;
+                e.preventDefault();
+                isResizing = true;
                 resizer.classList.add('dragging');
-                resizer.setPointerCapture(e.pointerId);
-                if (frame) frame.style.pointerEvents = 'none';
+                if (fallbackFrame) fallbackFrame.style.pointerEvents = 'none';
             });
 
-            resizer.addEventListener('pointermove', (e) => {
-                if (!dragging) return;
-                const rect = container.getBoundingClientRect();
-                const relX = e.clientX - rect.left;
-                const pct = Math.max(15, Math.min(85, (relX / rect.width) * 100));
-                state.pdfSplitPercent = Math.round(pct);
-                leftPane.style.flex = `0 0 ${state.pdfSplitPercent}%`;
-            });
-
-            const stopDrag = () => {
-                if (dragging) {
-                    dragging = false;
-                    resizer.classList.remove('dragging');
-                    if (frame) frame.style.pointerEvents = 'auto';
-                    saveState();
-                }
-            };
-            resizer.addEventListener('pointerup', stopDrag);
-            window.addEventListener('pointerup', stopDrag);
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
         }
 
-        /* BACKUP ESPORTA / IMPORTA */
+        /* ESPORTA E IMPORTA BACKUP (COMPATIBILE CON TUTTI I FORMATI PRECEDENTI E ATTUALI) */
         function exportBackup() {
-            const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+            const payload = {
+                app: 'Quaderno per lo studio',
+                exportedAt: new Date().toISOString(),
+                weekKey: getWeekKey(state.weekOffset || 0),
+                ...state
+            };
+            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'Quaderno_Studio_Backup_' + new Date().toISOString().slice(0, 10) + '.json';
             a.click();
             URL.revokeObjectURL(url);
+            showToast('Backup esportato sul dispositivo!');
         }
 
         function importBackup(event) {
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = function(e) {
                 try {
-                    const rawText = String(e.target.result || '').replace(/^\uFEFF/, '').trim();
-                    const data = JSON.parse(rawText);
+                    const rawData = JSON.parse(e.target.result);
+                    if (!rawData || typeof rawData !== 'object') {
+                        throw new Error('Formato non riconosciuto');
+                    }
+
+                    const root = rawData.state && typeof rawData.state === 'object' ? rawData.state : rawData;
                     let importedNotesCount = 0;
                     let importedScrCount = 0;
 
-                    if (data && Array.isArray(data.sessions)) {
-                        // Formato con array sessions
-                        const incomingMap = {};
-                        data.sessions.forEach(s => { if (s && s.id) incomingMap[s.id] = s; });
-
-                        const merged = DEFAULT_SESSIONS.map(def => {
-                            const inc = incomingMap[def.id];
-                            if (!inc) return JSON.parse(JSON.stringify(def));
-                            const notes = Array.isArray(inc.notes) ? inc.notes : [];
-                            const scriptures = Array.isArray(inc.scriptures) ? inc.scriptures : [];
-                            importedNotesCount += notes.length;
-                            importedScrCount += scriptures.length;
+                    const normalizeNote = (n, idx) => {
+                        if (typeof n === 'string') {
+                            importedNotesCount++;
                             return {
-                                ...def,
-                                ...inc,
-                                name: inc.name || def.name,
-                                lucideIcon: def.lucideIcon,
-                                isBase: true,
-                                notes,
-                                scriptures,
-                                pdfAnnotations: inc.pdfAnnotations || {},
-                                pdfImages: inc.pdfImages || {}
+                                id: 'note_imp_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5),
+                                title: 'Nota #' + (idx + 1),
+                                html: escapeHtml(n).replace(/\n/g, '<br>'),
+                                fontSize: 17,
+                                pdfPage: null,
+                                collapsed: false,
+                                image: null,
+                                isQuickNote: false
                             };
-                        });
-
-                        data.sessions.forEach(inc => {
-                            if (inc && inc.id && !DEFAULT_SESSIONS.some(d => d.id === inc.id)) {
-                                const notes = Array.isArray(inc.notes) ? inc.notes : [];
-                                const scriptures = Array.isArray(inc.scriptures) ? inc.scriptures : [];
-                                importedNotesCount += notes.length;
-                                importedScrCount += scriptures.length;
-                                merged.push({
-                                    ...inc,
-                                    lucideIcon: inc.lucideIcon || 'notebook-pen',
-                                    isBase: false,
-                                    notes,
-                                    scriptures,
-                                    pdfAnnotations: inc.pdfAnnotations || {},
-                                    pdfImages: inc.pdfImages || {}
-                                });
-                            }
-                        });
-
-                        state.sessions = merged;
-                        if (data.activeSessionId && state.sessions.some(x => x.id === data.activeSessionId)) {
-                            state.activeSessionId = data.activeSessionId;
                         }
-                    } else if (data && (data.weeks || data.sections || data.notes || data.scriptures)) {
-                        // Compatibilità con backup delle versioni precedenti (organizzati per settimane/sezioni)
-                        const merged = JSON.parse(JSON.stringify(DEFAULT_SESSIONS));
-                        const targetByKey = {
-                            torre: merged.find(x => x.id === 'torre'),
-                            watchtower: merged.find(x => x.id === 'torre'),
-                            tesori: merged.find(x => x.id === 'tesori'),
-                            treasures: merged.find(x => x.id === 'tesori'),
-                            ministero: merged.find(x => x.id === 'ministero'),
-                            ministry: merged.find(x => x.id === 'ministero'),
-                            vita: merged.find(x => x.id === 'vita'),
-                            living: merged.find(x => x.id === 'vita'),
-                            personale: merged.find(x => x.id === 'personale'),
-                            personal: merged.find(x => x.id === 'personale')
+                        importedNotesCount++;
+                        return {
+                            id: n.id || ('note_imp_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5)),
+                            title: n.title || n.heading || n.name || ('Nota #' + (idx + 1)),
+                            html: extractImportedNoteHtml(n),
+                            fontSize: n.fontSize || 17,
+                            pdfPage: n.pdfPage || n.page || null,
+                            collapsed: false,
+                            image: n.image || n.img || null,
+                            isQuickNote: !!n.isQuickNote
                         };
+                    };
 
-                        const extractSectionItems = (secKey, secObj) => {
-                            if (!secObj || typeof secObj !== 'object') return;
-                            const dest = targetByKey[secKey] || merged[0];
-                            if (Array.isArray(secObj.notes)) {
-                                secObj.notes.forEach((n, i) => {
-                                    dest.notes.push({
-                                        id: n.id || ('imp_n_' + Date.now() + '_' + i),
-                                        title: n.title || ('Nota #' + (dest.notes.length + 1)),
-                                        html: n.html || n.content || n.text || '',
-                                        fontSize: n.fontSize || 17,
-                                        pdfPage: n.pdfPage || n.page || null,
-                                        collapsed: !!n.collapsed,
-                                        image: n.image || null,
-                                        isQuickNote: !!n.isQuickNote
-                                    });
-                                    importedNotesCount++;
-                                });
-                            }
-                            if (Array.isArray(secObj.scriptures)) {
-                                secObj.scriptures.forEach((sc, i) => {
-                                    dest.scriptures.push({
-                                        id: sc.id || ('imp_s_' + Date.now() + '_' + i),
-                                        ref: sc.ref || sc.reference || sc.title || 'Scrittura',
-                                        text: sc.text || sc.content || '',
-                                        pdfPage: sc.pdfPage || sc.page || null
-                                    });
-                                    importedScrCount++;
-                                });
-                            }
+                    const normalizeScripture = (sc, idx) => {
+                        importedScrCount++;
+                        return {
+                            id: sc.id || ('scr_imp_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5)),
+                            ref: sc.ref || sc.reference || sc.title || 'Scrittura',
+                            text: sc.text || sc.content || sc.body || '',
+                            pdfPage: sc.pdfPage || sc.page || null
                         };
+                    };
 
-                        if (data.weeks && typeof data.weeks === 'object') {
-                            Object.values(data.weeks).forEach(weekObj => {
-                                if (weekObj && typeof weekObj === 'object') {
-                                    Object.entries(weekObj).forEach(([k, v]) => extractSectionItems(k, v));
+                    const mapSessionId = (keyOrName) => {
+                        const k = String(keyOrName || '').toLowerCase();
+                        if (k.includes('torre') || k.includes('watchtower') || k === 'wt') return 'torre';
+                        if (k.includes('tesori') || k.includes('treasures')) return 'tesori';
+                        if (k.includes('ministero') || k.includes('efficaci') || k.includes('ministry')) return 'ministero';
+                        if (k.includes('vita') || k.includes('cristiana') || k.includes('living')) return 'vita';
+                        if (k.includes('personale') || k.includes('personal')) return 'personale';
+                        return null;
+                    };
+
+                    const assignToSession = (targetId, fallbackName, notesArr, scrArr) => {
+                        let target = state.sessions.find(s => s.id === targetId);
+                        if (!target && fallbackName) {
+                            target = state.sessions.find(s => s.name.toLowerCase() === fallbackName.toLowerCase());
+                        }
+                        if (!target) {
+                            const newId = targetId || ('sess_imp_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5));
+                            target = {
+                                id: newId,
+                                name: fallbackName || 'Sessione Importata',
+                                lucideIcon: 'notebook-pen',
+                                isBase: false,
+                                notes: [],
+                                scriptures: [],
+                                pdfMeta: null,
+                                pdfAnnotations: {},
+                                pdfImages: {}
+                            };
+                            state.sessions.push(target);
+                        }
+                        if (Array.isArray(notesArr) && notesArr.length > 0) {
+                            const normalized = notesArr.map((n, i) => normalizeNote(n, target.notes.length + i));
+                            target.notes = target.notes.concat(normalized);
+                        }
+                        if (Array.isArray(scrArr) && scrArr.length > 0) {
+                            const normalizedScr = scrArr.map((sc, i) => normalizeScripture(sc, target.scriptures.length + i));
+                            target.scriptures = target.scriptures.concat(normalizedScr);
+                        }
+                    };
+
+                    // Scansione ricorsiva profonda per trovare tutte le note e scritture in qualsiasi struttura JSON precedente
+                    const deepScanObject = (node, hintKey = '') => {
+                        if (!node || typeof node !== 'object') return;
+                        if (Array.isArray(node)) {
+                            node.forEach((item, idx) => deepScanObject(item, hintKey || String(idx)));
+                            return;
+                        }
+
+                        const mappedId = mapSessionId(node.id) || mapSessionId(node.name) || mapSessionId(hintKey) || state.activeSessionId;
+                        const labelName = node.name || node.title || hintKey || null;
+
+                        let foundDirect = false;
+                        const noteKeys = ['notes', 'customNotes', 'paragraphs', 'items', 'entries', 'appunti'];
+                        for (const nk of noteKeys) {
+                            if (Array.isArray(node[nk]) && node[nk].length > 0) {
+                                const first = node[nk][0];
+                                if (typeof first === 'string' || (first && typeof first === 'object' && !Array.isArray(first.notes))) {
+                                    assignToSession(mappedId, labelName, node[nk], null);
+                                    foundDirect = true;
                                 }
-                            });
+                            }
                         }
-                        if (data.sections && typeof data.sections === 'object') {
-                            Object.entries(data.sections).forEach(([k, v]) => extractSectionItems(k, v));
+
+                        const scrKeys = ['scriptures', 'scritture', 'verses', 'versetti'];
+                        for (const sk of scrKeys) {
+                            if (Array.isArray(node[sk]) && node[sk].length > 0) {
+                                assignToSession(mappedId, labelName, null, node[sk]);
+                                foundDirect = true;
+                            }
                         }
-                        extractSectionItems('torre', data);
-                        state.sessions = merged;
+
+                        // Cerca anche campi testuali diretti delle vecchie schede (es. mainNote, studyTitle, baseScripture, summary, comment)
+                        const legacyTextParts = [];
+                        if (typeof node.studyTitle === 'string' && node.studyTitle.trim()) legacyTextParts.push('Titolo: ' + node.studyTitle.trim());
+                        if (typeof node.baseScripture === 'string' && node.baseScripture.trim()) legacyTextParts.push('Scrittura base: ' + node.baseScripture.trim());
+                        if (typeof node.mainNote === 'string' && node.mainNote.trim()) legacyTextParts.push(node.mainNote.trim());
+                        if (typeof node.personalComment === 'string' && node.personalComment.trim()) legacyTextParts.push(node.personalComment.trim());
+                        if (typeof node.reviewNotes === 'string' && node.reviewNotes.trim()) legacyTextParts.push(node.reviewNotes.trim());
+                        if (legacyTextParts.length > 0) {
+                            assignToSession(mappedId, labelName, [{ title: labelName || 'Appunti importati', html: legacyTextParts.map(t => escapeHtml(t).replace(/\n/g, '<br>')).join('<br><br>') }], null);
+                            foundDirect = true;
+                        }
+
+                        Object.entries(node).forEach(([k, val]) => {
+                            if (foundDirect && (noteKeys.includes(k) || scrKeys.includes(k))) return;
+                            if (val && typeof val === 'object') {
+                                deepScanObject(val, k);
+                            }
+                        });
+                    };
+
+                    if (Array.isArray(root.sessions) && root.sessions.some(s => (s.notes && s.notes.length) || (s.scriptures && s.scriptures.length))) {
+                        root.sessions.forEach(impSess => {
+                            const mappedId = mapSessionId(impSess.id) || mapSessionId(impSess.name) || impSess.id;
+                            assignToSession(mappedId, impSess.name, impSess.notes, impSess.scriptures);
+                        });
                     } else {
-                        showToast('Il file selezionato non è un backup valido del Quaderno per lo studio.', true);
-                        return;
+                        deepScanObject(root, '');
                     }
 
                     saveState();
+                    const currentSess = getActiveSession();
+                    if ((!currentSess.notes || currentSess.notes.length === 0) && importedNotesCount > 0) {
+                        const firstWithNotes = state.sessions.find(x => x.notes && x.notes.length > 0);
+                        if (firstWithNotes) {
+                            state.activeSessionId = firstWithNotes.id;
+                            state.view = 'session';
+                            saveState();
+                        }
+                    }
                     renderApp();
                     showToast(`Backup importato con successo! (${importedNotesCount} note e ${importedScrCount} scritture ripristinate)`, false);
                 } catch (err) {
