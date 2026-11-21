@@ -1078,8 +1078,13 @@
                     : 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#4a3343]';
             });
             const annotCanvas = document.getElementById('pdf-annot-canvas');
+            const leftPane = document.getElementById('pdf-left-pane');
             if (annotCanvas) {
                 annotCanvas.style.pointerEvents = tool === 'none' ? 'none' : 'auto';
+                annotCanvas.style.touchAction = tool === 'none' ? 'auto' : 'none';
+            }
+            if (leftPane) {
+                leftPane.style.overflow = tool === 'none' ? 'auto' : 'hidden';
             }
         }
 
@@ -1105,14 +1110,164 @@
         function isStylusInput(e) {
             if (!pencilOnly) return true;
             if (e.pointerType === 'pen') return true;
+            if (e.touchType === 'stylus') return true;
             if (e.pointerType === 'touch') {
-                return e.touchType === 'stylus' || (typeof e.pressure === 'number' && e.pressure > 0 && e.pressure !== 0.5 && e.pressure !== 1);
+                return typeof e.pressure === 'number' && e.pressure > 0 && e.pressure !== 0.5 && e.pressure !== 1;
             }
             if (e.touches && e.touches.length > 0) {
                 const t = e.touches[0];
-                return t.touchType === 'stylus' || (typeof t.force === 'number' && t.force > 0 && t.force !== 1);
+                if (t.touchType === 'stylus') return true;
+                if (typeof t.force === 'number' && t.force > 0 && t.force !== 1) return true;
+                if (typeof t.radiusX === 'number' && t.radiusX > 0 && t.radiusX <= 5) return true;
             }
             return e.pointerType === 'mouse';
+        }
+
+        function redrawPdfAnnotations(previewStroke = null) {
+            const canvas = document.getElementById('pdf-annot-canvas');
+            if (!canvas) return;
+            const dpr = Math.min(window.devicePixelRatio || 1, 3);
+            const cssW = canvas.width / dpr;
+            const cssH = canvas.height / dpr;
+            const ctx = canvas.getContext('2d');
+            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+            ctx.clearRect(0, 0, cssW, cssH);
+
+            const s = getActiveSession();
+            const strokes = [...(s.pdfAnnotations[activePdfPage] || [])];
+            if (previewStroke) strokes.push(previewStroke);
+
+            strokes.forEach(st => {
+                if (!st || !Array.isArray(st.points) || st.points.length === 0) return;
+                ctx.save();
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.strokeStyle = st.color || '#6b2d5c';
+                ctx.lineWidth = st.width || 4;
+                if (st.tool === 'highlighter') {
+                    ctx.globalCompositeOperation = 'multiply';
+                }
+                ctx.beginPath();
+                const p0 = st.points[0];
+                ctx.moveTo(p0.x * cssW, p0.y * cssH);
+                if (st.points.length === 1) {
+                    ctx.lineTo(p0.x * cssW + 0.5, p0.y * cssH + 0.5);
+                } else {
+                    for (let i = 1; i < st.points.length; i++) {
+                        ctx.lineTo(st.points[i].x * cssW, st.points[i].y * cssH);
+                    }
+                }
+                ctx.stroke();
+                ctx.restore();
+            });
+        }
+
+        function eraseAtPoint(pos) {
+            const s = getActiveSession();
+            const list = s.pdfAnnotations[activePdfPage];
+            if (!Array.isArray(list) || list.length === 0) return;
+            const threshold = 0.03;
+            const filtered = list.filter(st => {
+                if (!st || !Array.isArray(st.points)) return false;
+                return !st.points.some(pt => Math.hypot(pt.x - pos.x, pt.y - pos.y) < threshold);
+            });
+            if (filtered.length !== list.length) {
+                s.pdfAnnotations[activePdfPage] = filtered;
+                saveState();
+                redrawPdfAnnotations();
+            }
+        }
+
+        function undoPdfStroke() {
+            const s = getActiveSession();
+            const list = s.pdfAnnotations[activePdfPage];
+            if (Array.isArray(list) && list.length > 0) {
+                list.pop();
+                saveState();
+                redrawPdfAnnotations();
+            }
+        }
+
+        function addPdfOverlayImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            compressImageFile(file, 800, (dataUrl) => {
+                const s = getActiveSession();
+                if (!s.pdfImages[activePdfPage]) s.pdfImages[activePdfPage] = [];
+                s.pdfImages[activePdfPage].push({
+                    id: 'pimg_' + Date.now(),
+                    src: dataUrl,
+                    x: 15,
+                    y: 15,
+                    w: 35
+                });
+                saveState();
+                renderPdfOverlayImages();
+            });
+            event.target.value = '';
+        }
+
+        function renderPdfOverlayImages() {
+            const layer = document.getElementById('pdf-images-layer');
+            if (!layer) return;
+            const s = getActiveSession();
+            const imgs = s.pdfImages[activePdfPage] || [];
+            layer.innerHTML = imgs.map(im => `
+                <div class="overlay-img-box pointer-events-auto" data-pimg-id="${im.id}"
+                     style="left:${im.x}%; top:${im.y}%; width:${im.w}%;">
+                    <img src="${im.src}" class="w-full h-auto rounded-lg block pointer-events-none" alt="Immagine PDF">
+                    <div class="flex items-center justify-end gap-1 p-1 bg-white/90 rounded-b-lg">
+                        <button type="button" onclick="resizePdfOverlayImage('${im.id}', -6)" class="px-2 py-0.5 text-xs font-bold bg-[#f6eef4] rounded">−</button>
+                        <button type="button" onclick="resizePdfOverlayImage('${im.id}', 6)" class="px-2 py-0.5 text-xs font-bold bg-[#f6eef4] rounded">+</button>
+                        <button type="button" onclick="deletePdfOverlayImage('${im.id}')" class="px-2 py-0.5 text-xs font-bold bg-rose-100 text-rose-700 rounded">✕</button>
+                    </div>
+                </div>
+            `).join('');
+
+            layer.querySelectorAll('.overlay-img-box').forEach(box => {
+                let dragging = false;
+                let startX = 0, startY = 0, origX = 0, origY = 0;
+                const id = box.dataset.pimgId;
+                box.addEventListener('pointerdown', (e) => {
+                    if (e.target.tagName === 'BUTTON') return;
+                    dragging = true;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    const item = (s.pdfImages[activePdfPage] || []).find(x => x.id === id);
+                    origX = item ? item.x : 15;
+                    origY = item ? item.y : 15;
+                    try { box.setPointerCapture(e.pointerId); } catch (_) {}
+                });
+                box.addEventListener('pointermove', (e) => {
+                    if (!dragging) return;
+                    const rect = layer.getBoundingClientRect();
+                    const dx = ((e.clientX - startX) / rect.width) * 100;
+                    const dy = ((e.clientY - startY) / rect.height) * 100;
+                    const item = (s.pdfImages[activePdfPage] || []).find(x => x.id === id);
+                    if (item) {
+                        item.x = Math.max(0, Math.min(85, origX + dx));
+                        item.y = Math.max(0, Math.min(85, origY + dy));
+                        box.style.left = item.x + '%';
+                        box.style.top = item.y + '%';
+                    }
+                });
+                box.addEventListener('pointerup', () => {
+                    if (dragging) {
+                        dragging = false;
+                        saveState();
+                    }
+                });
+            });
+        }
+
+        function resizePdfOverlayImage(id, delta) {
+            const s = getActiveSession();
+            const item = (s.pdfImages[activePdfPage] || []).find(x => x.id === id);
+            if (item) {
+                item.w = Math.max(12, Math.min(90, (item.w || 35) + delta));
+                saveState();
+                renderPdfOverlayImages();
+            }
         }
 
         function setupPdfAnnotCanvas() {
@@ -1120,31 +1275,14 @@
             if (!canvas) return;
             canvas.style.pointerEvents = 'none';
             canvas.style.touchAction = 'none';
-
-            // Su iPad/Safari impedisce alle dita di disegnare o far scorrere il canvas quando uno strumento penna è attivo
-            canvas.addEventListener('touchstart', (e) => {
-                if (pdfTool === 'none') return;
-                if (!isStylusInput(e)) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-            }, { passive: false });
-
-            canvas.addEventListener('touchmove', (e) => {
-                if (pdfTool === 'none') return;
-                if (!isStylusInput(e)) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                }
-            }, { passive: false });
+            canvas.style.webkitTouchCallout = 'none';
 
             const getRelPos = (e) => {
                 const rect = canvas.getBoundingClientRect();
-                const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-                const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                const point = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
                 return {
-                    x: (clientX - rect.left) / rect.width,
-                    y: (clientY - rect.top) / rect.height
+                    x: Math.max(0, Math.min(1, (point.clientX - rect.left) / rect.width)),
+                    y: Math.max(0, Math.min(1, (point.clientY - rect.top) / rect.height))
                 };
             };
 
@@ -1156,6 +1294,7 @@
                     return;
                 }
                 e.preventDefault();
+                e.stopPropagation();
                 if (e.pointerId !== undefined && canvas.setPointerCapture) {
                     try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
                 }
@@ -1171,15 +1310,18 @@
                     width: pdfTool === 'highlighter' ? pdfStrokeWidth * 3.5 : pdfStrokeWidth,
                     points: [pos]
                 };
+                redrawPdfAnnotations(currentStroke);
             };
 
             const moveDraw = (e) => {
                 if (!isDrawingPdf || pdfTool === 'none') return;
                 if (!isStylusInput(e)) {
                     e.preventDefault();
+                    e.stopPropagation();
                     return;
                 }
                 e.preventDefault();
+                e.stopPropagation();
                 const pos = getRelPos(e);
                 if (pdfTool === 'eraser') {
                     eraseAtPoint(pos);
@@ -1207,24 +1349,23 @@
                 redrawPdfAnnotations();
             };
 
+            // Eventi Pointer (moderni)
             canvas.addEventListener('pointerdown', startDraw, { passive: false });
             canvas.addEventListener('pointermove', moveDraw, { passive: false });
             canvas.addEventListener('pointerup', endDraw);
             canvas.addEventListener('pointercancel', endDraw);
-        }
 
-        function enablePencilClicksOnPdfToolbar() {
-            const overlay = document.getElementById('pdf-workspace-overlay');
-            if (!overlay) return;
-            overlay.querySelectorAll('button').forEach(btn => {
-                if (btn.dataset.pencilBound) return;
-                btn.dataset.pencilBound = '1';
-                btn.addEventListener('pointerdown', (e) => {
-                    if (e.pointerType === 'pen' || e.touchType === 'stylus') {
-                        e.preventDefault();
-                        btn.click();
-                    }
-                });
+            // Eventi Touch nativi (fallback garantito su Safari iPadOS)
+            canvas.addEventListener('touchstart', (e) => {
+                if (!window.PointerEvent) startDraw(e);
+                else if (!isStylusInput(e)) { e.preventDefault(); e.stopPropagation(); }
+            }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => {
+                if (!window.PointerEvent) moveDraw(e);
+                else if (!isStylusInput(e)) { e.preventDefault(); e.stopPropagation(); }
+            }, { passive: false });
+            canvas.addEventListener('touchend', (e) => {
+                if (!window.PointerEvent) endDraw(e);
             });
         }
 
@@ -1717,6 +1858,14 @@
                 </div>
             `;
             if (window.lucide) lucide.createIcons();
+        }
+
+        function enablePencilClicksOnPdfToolbar() {
+            const overlay = document.getElementById('pdf-workspace-overlay');
+            if (!overlay) return;
+            overlay.querySelectorAll('button, label').forEach(el => {
+                el.style.touchAction = 'manipulation';
+            });
         }
 
         window.addEventListener('DOMContentLoaded', () => {
