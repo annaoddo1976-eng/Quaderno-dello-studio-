@@ -225,17 +225,19 @@
         @media (max-width: 639px) {
             #pdf-left-pane {
                 width: 100% !important;
-                height: 64% !important;
+                height: 55% !important;
             }
             #pdf-right-pane {
                 width: 100% !important;
-                height: 36% !important;
+                height: 45% !important;
             }
         }
         @media (min-width: 640px) {
             #pdf-left-pane,
             #pdf-right-pane {
                 height: 100% !important;
+                min-height: 0 !important;
+                max-height: 100% !important;
             }
         }
 
@@ -623,58 +625,8 @@
             </div>
         </div>
 
-        <!-- Seconda barra: strumenti penna, evidenziatore, testo, foto e blocco scorrimento -->
-        <div class="bg-plum-50 border-b border-plum-200 px-1.5 sm:px-2.5 py-1 flex flex-wrap items-center justify-between gap-1 text-xs">
-            <div class="flex items-center gap-1 flex-wrap">
-                <button type="button" onclick="setPdfAnnotTool('scroll')" class="pdf-annot-btn px-2 py-1 rounded-xl font-bold bg-plum-200 border border-plum-400 text-black flex items-center gap-1" data-tool="scroll" title="Sfoglia il PDF con il dito come un libro o seleziona una frase">
-                    <i data-lucide="book-open" class="w-3.5 h-3.5 text-black"></i> Sfoglia / Seleziona
-                </button>
-                <button type="button" onclick="setPdfAnnotTool('pen')" class="pdf-annot-btn px-2 py-1 rounded-xl font-bold bg-white border border-plum-300 text-black flex items-center gap-1" data-tool="pen">
-                    <i data-lucide="pen-tool" class="w-3.5 h-3.5 text-black"></i> Penna
-                </button>
-                <button type="button" onclick="setPdfAnnotTool('highlight')" class="pdf-annot-btn px-2 py-1 rounded-xl font-bold bg-white border border-plum-300 text-black flex items-center gap-1" data-tool="highlight">
-                    <i data-lucide="highlighter" class="w-3.5 h-3.5 text-black"></i> Evidenziatore
-                </button>
-                <button type="button" onclick="setPdfAnnotTool('line')" class="pdf-annot-btn px-2 py-1 rounded-xl font-bold bg-white border border-plum-300 text-black flex items-center gap-1" data-tool="line">
-                    <i data-lucide="minus" class="w-3.5 h-3.5 text-black"></i> Linea
-                </button>
-                <button type="button" onclick="setPdfAnnotTool('circle')" class="pdf-annot-btn px-2 py-1 rounded-xl font-bold bg-white border border-plum-300 text-black flex items-center gap-1" data-tool="circle">
-                    <i data-lucide="circle" class="w-3.5 h-3.5 text-black"></i> Cerchio
-                </button>
-                <button type="button" onclick="setPdfAnnotTool('eraser')" class="pdf-annot-btn px-2 py-1 rounded-xl font-bold bg-white border border-plum-300 text-black flex items-center gap-1" data-tool="eraser">
-                    <i data-lucide="eraser" class="w-3.5 h-3.5 text-black"></i> Gomma
-                </button>
-
-                <button type="button" onclick="addTextBoxOverlayToPdf()" class="px-2 py-1 rounded-xl font-bold bg-white border border-plum-300 text-black hover:bg-plum-100 flex items-center gap-1" title="Scrivi una nota spostabile direttamente sopra la pagina PDF">
-                    <i data-lucide="type" class="w-3.5 h-3.5 text-burgundy-700"></i> + Nota sul PDF
-                </button>
-                <label class="px-2 py-1 rounded-xl font-bold bg-white border border-plum-300 text-black hover:bg-plum-100 flex items-center gap-1 cursor-pointer" title="Inserisci un'immagine o schema sopra la pagina PDF">
-                    <i data-lucide="image-plus" class="w-3.5 h-3.5 text-burgundy-700"></i> + Foto sul PDF
-                    <input type="file" accept="image/*" onchange="addImageOverlayToPdf(event)" class="hidden">
-                </label>
-
-                <div class="flex items-center gap-1 pl-1 border-l border-plum-200">
-                    <button type="button" onclick="setPdfAnnotColor('#4B2140')" class="w-5 h-5 rounded-full bg-[#4B2140] border-2 border-white shadow"></button>
-                    <button type="button" onclick="setPdfAnnotColor('#8F3656')" class="w-5 h-5 rounded-full bg-[#8F3656] border-2 border-white shadow"></button>
-                    <button type="button" onclick="setPdfAnnotColor('#1D4ED8')" class="w-5 h-5 rounded-full bg-[#1D4ED8] border-2 border-white shadow"></button>
-                    <button type="button" onclick="setPdfAnnotColor('#FEF08A')" class="w-5 h-5 rounded-full bg-[#FEF08A] border border-plum-400 shadow" title="Giallo evidenzia"></button>
-                    <button type="button" onclick="setPdfAnnotColor('#BBF7D0')" class="w-5 h-5 rounded-full bg-[#BBF7D0] border border-plum-400 shadow" title="Verde evidenzia"></button>
-                </div>
-
-                <button type="button" onclick="pdfUndoStroke()" class="px-2 py-1 rounded-xl bg-white border border-plum-300 hover:bg-plum-100 font-bold text-black">Annulla</button>
-            </div>
-
-            <div class="flex items-center gap-1">
-                <button type="button" id="btn-lock-pdf-scroll" onclick="togglePdfScrollLock()" class="px-2 py-1 rounded-xl border border-plum-300 bg-white font-bold text-black flex items-center gap-1" title="Blocca la pagina PDF ferma mentre scorri le note a destra">
-                    <i data-lucide="lock" class="w-3.5 h-3.5 text-black"></i> <span id="label-lock-pdf">Blocca PDF</span>
-                </button>
-                <input type="text" id="pdf-search-input" placeholder="Cerca nel PDF..." onkeydown="if(event.key==='Enter') searchInPdf()" class="w-24 sm:w-32 rounded-xl border border-plum-300 bg-white px-2 py-1 text-xs text-black">
-                <button type="button" onclick="searchInPdf()" class="px-2 py-1 rounded-xl bg-plum-200 hover:bg-plum-300 border border-plum-400 text-black font-bold">Trova</button>
-            </div>
-        </div>
-
         <!-- Area divisa: sinistra (70% PDF) | divisore trascinabile | destra (30% Note con scorciatoie) -->
-        <div id="pdf-split-container" class="flex-1 flex flex-col sm:flex-row overflow-hidden relative bg-white">
+        <div id="pdf-split-container" class="flex-1 min-h-0 flex flex-col sm:flex-row overflow-hidden relative bg-white">
             <!-- STRISCIA LATERALE INDICE E MINIATURE PAGINE PDF -->
             <div id="pdf-thumbs-drawer" class="hidden w-36 sm:w-44 bg-plum-50 border-r border-plum-300 overflow-y-auto p-1.5 space-y-2 shrink-0">
                 <div class="flex items-center justify-between border-b border-plum-200 pb-1">
@@ -697,8 +649,8 @@
                 <div class="w-1 h-10 rounded-full bg-plum-500"></div>
             </div>
 
-            <div id="pdf-right-pane" style="width: 30%; height: 38%;" class="flex-1 sm:h-full bg-white border-t sm:border-t-0 border-plum-200 flex flex-col overflow-hidden">
-                <div class="p-2 border-b border-plum-200 bg-plum-50 flex flex-wrap items-center justify-between gap-1.5">
+            <div id="pdf-right-pane" style="width: 30%;" class="h-full min-h-0 bg-white border-t sm:border-t-0 border-plum-200 flex flex-col overflow-hidden">
+                <div class="p-2 border-b border-plum-200 bg-plum-50 flex flex-wrap items-center justify-between gap-1.5 shrink-0">
                     <div>
                         <span class="font-serif font-bold text-sm text-black block">Note su questo PDF</span>
                         <span class="text-[10px] text-plum-800">Puoi chiudere ogni nota già svolta</span>
@@ -712,7 +664,7 @@
                         </button>
                     </div>
                 </div>
-                <div id="pdf-side-notes-list" class="flex-1 overflow-y-auto p-1.5 space-y-2"></div>
+                <div id="pdf-side-notes-list" class="flex-1 min-h-0 overflow-y-auto p-1.5 pb-16 space-y-2"></div>
             </div>
         </div>
     </div>
