@@ -240,7 +240,7 @@
         <!-- Area divisa: PDF a sinistra (70%), Note a destra (30%) -->
         <div id="pdf-split-container" class="flex-1 flex flex-row min-h-0 overflow-hidden">
             <!-- Pannello Sinistro: PDF -->
-            <div id="pdf-left-pane" style="width: 70%;" class="h-full overflow-auto bg-ivory-200/70 flex justify-center items-start p-3">
+            <div id="pdf-left-pane" style="flex: 0 0 70%; width: 70%; min-width: 0;" class="h-full overflow-auto bg-ivory-200/70 flex justify-center items-start p-3">
                 <div id="pdf-canvas-wrapper" class="relative bg-white shadow-md rounded-lg overflow-hidden">
                     <canvas id="pdf-render-canvas" class="block"></canvas>
                     <canvas id="pdf-annot-canvas" class="absolute inset-0 w-full h-full"></canvas>
@@ -250,12 +250,12 @@
             </div>
 
             <!-- Barra divisoria trascinabile -->
-            <div id="pdf-resizer" class="w-3 bg-plum-200 hover:bg-plum-400 active:bg-plum-600 cursor-col-resize shrink-0 flex items-center justify-center" title="Trascina per allargare o stringere le note">
-                <div class="w-1 h-10 rounded-full bg-plum-600/70"></div>
+            <div id="pdf-resizer" class="w-4 bg-plum-200 hover:bg-plum-400 active:bg-plum-600 cursor-col-resize shrink-0 flex items-center justify-center z-10" title="Trascina per allargare o stringere le note">
+                <div class="w-1.5 h-12 rounded-full bg-plum-700/80 pointer-events-none"></div>
             </div>
 
             <!-- Pannello Destro: Note collegate -->
-            <div id="pdf-right-pane" style="width: 30%;" class="h-full overflow-y-auto bg-ivory-50 border-l border-plum-200 p-3 flex flex-col gap-3">
+            <div id="pdf-right-pane" style="flex: 1 1 30%; width: 30%; min-width: 0;" class="h-full overflow-y-auto bg-ivory-50 border-l border-plum-200 p-3 flex flex-col gap-3">
                 <div class="bg-white border border-plum-200 rounded-2xl p-3 space-y-2.5">
                     <div class="flex items-center justify-between gap-2">
                         <div>
@@ -286,7 +286,7 @@
     </div>
 
     <!-- MODALE INCOLLA PREPARAZIONE (SUDDIVISIONE AUTOMATICA PARAGRAFI) -->
-    <div id="paste-prep-modal" class="fixed inset-0 z-50 bg-black/50 hidden items-center justify-center p-4">
+    <div id="paste-prep-modal" class="fixed inset-0 z-[80] bg-black/50 hidden items-center justify-center p-4">
         <div class="bg-white border border-plum-300 rounded-2xl max-w-2xl w-full p-5 space-y-4 shadow-xl">
             <div class="flex items-center justify-between">
                 <h3 class="text-lg font-extrabold text-plum-900">Incolla Preparazione (Divide in paragrafi)</h3>
@@ -295,13 +295,36 @@
                 </button>
             </div>
             <div class="flex flex-wrap items-center justify-between gap-2">
-                <p class="text-xs text-plum-700">Incolla qui tutto il testo preparato: verrà diviso automaticamente in singole note per ogni paragrafo.</p>
+                <p class="text-xs text-plum-700">Tocca il riquadro qui sotto, tieni premuto e scegli <strong>Incolla</strong> (oppure usa il tasto accanto), poi premi <strong>Crea Paragrafi</strong>.</p>
                 <button type="button" onclick="pasteFromClipboardToPrep()" class="px-3 py-1.5 rounded-xl bg-plum-100 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-200">Incolla dagli appunti</button>
             </div>
-            <textarea id="paste-prep-textarea" rows="8" placeholder="Tocca qui e fai Incolla..." class="w-full border border-plum-300 rounded-xl p-3 text-sm outline-none focus:border-plum-700"></textarea>
+            <textarea id="paste-prep-textarea" rows="8" placeholder="Tocca qui dentro e fai Incolla della tua preparazione..." class="w-full border-2 border-plum-300 rounded-xl p-3 text-sm outline-none focus:border-plum-700 bg-ivory-50"></textarea>
+            <div class="flex items-center justify-between gap-2">
+                <span id="paste-prep-feedback" class="text-xs font-bold text-rose-700"></span>
+                <div class="flex gap-2">
+                    <button type="button" onclick="closePastePrepModal()" class="px-4 py-2 rounded-xl border border-plum-300 text-xs font-bold">Annulla</button>
+                    <button type="button" onclick="processPastedPreparation()" class="px-4 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">Crea Paragrafi</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODALE AGGIUNGI / RINOMINA SESSIONE -->
+    <div id="session-modal" class="fixed inset-0 z-[80] bg-black/50 hidden items-center justify-center p-4">
+        <div class="bg-white border border-plum-300 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl">
+            <div class="flex items-center justify-between">
+                <h3 id="session-modal-title" class="text-lg font-extrabold text-plum-900">Nuova Sessione</h3>
+                <button type="button" onclick="closeSessionModal()" class="p-1.5 rounded-xl hover:bg-plum-100">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-plum-800 mb-1">Nome della sessione</label>
+                <input type="text" id="session-modal-input" onkeydown="if(event.key==='Enter')saveSessionModal()" placeholder="Es. Studio Biblico di Congregazione..." class="w-full border-2 border-plum-300 rounded-xl px-3 py-2 text-sm font-bold text-plum-900 outline-none focus:border-plum-700 bg-ivory-50">
+            </div>
             <div class="flex justify-end gap-2">
-                <button type="button" onclick="closePastePrepModal()" class="px-4 py-2 rounded-xl border border-plum-300 text-xs font-bold">Annulla</button>
-                <button type="button" onclick="processPastedPreparation()" class="px-4 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">Crea Paragrafi</button>
+                <button type="button" onclick="closeSessionModal()" class="px-4 py-2 rounded-xl border border-plum-300 text-xs font-bold">Annulla</button>
+                <button type="button" onclick="saveSessionModal()" class="px-4 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">Salva</button>
             </div>
         </div>
     </div>
@@ -346,22 +369,23 @@
         const DB_NAME = 'QuadernoStudioPdfsDB';
         const DB_STORE = 'pdfs';
 
-        const SECTIONS = [
-            { id: 'torre', label: 'Torre di Guardia', icon: 'book-open' },
-            { id: 'tesori', label: 'Tesori della Parola', icon: 'gem' },
-            { id: 'ministero', label: 'Efficaci nel Ministero', icon: 'message-circle' },
-            { id: 'vita', label: 'Vita Cristiana', icon: 'heart' },
-            { id: 'personale', label: 'Studio Personale', icon: 'sparkles' }
+        const DEFAULT_SECTIONS = [
+            { id: 'torre', label: 'Torre di Guardia', icon: 'book-open', isDefault: true },
+            { id: 'tesori', label: 'Tesori della Parola', icon: 'gem', isDefault: true },
+            { id: 'ministero', label: 'Efficaci nel Ministero', icon: 'message-circle', isDefault: true },
+            { id: 'vita', label: 'Vita Cristiana', icon: 'heart', isDefault: true },
+            { id: 'personale', label: 'Studio Personale', icon: 'sparkles', isDefault: true }
         ];
 
         let state = {
             currentWeekOffset: 0,
-            activeSection: 'torre',
+            activeSection: 'home',
             meetingMode: false,
             pdfSingleCol: false,
             pdfSplitLeftPct: 70,
             pdfNotesFilter: 'page',
             scriptureFontSize: 16,
+            sections: JSON.parse(JSON.stringify(DEFAULT_SECTIONS)),
             weeks: {},
             pdfs: [], // { id, name, section, lastPage, annotations: { [page]: strokes[] } }
             notes: [], // { id, weekKey, section, title, htmlContent, fontSize, isBold, collapsed, sortOrder, pdfId, pdfPages: [], isQuickMeetingNote, type, strokes: [] }
@@ -380,14 +404,24 @@
         let scriptureFromPdfContext = false;
         let editingScriptureId = null;
         let pdfScripturesOnlyCurrentPage = false;
+        let editingSessionId = null;
 
         function getWeekKey(offset = 0) {
-            const d = new Date();
-            d.setDate(d.getDate() + offset * 7);
-            const day = d.getDay();
-            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-            const monday = new Date(d.setDate(diff));
-            return monday.toISOString().slice(0, 10);
+            const now = new Date();
+            const day = now.getDay();
+            const diffToMonday = (day === 0 ? -6 : 1 - day) + offset * 7;
+            const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
+            const y = monday.getFullYear();
+            const m = String(monday.getMonth() + 1).padStart(2, '0');
+            const d = String(monday.getDate()).padStart(2, '0');
+            return `${y}-${m}-${d}`;
+        }
+
+        function getAllSections() {
+            if (!Array.isArray(state.sections) || state.sections.length === 0) {
+                state.sections = JSON.parse(JSON.stringify(DEFAULT_SECTIONS));
+            }
+            return state.sections;
         }
 
         function ensureWeekData(weekKey) {
@@ -414,6 +448,10 @@
                 if (raw) {
                     const parsed = JSON.parse(raw);
                     state = { ...state, ...parsed };
+                    if (!Array.isArray(state.sections) || state.sections.length === 0) {
+                        state.sections = JSON.parse(JSON.stringify(DEFAULT_SECTIONS));
+                    }
+                    if (!state.activeSection) state.activeSection = 'home';
                     if (!Array.isArray(state.notes)) state.notes = [];
                     if (!Array.isArray(state.pdfs)) state.pdfs = [];
                     if (!Array.isArray(state.scriptures)) state.scriptures = [];
@@ -484,16 +522,149 @@
         function renderNavigation() {
             const nav = document.getElementById('main-nav-bar');
             if (!nav) return;
-            nav.innerHTML = SECTIONS.map(sec => {
+            const homeActive = state.activeSection === 'home';
+            const homeTab = `
+                <button type="button" onclick="navigateToSection('home')"
+                    class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border transition ${homeActive ? 'bg-plum-700 text-white border-plum-700' : 'bg-white text-plum-900 border-plum-200 hover:bg-plum-100'}">
+                    <i data-lucide="home" class="w-3.5 h-3.5"></i>
+                    <span>Home Page</span>
+                </button>
+            `;
+            const secTabs = getAllSections().map(sec => {
                 const active = sec.id === state.activeSection;
                 return `
                     <button type="button" onclick="navigateToSection('${sec.id}')"
                         class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border transition ${active ? 'bg-plum-700 text-white border-plum-700' : 'bg-white text-plum-900 border-plum-200 hover:bg-plum-100'}">
-                        <i data-lucide="${sec.icon}" class="w-3.5 h-3.5"></i>
-                        <span>${sec.label}</span>
+                        <i data-lucide="${sec.icon || 'folder'}" class="w-3.5 h-3.5"></i>
+                        <span>${escapeAttr(sec.label)}</span>
                     </button>
                 `;
             }).join('');
+            nav.innerHTML = homeTab + secTabs;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function openSessionModal(secId = null) {
+            editingSessionId = secId;
+            const modal = document.getElementById('session-modal');
+            const titleEl = document.getElementById('session-modal-title');
+            const inputEl = document.getElementById('session-modal-input');
+            if (secId) {
+                const sec = getAllSections().find(s => s.id === secId);
+                titleEl.textContent = 'Rinomina Sessione';
+                inputEl.value = sec ? sec.label : '';
+            } else {
+                titleEl.textContent = 'Nuova Sessione';
+                inputEl.value = '';
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+            setTimeout(() => { inputEl.focus(); inputEl.select(); }, 50);
+        }
+
+        function closeSessionModal() {
+            const modal = document.getElementById('session-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+            editingSessionId = null;
+        }
+
+        function saveSessionModal() {
+            const inputEl = document.getElementById('session-modal-input');
+            const label = inputEl.value.trim();
+            if (!label) return;
+            const list = getAllSections();
+            if (editingSessionId) {
+                const target = list.find(s => s.id === editingSessionId);
+                if (target) target.label = label;
+            } else {
+                const newId = 'sec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+                list.push({
+                    id: newId,
+                    label: label,
+                    icon: 'folder-heart',
+                    isDefault: false
+                });
+            }
+            saveState();
+            closeSessionModal();
+            renderNavigation();
+            renderActiveSection();
+        }
+
+        function deleteCustomSession(secId) {
+            const list = getAllSections();
+            const target = list.find(s => s.id === secId);
+            if (!target || target.isDefault) return;
+            state.sections = list.filter(s => s.id !== secId);
+            if (state.activeSection === secId) state.activeSection = 'home';
+            saveState();
+            renderNavigation();
+            renderActiveSection();
+        }
+
+        function renderHomePage() {
+            const main = document.getElementById('main-content');
+            if (!main) return;
+            const wk = getWeekKey(state.currentWeekOffset);
+            const sectionsList = getAllSections();
+
+            main.innerHTML = `
+                <div class="space-y-5">
+                    <div class="bg-white border border-plum-200 rounded-2xl p-5 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                            <h2 class="text-xl font-extrabold text-plum-900">Home Page — Le tue Sessioni di Studio</h2>
+                            <p class="text-xs sm:text-sm text-plum-700 mt-0.5">Scegli una sessione per aprire note, scritture e PDF, oppure aggiungi e rinomina le sessioni.</p>
+                        </div>
+                        ${!state.meetingMode ? `
+                            <button type="button" onclick="openSessionModal(null)" class="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-plum-700 text-white text-xs sm:text-sm font-bold hover:bg-plum-800 shadow-sm">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                                <span>Nuova Sessione</span>
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        ${sectionsList.map(sec => {
+                            const notesCount = getSectionNotes(sec.id, wk).length;
+                            const scrCount = getSectionScriptures(sec.id, wk).length;
+                            const pdfCount = state.pdfs.filter(p => p.section === sec.id).length;
+                            return `
+                                <div class="bg-white border border-plum-200 hover:border-plum-400 rounded-2xl p-4 shadow-sm flex flex-col justify-between gap-4 transition">
+                                    <div onclick="navigateToSection('${sec.id}')" class="cursor-pointer space-y-2.5">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <div class="w-10 h-10 rounded-xl bg-plum-100 text-plum-800 flex items-center justify-center shrink-0">
+                                                <i data-lucide="${sec.icon || 'folder'}" class="w-5 h-5"></i>
+                                            </div>
+                                            <span class="px-2.5 py-1 rounded-lg bg-plum-50 text-plum-800 text-xs font-bold">Apri →</span>
+                                        </div>
+                                        <h3 class="text-base font-extrabold text-plum-900">${escapeAttr(sec.label)}</h3>
+                                        <div class="flex flex-wrap gap-1.5 text-[11px] font-bold text-plum-700">
+                                            <span class="px-2 py-0.5 rounded-md bg-ivory-100 border border-plum-200">${notesCount} note</span>
+                                            <span class="px-2 py-0.5 rounded-md bg-ivory-100 border border-plum-200">${scrCount} scritture</span>
+                                            <span class="px-2 py-0.5 rounded-md bg-ivory-100 border border-plum-200">${pdfCount} PDF</span>
+                                        </div>
+                                    </div>
+
+                                    ${!state.meetingMode ? `
+                                        <div class="pt-2.5 border-t border-plum-100 flex items-center justify-between gap-2">
+                                            <button type="button" onclick="openSessionModal('${sec.id}')" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-ivory-100 hover:bg-plum-100 text-xs font-bold text-plum-900">
+                                                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
+                                                <span>Rinomina</span>
+                                            </button>
+                                            ${!sec.isDefault ? `
+                                                <button type="button" onclick="deleteCustomSession('${sec.id}')" class="p-1.5 rounded-xl text-rose-700 hover:bg-rose-50" title="Elimina sessione">
+                                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                                </button>
+                                            ` : `<span class="text-[11px] text-plum-500 font-medium">Sessione base</span>`}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
             if (window.lucide) lucide.createIcons();
         }
 
@@ -896,31 +1067,40 @@
         }
         /* INCOLLA PREPARAZIONE E DIVIDI IN PARAGRAFI */
         function openPastePrepModal(fromPdf = false) {
-            pasteFromPdfContext = fromPdf;
+            pasteFromPdfContext = Boolean(fromPdf);
             const modal = document.getElementById('paste-prep-modal');
             const ta = document.getElementById('paste-prep-textarea');
+            const fb = document.getElementById('paste-prep-feedback');
             if (ta) ta.value = '';
+            if (fb) fb.textContent = '';
             if (modal) {
                 modal.classList.remove('hidden');
                 modal.classList.add('flex');
-                setTimeout(() => ta && ta.focus(), 60);
+                setTimeout(() => { if (ta) ta.focus(); }, 60);
             }
         }
 
         async function pasteFromClipboardToPrep() {
             const ta = document.getElementById('paste-prep-textarea');
+            const fb = document.getElementById('paste-prep-feedback');
             if (!ta) return;
+            ta.focus();
             try {
                 if (navigator.clipboard && navigator.clipboard.readText) {
                     const clip = await navigator.clipboard.readText();
                     if (clip) {
                         ta.value = clip;
+                        if (fb) fb.textContent = '';
                         return;
                     }
                 }
             } catch (_) {}
-            ta.focus();
-            document.execCommand('paste');
+            try {
+                document.execCommand('paste');
+            } catch (_) {}
+            if (!ta.value && fb) {
+                fb.textContent = 'Tocca dentro il riquadro bianco qui sotto e seleziona "Incolla".';
+            }
         }
 
         function closePastePrepModal() {
@@ -935,16 +1115,24 @@
             const normalized = raw.replace(/\r\n/g, '\n').trim();
             if (!normalized) return [];
 
-            // 1. Prova prima con doppio "a capo" (riga vuota tra paragrafi)
-            let blocks = normalized.split(/\n\s*\n+/).map(b => b.trim()).filter(Boolean);
-            if (blocks.length > 1) return blocks;
+            // 1. Se ci sono paragrafi numerati (es. "1. ...", "2) ...", "Paragrafo 1 ...", "Par. 1 ...") su più righe
+            const numberedLineBlocks = normalized.split(/\n(?=\s*(?:Paragrafo\s+\d+|Par\.\s*\d+|Domanda\s+\d+|\d{1,2}[\.\)\:\-]\s+))/i)
+                .map(b => b.trim())
+                .filter(Boolean);
+            if (numberedLineBlocks.length > 1) return numberedLineBlocks;
 
-            // 2. Se c'è un solo blocco con singoli "a capo", dividi per riga non vuota
+            // 2. Doppio "a capo" (riga vuota tra un paragrafo e l'altro)
+            const doubleBreakBlocks = normalized.split(/\n\s*\n+/).map(b => b.trim()).filter(Boolean);
+            if (doubleBreakBlocks.length > 1) return doubleBreakBlocks;
+
+            // 3. Singoli "a capo" (ogni riga non vuota diventa una nota/paragrafo)
             const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
             if (lines.length > 1) return lines;
 
-            // 3. Se tutto è stato incollato su una sola riga continua con numeri di paragrafo (es. "1. ... 2. ..." o "Paragrafo 1 ... Paragrafo 2 ...")
-            const inlineSplit = normalized.split(/(?=(?:^|\s)(?:Paragrafo\s+\d+|\d{1,2}[\.\)\-]\s+[A-ZÀ-Ú]))/g).map(s => s.trim()).filter(Boolean);
+            // 4. Testo incollato tutto su una riga continua con numeri di paragrafo
+            const inlineSplit = normalized.split(/(?=(?:^|\s)(?:Paragrafo\s+\d+|Par\.\s*\d+|\d{1,2}[\.\)\-]\s+[A-ZÀ-Ú]))/g)
+                .map(s => s.trim())
+                .filter(Boolean);
             if (inlineSplit.length > 1) return inlineSplit;
 
             return [normalized];
@@ -952,20 +1140,29 @@
 
         function processPastedPreparation() {
             const ta = document.getElementById('paste-prep-textarea');
+            const fb = document.getElementById('paste-prep-feedback');
             const raw = ta ? ta.value.trim() : '';
             if (!raw) {
-                closePastePrepModal();
+                if (fb) fb.textContent = 'Incolla prima il testo nel riquadro qui sopra.';
+                if (ta) ta.focus();
                 return;
             }
+
             const blocks = splitTextIntoSmartParagraphs(raw);
             const wk = getWeekKey(state.currentWeekOffset);
             let orderBase = getSectionNotes(state.activeSection, wk).reduce((m, n) => Math.max(m, n.sortOrder ?? 0), 0);
 
             blocks.forEach((block, idx) => {
                 orderBase += 10;
-                const firstLine = block.split('\n')[0].trim();
-                const title = firstLine.length <= 65 ? firstLine : `Paragrafo ${idx + 1}`;
-                const html = escapeAttr(block).replace(/\n/g, '<br>');
+                const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+                const firstLine = lines[0] || '';
+                const hasSeparateBody = lines.length > 1 && firstLine.length <= 75;
+                const title = hasSeparateBody
+                    ? firstLine
+                    : (firstLine.length <= 60 ? firstLine : `Paragrafo ${idx + 1}`);
+                const bodyText = hasSeparateBody ? lines.slice(1).join('\n') : block;
+                const html = escapeAttr(bodyText).replace(/\n/g, '<br>');
+
                 state.notes.push({
                     id: 'note_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5),
                     weekKey: wk,
@@ -985,7 +1182,6 @@
                 });
             });
 
-            // Se eravamo nel filtro "Note della pagina" senza pagine associate, passa a "Tutte le note" così i paragrafi incollati si vedono subito
             if (pasteFromPdfContext && activePdfMeta && state.pdfNotesFilter === 'page') {
                 setPdfNotesFilterMode('all');
             }
@@ -1486,12 +1682,63 @@
 
         function applyPdfSplitWidths() {
             if (state.pdfSingleCol) return;
-            const leftPct = Math.max(25, Math.min(82, Number(state.pdfSplitLeftPct) || 70));
-            const rightPct = 100 - leftPct;
+            const leftPct = Math.max(15, Math.min(85, Number(state.pdfSplitLeftPct) || 70));
+            const rightPct = Math.max(15, 100 - leftPct);
             const leftPane = document.getElementById('pdf-left-pane');
             const rightPane = document.getElementById('pdf-right-pane');
-            if (leftPane) leftPane.style.width = leftPct + '%';
-            if (rightPane) rightPane.style.width = rightPct + '%';
+            if (leftPane) {
+                leftPane.style.flex = `0 0 ${leftPct}%`;
+                leftPane.style.width = leftPct + '%';
+            }
+            if (rightPane) {
+                rightPane.style.flex = `1 1 ${rightPct}%`;
+                rightPane.style.width = rightPct + '%';
+            }
+        }
+
+        function initPdfSplitResizer() {
+            const resizer = document.getElementById('pdf-resizer');
+            const container = document.getElementById('pdf-split-container');
+            const nativeContainer = document.getElementById('pdf-native-container');
+            if (!resizer || !container) return;
+
+            let dragging = false;
+
+            const updatePositionFromClientX = (clientX) => {
+                const rect = container.getBoundingClientRect();
+                if (rect.width <= 0) return;
+                const relX = clientX - rect.left;
+                const pct = (relX / rect.width) * 100;
+                state.pdfSplitLeftPct = Math.max(15, Math.min(85, Math.round(pct * 10) / 10));
+                applyPdfSplitWidths();
+            };
+
+            resizer.onpointerdown = (e) => {
+                if (state.pdfSingleCol) return;
+                e.preventDefault();
+                dragging = true;
+                if (resizer.setPointerCapture) {
+                    try { resizer.setPointerCapture(e.pointerId); } catch (_) {}
+                }
+                if (nativeContainer) nativeContainer.style.pointerEvents = 'none';
+                document.body.style.cursor = 'col-resize';
+            };
+
+            window.addEventListener('pointermove', (e) => {
+                if (!dragging || state.pdfSingleCol) return;
+                updatePositionFromClientX(e.clientX);
+            });
+
+            const stopDrag = () => {
+                if (!dragging) return;
+                dragging = false;
+                if (nativeContainer) nativeContainer.style.pointerEvents = '';
+                document.body.style.cursor = '';
+                saveState();
+            };
+
+            window.addEventListener('pointerup', stopDrag);
+            window.addEventListener('pointercancel', stopDrag);
         }
 
         function initPdfSplitResizer() {
@@ -1814,11 +2061,16 @@
         }
 
         function renderActiveSection() {
+            if (state.activeSection === 'home') {
+                renderHomePage();
+                return;
+            }
             const main = document.getElementById('main-content');
             if (!main) return;
             const wk = getWeekKey(state.currentWeekOffset);
             const weekData = ensureWeekData(wk);
-            const sec = SECTIONS.find(s => s.id === state.activeSection) || SECTIONS[0];
+            const sectionsList = getAllSections();
+            const sec = sectionsList.find(s => s.id === state.activeSection) || sectionsList[0];
             const secNotes = getSectionNotes(sec.id, wk);
             const secPdfs = state.pdfs.filter(p => p.section === sec.id);
             const secScriptures = getSectionScriptures(sec.id, wk);
@@ -1827,11 +2079,19 @@
                 <div class="space-y-5">
                     <div class="bg-white border border-plum-200 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
                         <div class="flex items-center gap-2.5">
+                            <button type="button" onclick="navigateToSection('home')" class="p-2 rounded-xl bg-ivory-100 hover:bg-plum-100 text-plum-900" title="Torna alla Home Page">
+                                <i data-lucide="home" class="w-4 h-4"></i>
+                            </button>
                             <div class="w-10 h-10 rounded-xl bg-plum-100 text-plum-800 flex items-center justify-center">
-                                <i data-lucide="${sec.icon}" class="w-5 h-5"></i>
+                                <i data-lucide="${sec.icon || 'folder'}" class="w-5 h-5"></i>
                             </div>
                             <div>
-                                <h2 class="text-lg font-extrabold text-plum-900">${sec.label}</h2>
+                                <div class="flex items-center gap-2">
+                                    <h2 class="text-lg font-extrabold text-plum-900">${escapeAttr(sec.label)}</h2>
+                                    ${!state.meetingMode ? `
+                                        <button type="button" onclick="openSessionModal('${sec.id}')" class="px-2 py-0.5 rounded-lg bg-ivory-100 hover:bg-plum-100 text-[11px] font-bold text-plum-800">Rinomina</button>
+                                    ` : ''}
+                                </div>
                                 <p class="text-xs text-plum-700">${state.meetingMode ? 'Modalità Adunanza attiva (note preparate protette)' : 'Modalità Preparazione'}</p>
                             </div>
                         </div>
