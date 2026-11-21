@@ -94,6 +94,11 @@
             border-left: none !important;
             border-top: 2px solid #E4CDDC !important;
         }
+        #pdf-resizer {
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
         .pdf-scroll-locked {
             overflow: hidden !important;
             touch-action: none !important;
@@ -245,7 +250,9 @@
             </div>
 
             <!-- Barra divisoria trascinabile -->
-            <div id="pdf-resizer" class="w-2 bg-plum-200 hover:bg-plum-400 cursor-col-resize shrink-0 hidden md:block"></div>
+            <div id="pdf-resizer" class="w-3 bg-plum-200 hover:bg-plum-400 active:bg-plum-600 cursor-col-resize shrink-0 flex items-center justify-center" title="Trascina per allargare o stringere le note">
+                <div class="w-1 h-10 rounded-full bg-plum-600/70"></div>
+            </div>
 
             <!-- Pannello Destro: Note collegate -->
             <div id="pdf-right-pane" style="width: 30%;" class="h-full overflow-y-auto bg-ivory-50 border-l border-plum-200 p-3 flex flex-col gap-3">
@@ -352,6 +359,7 @@
             activeSection: 'torre',
             meetingMode: false,
             pdfSingleCol: false,
+            pdfSplitLeftPct: 70,
             pdfNotesFilter: 'page',
             scriptureFontSize: 16,
             weeks: {},
@@ -931,9 +939,13 @@
             let blocks = normalized.split(/\n\s*\n+/).map(b => b.trim()).filter(Boolean);
             if (blocks.length > 1) return blocks;
 
-            // 2. Se c'è un solo blocco con singoli "a capo" (es. "1. ...", "Paragrafo 1...", o righe distinte), dividi per riga
+            // 2. Se c'è un solo blocco con singoli "a capo", dividi per riga non vuota
             const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
             if (lines.length > 1) return lines;
+
+            // 3. Se tutto è stato incollato su una sola riga continua con numeri di paragrafo (es. "1. ... 2. ..." o "Paragrafo 1 ... Paragrafo 2 ...")
+            const inlineSplit = normalized.split(/(?=(?:^|\s)(?:Paragrafo\s+\d+|\d{1,2}[\.\)\-]\s+[A-ZÀ-Ú]))/g).map(s => s.trim()).filter(Boolean);
+            if (inlineSplit.length > 1) return inlineSplit;
 
             return [normalized];
         }
@@ -972,6 +984,11 @@
                     images: []
                 });
             });
+
+            // Se eravamo nel filtro "Note della pagina" senza pagine associate, passa a "Tutte le note" così i paragrafi incollati si vedono subito
+            if (pasteFromPdfContext && activePdfMeta && state.pdfNotesFilter === 'page') {
+                setPdfNotesFilterMode('all');
+            }
 
             saveState();
             closePastePrepModal();
@@ -1458,9 +1475,59 @@
 
         function togglePdfSingleColumnLayout() {
             state.pdfSingleCol = !state.pdfSingleCol;
-            document.getElementById('pdf-split-container').classList.toggle('single-col-layout', state.pdfSingleCol);
+            const splitEl = document.getElementById('pdf-split-container');
+            const resizerEl = document.getElementById('pdf-resizer');
+            if (splitEl) splitEl.classList.toggle('single-col-layout', state.pdfSingleCol);
+            if (resizerEl) resizerEl.classList.toggle('hidden', state.pdfSingleCol);
             document.getElementById('label-pdf-col-layout').textContent = state.pdfSingleCol ? '1 Col' : '2 Col';
+            if (!state.pdfSingleCol) applyPdfSplitWidths();
             saveState();
+        }
+
+        function applyPdfSplitWidths() {
+            if (state.pdfSingleCol) return;
+            const leftPct = Math.max(25, Math.min(82, Number(state.pdfSplitLeftPct) || 70));
+            const rightPct = 100 - leftPct;
+            const leftPane = document.getElementById('pdf-left-pane');
+            const rightPane = document.getElementById('pdf-right-pane');
+            if (leftPane) leftPane.style.width = leftPct + '%';
+            if (rightPane) rightPane.style.width = rightPct + '%';
+        }
+
+        function initPdfSplitResizer() {
+            const resizer = document.getElementById('pdf-resizer');
+            const container = document.getElementById('pdf-split-container');
+            if (!resizer || !container) return;
+
+            let dragging = false;
+
+            resizer.onpointerdown = (e) => {
+                if (state.pdfSingleCol) return;
+                e.preventDefault();
+                dragging = true;
+                resizer.setPointerCapture(e.pointerId);
+                document.body.style.cursor = 'col-resize';
+            };
+
+            resizer.onpointermove = (e) => {
+                if (!dragging || state.pdfSingleCol) return;
+                const rect = container.getBoundingClientRect();
+                if (rect.width <= 0) return;
+                const relX = e.clientX - rect.left;
+                const pct = (relX / rect.width) * 100;
+                state.pdfSplitLeftPct = Math.max(25, Math.min(82, Math.round(pct * 10) / 10));
+                applyPdfSplitWidths();
+            };
+
+            const stopDrag = () => {
+                if (!dragging) return;
+                dragging = false;
+                document.body.style.cursor = '';
+                saveState();
+            };
+
+            resizer.onpointerup = stopDrag;
+            resizer.onpointercancel = stopDrag;
         }
 
         function setPdfNotesFilterMode(mode) {
@@ -1776,9 +1843,7 @@
                                     <input type="file" accept="application/pdf,.pdf" onchange="handlePdfUpload(event)" class="hidden">
                                 </label>
                                 <button type="button" onclick="openScriptureModal(false)" class="px-3 py-2 rounded-xl bg-plum-50 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-100">+ Scrittura</button>
-                                ${sec.id === 'torre' ? `
-                                    <button type="button" onclick="openPastePrepModal(false)" class="px-3 py-2 rounded-xl bg-white border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-100">Incolla Preparazione</button>
-                                ` : ''}
+                                <button type="button" onclick="openPastePrepModal(false)" class="px-3 py-2 rounded-xl bg-white border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-100">Incolla Preparazione</button>
                                 <button type="button" onclick="addCustomNote(false, 'text')" class="px-3 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">+ Nuova Nota</button>
                                 <button type="button" onclick="addCustomNote(false, 'pencil')" class="px-3 py-2 rounded-xl bg-plum-100 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-200">+ Nota Pencil</button>
                             ` : `
@@ -1845,6 +1910,8 @@
             updateWeekHeader();
             renderNavigation();
             renderActiveSection();
+            applyPdfSplitWidths();
+            initPdfSplitResizer();
             if (window.lucide) lucide.createIcons();
         });
     </script>
