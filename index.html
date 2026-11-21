@@ -186,10 +186,37 @@
                     <span id="label-pdf-col-layout">2 Col</span>
                 </button>
 
+                <button type="button" id="btn-pdf-scriptures" onclick="togglePdfScripturesDrawer()" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-plum-100 border border-plum-300 text-xs font-bold text-plum-900 hover:bg-plum-200">
+                    <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                    <span>Scritture (<span id="pdf-scriptures-count">0</span>)</span>
+                </button>
+
                 <button type="button" id="btn-pdf-meeting-mode" onclick="toggleMeetingMode()" class="px-2.5 py-1.5 rounded-xl bg-white border border-plum-300 text-xs font-bold text-plum-900 hover:bg-plum-100">
                     <span id="label-pdf-meeting-mode">Preparazione</span>
                 </button>
             </div>
+        </div>
+
+        <!-- Pannello a comparsa rapida delle Scritture dentro il lettore PDF -->
+        <div id="pdf-scriptures-drawer" class="hidden bg-plum-50 border-b border-plum-300 px-3 py-3 max-h-[45vh] overflow-y-auto space-y-2.5">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-extrabold text-plum-900">Scritture della sessione</span>
+                    <button type="button" id="btn-scr-filter-toggle" onclick="togglePdfScripturesFilter()" class="px-2 py-1 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-plum-900 hover:bg-plum-100">
+                        Mostra tutte
+                    </button>
+                </div>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="changeScriptureFontSize(-2)" class="px-2 py-1 rounded-lg bg-white border border-plum-300 text-xs font-extrabold">A−</button>
+                    <button type="button" onclick="changeScriptureFontSize(2)" class="px-2 py-1 rounded-lg bg-white border border-plum-300 text-xs font-extrabold">A+</button>
+                    <button type="button" onclick="openScriptureModal(true)" class="px-2.5 py-1 rounded-lg bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">+ Aggiungi Scrittura</button>
+                    <button type="button" onclick="togglePdfScripturesDrawer(false)" class="p-1 rounded-lg bg-white border border-plum-300 text-plum-900">
+                        <i data-lucide="x" class="w-4 h-4"></i>
+                    </button>
+                </div>
+            </div>
+            <div id="pdf-scriptures-list" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
+        </div>
         </div>
 
         <!-- Barra strumenti Apple Pencil sul PDF (nascosta in Adunanza) -->
@@ -200,6 +227,10 @@
             <button type="button" id="tool-pdf-eraser" onclick="setPdfAnnotTool('eraser')" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Gomma</button>
             <button type="button" onclick="pdfUndoStroke()" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Annulla</button>
             <button type="button" id="btn-pdf-lock-scroll" onclick="togglePdfScrollLock()" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Solo penna</button>
+            <label class="px-2.5 py-1 rounded-xl border border-plum-300 bg-plum-50 text-plum-900 hover:bg-plum-100 cursor-pointer">
+                + Foto PDF
+                <input type="file" accept="image/*" onchange="handlePdfOverlayImageUpload(event)" class="hidden">
+            </label>
         </div>
 
         <!-- Area divisa: PDF a sinistra (70%), Note a destra (30%) -->
@@ -209,6 +240,7 @@
                 <div id="pdf-canvas-wrapper" class="relative bg-white shadow-md rounded-lg overflow-hidden">
                     <canvas id="pdf-render-canvas" class="block"></canvas>
                     <canvas id="pdf-annot-canvas" class="absolute inset-0 w-full h-full"></canvas>
+                    <div id="pdf-images-overlay-layer" class="absolute inset-0 pointer-events-none"></div>
                 </div>
             </div>
 
@@ -255,11 +287,49 @@
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <p class="text-xs text-plum-700">Incolla qui tutto il testo della preparazione (es. Torre di Guardia). Verrà diviso automaticamente in singole note per ogni paragrafo.</p>
-            <textarea id="paste-prep-textarea" rows="8" placeholder="Incolla qui i paragrafi preparati..." class="w-full border border-plum-300 rounded-xl p-3 text-sm outline-none focus:border-plum-700"></textarea>
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <p class="text-xs text-plum-700">Incolla qui tutto il testo preparato: verrà diviso automaticamente in singole note per ogni paragrafo.</p>
+                <button type="button" onclick="pasteFromClipboardToPrep()" class="px-3 py-1.5 rounded-xl bg-plum-100 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-200">Incolla dagli appunti</button>
+            </div>
+            <textarea id="paste-prep-textarea" rows="8" placeholder="Tocca qui e fai Incolla..." class="w-full border border-plum-300 rounded-xl p-3 text-sm outline-none focus:border-plum-700"></textarea>
             <div class="flex justify-end gap-2">
                 <button type="button" onclick="closePastePrepModal()" class="px-4 py-2 rounded-xl border border-plum-300 text-xs font-bold">Annulla</button>
                 <button type="button" onclick="processPastedPreparation()" class="px-4 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">Crea Paragrafi</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- LIGHTBOX ANTEPRIMA IMMAGINE A SCHERMO INTERO -->
+    <div id="image-lightbox" onclick="closeImageLightbox()" class="fixed inset-0 z-[70] bg-black/80 hidden items-center justify-center p-4">
+        <img id="image-lightbox-img" src="" alt="Anteprima immagine" class="max-w-full max-h-full rounded-2xl shadow-2xl border-2 border-white">
+    </div>
+
+    <!-- MODALE AGGIUNGI / MODIFICA SCRITTURA COLLEGATA AL PDF -->
+    <div id="scripture-modal" class="fixed inset-0 z-[65] bg-black/50 hidden items-center justify-center p-4">
+        <div class="bg-white border border-plum-300 rounded-2xl max-w-xl w-full p-5 space-y-3.5 shadow-xl">
+            <div class="flex items-center justify-between">
+                <h3 id="scripture-modal-title" class="text-lg font-extrabold text-plum-900">Aggiungi Scrittura</h3>
+                <button type="button" onclick="closeScriptureModal()" class="p-1.5 rounded-xl hover:bg-plum-100">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                <div class="sm:col-span-2">
+                    <label class="block text-xs font-bold text-plum-800 mb-1">Riferimento (es. Salmo 23:1)</label>
+                    <input type="text" id="scr-input-ref" placeholder="Scrivi il versetto..." class="w-full border border-plum-300 rounded-xl px-3 py-2 text-sm font-bold text-plum-900 outline-none focus:border-plum-700">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-plum-800 mb-1">Pagina PDF</label>
+                    <input type="number" min="1" id="scr-input-page" placeholder="Es. 4" class="w-full border border-plum-300 rounded-xl px-3 py-2 text-sm font-bold text-plum-900 outline-none focus:border-plum-700">
+                </div>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-plum-800 mb-1">Testo della scrittura (per leggerlo al volo in sala)</label>
+                <textarea id="scr-input-text" rows="5" placeholder="Incolla o scrivi qui il testo del versetto..." class="w-full border border-plum-300 rounded-xl p-3 text-sm outline-none focus:border-plum-700"></textarea>
+            </div>
+            <div class="flex justify-end gap-2">
+                <button type="button" onclick="closeScriptureModal()" class="px-4 py-2 rounded-xl border border-plum-300 text-xs font-bold">Annulla</button>
+                <button type="button" onclick="saveScriptureEntry()" class="px-4 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">Salva Scrittura</button>
             </div>
         </div>
     </div>
@@ -283,9 +353,11 @@
             meetingMode: false,
             pdfSingleCol: false,
             pdfNotesFilter: 'page',
+            scriptureFontSize: 16,
             weeks: {},
             pdfs: [], // { id, name, section, lastPage, annotations: { [page]: strokes[] } }
-            notes: [] // { id, weekKey, section, title, htmlContent, fontSize, isBold, collapsed, sortOrder, pdfId, pdfPages: [], isQuickMeetingNote, type, strokes: [] }
+            notes: [], // { id, weekKey, section, title, htmlContent, fontSize, isBold, collapsed, sortOrder, pdfId, pdfPages: [], isQuickMeetingNote, type, strokes: [] }
+            scriptures: [] // { id, weekKey, section, ref, text, pdfId, pdfPage }
         };
 
         let activePdfDoc = null;
@@ -296,6 +368,9 @@
         let pdfScrollLocked = false;
         let inMemoryPdfBuffers = {};
         let pasteFromPdfContext = false;
+        let scriptureFromPdfContext = false;
+        let editingScriptureId = null;
+        let pdfScripturesOnlyCurrentPage = false;
 
         function getWeekKey(offset = 0) {
             const d = new Date();
@@ -332,6 +407,7 @@
                     state = { ...state, ...parsed };
                     if (!Array.isArray(state.notes)) state.notes = [];
                     if (!Array.isArray(state.pdfs)) state.pdfs = [];
+                    if (!Array.isArray(state.scriptures)) state.scriptures = [];
                     if (!state.weeks) state.weeks = {};
                 }
             } catch (e) {
@@ -470,7 +546,34 @@
                 pdfPages: fromPdf && activePdfMeta ? [activePdfPage] : [],
                 isQuickMeetingNote: false,
                 type: noteType,
-                strokes: []
+                strokes: [],
+                images: []
+            };
+            state.notes.push(newNote);
+            saveState();
+            renderActiveSection();
+            if (activePdfMeta) renderPdfSideNotes();
+        }
+
+        function addQuickMeetingNote(fromPdf = false) {
+            saveState();
+            const wk = getWeekKey(state.currentWeekOffset);
+            const newNote = {
+                id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+                weekKey: wk,
+                section: state.activeSection,
+                title: 'Appunto rapido adunanza',
+                htmlContent: '',
+                fontSize: 16,
+                isBold: false,
+                collapsed: false,
+                sortOrder: -Date.now(),
+                pdfId: fromPdf && activePdfMeta ? activePdfMeta.id : null,
+                pdfPages: fromPdf && activePdfMeta ? [activePdfPage] : [],
+                isQuickMeetingNote: true,
+                type: 'both',
+                strokes: [],
+                images: []
             };
             state.notes.push(newNote);
             saveState();
@@ -646,6 +749,10 @@
                                 <button type="button" onmousedown="event.preventDefault()" onclick="changeNoteFontSize('${note.id}', -2)" class="px-2 py-1 rounded-lg bg-ivory-100 hover:bg-plum-100 text-xs font-extrabold text-plum-900" title="Diminuisci carattere">A−</button>
                                 <button type="button" onmousedown="event.preventDefault()" onclick="changeNoteFontSize('${note.id}', 2)" class="px-2 py-1 rounded-lg bg-ivory-100 hover:bg-plum-100 text-xs font-extrabold text-plum-900" title="Ingrandisci carattere">A+</button>
                                 <button type="button" onmousedown="event.preventDefault()" onclick="toggleNoteBold('${note.id}')" class="px-2.5 py-1 rounded-lg ${note.isBold ? 'bg-plum-700 text-white' : 'bg-ivory-100 text-plum-900'} hover:bg-plum-200 text-xs font-extrabold" title="Grassetto">B</button>
+                                <label class="px-2 py-1 rounded-lg bg-ivory-100 hover:bg-plum-100 text-xs font-bold text-plum-900 cursor-pointer" title="Aggiungi immagine o infografica">
+                                    + Foto
+                                    <input type="file" accept="image/*" onchange="handleNoteImageUpload(event, '${note.id}')" class="hidden">
+                                </label>
                                 <button type="button" onclick="deleteNote('${note.id}')" class="p-1.5 rounded-lg text-rose-700 hover:bg-rose-50" title="Elimina nota">
                                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                                 </button>
@@ -696,122 +803,88 @@
                                     <canvas id="pad_${inPdfSidebar ? 'side_' : ''}${note.id}" data-pad-note="${note.id}" data-pad-editable="${editable}" height="170" class="pencil-canvas"></canvas>
                                 </div>
                             ` : ''}
+                            ${Array.isArray(note.images) && note.images.length > 0 ? `
+                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+                                    ${note.images.map((imgSrc, imgIdx) => `
+                                        <div class="relative group rounded-xl overflow-hidden border border-plum-200 bg-ivory-50">
+                                            <img src="${imgSrc}" onclick="openImageLightbox('${imgSrc}')" alt="Immagine nota" class="w-full h-28 object-cover cursor-zoom-in">
+                                            ${editable ? `
+                                                <button type="button" onclick="removeNoteImage('${note.id}', ${imgIdx})" class="absolute top-1 right-1 p-1 rounded-lg bg-rose-600 text-white shadow text-[10px] font-bold" title="Rimuovi immagine">✕</button>
+                                            ` : ''}
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            ` : ''}
                         </div>
                     ` : ''}
                 </article>
             `;
         }
 
-        function escapeAttr(str) {
-            return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        function compressImageFileToDataUrl(file, maxWidth = 1000) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        const scale = Math.min(1, maxWidth / Math.max(img.width, img.height));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = Math.round(img.width * scale);
+                        canvas.height = Math.round(img.height * scale);
+                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+                        resolve(canvas.toDataURL('image/jpeg', 0.82));
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
         }
 
-        /* RENDER SEZIONE ATTIVA */
-        function renderActiveSection() {
-            const main = document.getElementById('main-content');
-            if (!main) return;
-            const wk = getWeekKey(state.currentWeekOffset);
-            const weekData = ensureWeekData(wk);
-            const secObj = SECTIONS.find(s => s.id === state.activeSection) || SECTIONS[0];
-            const sectionPdfs = state.pdfs.filter(p => p.section === state.activeSection);
-            const notes = getSectionNotes(state.activeSection, wk);
-
-            main.innerHTML = `
-                <div class="space-y-6">
-                    <!-- Intestazione Sezione + Pulsanti Essenziali -->
-                    <div class="bg-white border border-plum-200 rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-3 shadow-sm">
-                        <div>
-                            <h2 class="text-xl font-extrabold text-plum-900">${secObj.label}</h2>
-                            <p class="text-xs text-plum-700">Prepara i tuoi commenti, collega le pagine del PDF e riordina liberamente le note.</p>
-                        </div>
-                        <div class="flex flex-wrap items-center gap-2">
-                            <button type="button" onclick="addCustomNote(false, 'text')" class="prep-only px-3.5 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">+ Aggiungi Nota</button>
-                            <button type="button" onclick="addCustomNote(false, 'pencil')" class="prep-only px-3.5 py-2 rounded-xl bg-plum-100 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-200">+ Nota Pencil</button>
-                            <button type="button" onclick="openPastePrepModal(false)" class="prep-only px-3.5 py-2 rounded-xl bg-white border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-100">Incolla Preparazione</button>
-                            ${state.meetingMode ? `
-                                <button type="button" onclick="addQuickMeetingNote(false)" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700">+ Appunto rapido</button>
-                            ` : ''}
-                        </div>
-                    </div>
-
-                    ${state.activeSection === 'torre' ? `
-                        <!-- Campi essenziali Torre di Guardia: Titolo articolo e Scrittura base -->
-                        <div class="bg-white border border-plum-200 rounded-2xl p-4 grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-xs font-bold text-plum-800 mb-1">Titolo dell'articolo di studio</label>
-                                <input type="text" value="${escapeAttr(weekData.torreTitle || '')}"
-                                    ${state.meetingMode ? 'readonly' : `oninput="updateTorreField('torreTitle', this.value)"`}
-                                    placeholder="Inserisci il titolo dell'articolo..."
-                                    class="w-full bg-ivory-50 border border-plum-200 rounded-xl px-3 py-2 text-sm font-semibold outline-none focus:border-plum-600">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-bold text-plum-800 mb-1">Scrittura base</label>
-                                <input type="text" value="${escapeAttr(weekData.torreScripture || '')}"
-                                    ${state.meetingMode ? 'readonly' : `oninput="updateTorreField('torreScripture', this.value)"`}
-                                    placeholder="Es. Salmo 23:1"
-                                    class="w-full bg-ivory-50 border border-plum-200 rounded-xl px-3 py-2 text-sm font-semibold outline-none focus:border-plum-600">
-                            </div>
-                        </div>
-                    ` : ''}
-
-                    <!-- Documenti PDF della sezione -->
-                    <div class="bg-white border border-plum-200 rounded-2xl p-4 space-y-3">
-                        <div class="flex flex-wrap items-center justify-between gap-2">
-                            <h3 class="text-sm font-extrabold text-plum-900">Documenti PDF (${sectionPdfs.length})</h3>
-                            <label class="prep-only inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-plum-100 border border-plum-300 text-xs font-bold text-plum-900 hover:bg-plum-200 cursor-pointer">
-                                <i data-lucide="file-plus" class="w-4 h-4"></i> Importa PDF
-                                <input type="file" accept=".pdf,application/pdf" onchange="handlePdfUpload(event)" class="hidden">
-                            </label>
-                        </div>
-                        ${sectionPdfs.length === 0 ? `
-                            <p class="text-xs text-plum-700">Nessun PDF caricato in questa sezione. Tocca «Importa PDF» per aprirlo accanto alle tue note.</p>
-                        ` : `
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                                ${sectionPdfs.map(pdf => `
-                                    <div class="border border-plum-200 rounded-xl p-3 bg-ivory-50 flex items-center justify-between gap-2">
-                                        <div class="min-w-0">
-                                            <p class="text-xs font-bold text-plum-900 truncate">${escapeAttr(pdf.name)}</p>
-                                            <p class="text-[11px] text-plum-700">Ultima pag. ${pdf.lastPage || 1}</p>
-                                        </div>
-                                        <div class="flex items-center gap-1.5 shrink-0">
-                                            <button type="button" onclick="openPdfInWorkspace('${pdf.id}')" class="px-3 py-1.5 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">Apri PDF</button>
-                                            <button type="button" onclick="deletePdfDocument('${pdf.id}')" class="prep-only p-1.5 rounded-lg text-rose-700 hover:bg-rose-50" title="Elimina PDF">
-                                                <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        `}
-                    </div>
-
-                    <!-- Elenco Note della Sezione -->
-                    <div class="space-y-3">
-                        <h3 class="text-sm font-extrabold text-plum-900">Le tue note (${notes.length})</h3>
-                        ${notes.length === 0 ? `
-                            <div class="bg-white border border-dashed border-plum-300 rounded-2xl p-6 text-center text-xs text-plum-700">
-                                Non hai ancora note in questa sezione. Tocca <strong>+ Aggiungi Nota</strong> oppure <strong>Incolla Preparazione</strong>.
-                            </div>
-                        ` : `
-                            <div class="space-y-3">
-                                ${notes.map(n => renderSingleNoteCardHtml(n, false)).join('')}
-                            </div>
-                        `}
-                    </div>
-                </div>
-            `;
-
-            if (window.lucide) lucide.createIcons();
-            initAllPencilPads();
+        async function handleNoteImageUpload(event, noteId) {
+            const file = event.target.files?.[0];
+            if (!file) return;
+            const note = state.notes.find(n => n.id === noteId);
+            if (!note || !isNoteEditable(note)) return;
+            try {
+                const dataUrl = await compressImageFileToDataUrl(file, 960);
+                if (!Array.isArray(note.images)) note.images = [];
+                note.images.push(dataUrl);
+                note.collapsed = false;
+                saveState();
+                renderActiveSection();
+                if (activePdfMeta) renderPdfSideNotes();
+            } catch (_) {}
+            event.target.value = '';
         }
 
-        function updateTorreField(field, val) {
-            const wk = getWeekKey(state.currentWeekOffset);
-            const data = ensureWeekData(wk);
-            data[field] = val;
+        function removeNoteImage(noteId, imgIdx) {
+            const note = state.notes.find(n => n.id === noteId);
+            if (!note || !isNoteEditable(note) || !Array.isArray(note.images)) return;
+            note.images.splice(imgIdx, 1);
             saveState();
+            renderActiveSection();
+            if (activePdfMeta) renderPdfSideNotes();
         }
 
+        function openImageLightbox(src) {
+            const lb = document.getElementById('image-lightbox');
+            const img = document.getElementById('image-lightbox-img');
+            if (lb && img) {
+                img.src = src;
+                lb.classList.remove('hidden');
+                lb.classList.add('flex');
+            }
+        }
+
+        function closeImageLightbox() {
+            const lb = document.getElementById('image-lightbox');
+            if (lb) {
+                lb.classList.add('hidden');
+                lb.classList.remove('flex');
+            }
+        }
         /* INCOLLA PREPARAZIONE E DIVIDI IN PARAGRAFI */
         function openPastePrepModal(fromPdf = false) {
             pasteFromPdfContext = fromPdf;
@@ -821,7 +894,24 @@
             if (modal) {
                 modal.classList.remove('hidden');
                 modal.classList.add('flex');
+                setTimeout(() => ta && ta.focus(), 60);
             }
+        }
+
+        async function pasteFromClipboardToPrep() {
+            const ta = document.getElementById('paste-prep-textarea');
+            if (!ta) return;
+            try {
+                if (navigator.clipboard && navigator.clipboard.readText) {
+                    const clip = await navigator.clipboard.readText();
+                    if (clip) {
+                        ta.value = clip;
+                        return;
+                    }
+                }
+            } catch (_) {}
+            ta.focus();
+            document.execCommand('paste');
         }
 
         function closePastePrepModal() {
@@ -832,6 +922,21 @@
             }
         }
 
+        function splitTextIntoSmartParagraphs(raw) {
+            const normalized = raw.replace(/\r\n/g, '\n').trim();
+            if (!normalized) return [];
+
+            // 1. Prova prima con doppio "a capo" (riga vuota tra paragrafi)
+            let blocks = normalized.split(/\n\s*\n+/).map(b => b.trim()).filter(Boolean);
+            if (blocks.length > 1) return blocks;
+
+            // 2. Se c'è un solo blocco con singoli "a capo" (es. "1. ...", "Paragrafo 1...", o righe distinte), dividi per riga
+            const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
+            if (lines.length > 1) return lines;
+
+            return [normalized];
+        }
+
         function processPastedPreparation() {
             const ta = document.getElementById('paste-prep-textarea');
             const raw = ta ? ta.value.trim() : '';
@@ -839,15 +944,15 @@
                 closePastePrepModal();
                 return;
             }
-            const blocks = raw.split(/\n\s*\n+/).map(b => b.trim()).filter(Boolean);
+            const blocks = splitTextIntoSmartParagraphs(raw);
             const wk = getWeekKey(state.currentWeekOffset);
             let orderBase = getSectionNotes(state.activeSection, wk).reduce((m, n) => Math.max(m, n.sortOrder ?? 0), 0);
 
             blocks.forEach((block, idx) => {
                 orderBase += 10;
                 const firstLine = block.split('\n')[0].trim();
-                const title = firstLine.length <= 60 ? firstLine : `Paragrafo ${idx + 1}`;
-                const html = block.replace(/\n/g, '<br>');
+                const title = firstLine.length <= 65 ? firstLine : `Paragrafo ${idx + 1}`;
+                const html = escapeAttr(block).replace(/\n/g, '<br>');
                 state.notes.push({
                     id: 'note_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5),
                     weekKey: wk,
@@ -862,7 +967,8 @@
                     pdfPages: pasteFromPdfContext && activePdfMeta ? [activePdfPage] : [],
                     isQuickMeetingNote: false,
                     type: 'text',
-                    strokes: []
+                    strokes: [],
+                    images: []
                 });
             });
 
@@ -1045,7 +1151,9 @@
 
             await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
             setupPdfAnnotCanvas(annotCanvas);
+            renderPdfOverlayImages();
             renderPdfSideNotes();
+            renderPdfScripturesDrawer();
             saveState();
         }
 
@@ -1070,9 +1178,184 @@
             }
         }
 
-        function pdfChangeZoom(delta) {
-            activePdfZoom = Math.max(0.6, Math.min(2.4, activePdfZoom + delta));
-            renderCurrentPdfPage();
+        /* GESTIONE SCRITTURE COLLEGATE ALLE PAGINE DEL PDF */
+        function getSectionScriptures(sectionId, weekKey) {
+            if (!Array.isArray(state.scriptures)) state.scriptures = [];
+            return state.scriptures.filter(s => s.section === sectionId && s.weekKey === weekKey);
+        }
+
+        function openScriptureModal(fromPdf = false, scrId = null) {
+            scriptureFromPdfContext = fromPdf;
+            editingScriptureId = scrId;
+            const modal = document.getElementById('scripture-modal');
+            const titleEl = document.getElementById('scripture-modal-title');
+            const refInput = document.getElementById('scr-input-ref');
+            const pageInput = document.getElementById('scr-input-page');
+            const textInput = document.getElementById('scr-input-text');
+
+            if (scrId) {
+                const existing = state.scriptures.find(s => s.id === scrId);
+                if (existing) {
+                    titleEl.textContent = 'Modifica Scrittura';
+                    refInput.value = existing.ref || '';
+                    pageInput.value = existing.pdfPage || '';
+                    textInput.value = existing.text || '';
+                }
+            } else {
+                titleEl.textContent = 'Aggiungi Scrittura';
+                refInput.value = '';
+                pageInput.value = (fromPdf && activePdfMeta) ? activePdfPage : '';
+                textInput.value = '';
+            }
+
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => refInput && refInput.focus(), 60);
+            }
+        }
+
+        function closeScriptureModal() {
+            const modal = document.getElementById('scripture-modal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+            editingScriptureId = null;
+        }
+
+        function saveScriptureEntry() {
+            const ref = document.getElementById('scr-input-ref').value.trim();
+            const text = document.getElementById('scr-input-text').value.trim();
+            const rawPage = parseInt(document.getElementById('scr-input-page').value, 10);
+            const pdfPage = (!isNaN(rawPage) && rawPage > 0) ? rawPage : null;
+            if (!ref) return;
+
+            const wk = getWeekKey(state.currentWeekOffset);
+            const secPdfs = state.pdfs.filter(p => p.section === state.activeSection);
+            const linkedPdfId = activePdfMeta ? activePdfMeta.id : (secPdfs[0] ? secPdfs[0].id : null);
+
+            if (editingScriptureId) {
+                const existing = state.scriptures.find(s => s.id === editingScriptureId);
+                if (existing) {
+                    existing.ref = ref;
+                    existing.text = text;
+                    existing.pdfPage = pdfPage;
+                    if (linkedPdfId) existing.pdfId = linkedPdfId;
+                }
+            } else {
+                state.scriptures.push({
+                    id: 'scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+                    weekKey: wk,
+                    section: state.activeSection,
+                    ref: ref,
+                    text: text,
+                    pdfId: linkedPdfId,
+                    pdfPage: pdfPage
+                });
+            }
+
+            saveState();
+            closeScriptureModal();
+            renderActiveSection();
+            if (activePdfMeta) renderPdfScripturesDrawer();
+        }
+
+        function deleteScriptureEntry(scrId) {
+            state.scriptures = state.scriptures.filter(s => s.id !== scrId);
+            saveState();
+            renderActiveSection();
+            if (activePdfMeta) renderPdfScripturesDrawer();
+        }
+
+        function jumpToPdfPageFromScripture(scrId) {
+            const scr = state.scriptures.find(s => s.id === scrId);
+            if (!scr || !scr.pdfPage) return;
+            const targetPdfId = scr.pdfId || (state.pdfs.find(p => p.section === scr.section)?.id);
+            if (!activePdfMeta && targetPdfId) {
+                openPdfInWorkspace(targetPdfId).then(() => {
+                    activePdfPage = scr.pdfPage;
+                    renderCurrentPdfPage();
+                });
+                return;
+            }
+            if (activePdfDoc) {
+                activePdfPage = scr.pdfPage;
+                renderCurrentPdfPage();
+            }
+        }
+
+        function changeScriptureFontSize(delta) {
+            state.scriptureFontSize = Math.max(13, Math.min(28, (state.scriptureFontSize || 16) + delta));
+            saveState();
+            renderActiveSection();
+            if (activePdfMeta) renderPdfScripturesDrawer();
+        }
+
+        function togglePdfScripturesDrawer(forceState = null) {
+            const drawer = document.getElementById('pdf-scriptures-drawer');
+            if (!drawer) return;
+            const shouldOpen = forceState !== null ? forceState : drawer.classList.contains('hidden');
+            drawer.classList.toggle('hidden', !shouldOpen);
+            if (shouldOpen) renderPdfScripturesDrawer();
+        }
+
+        function togglePdfScripturesFilter() {
+            pdfScripturesOnlyCurrentPage = !pdfScripturesOnlyCurrentPage;
+            renderPdfScripturesDrawer();
+        }
+
+        function renderSingleScriptureCardHtml(scr, compact = false) {
+            const hasPage = typeof scr.pdfPage === 'number' && scr.pdfPage > 0;
+            return `
+                <div class="bg-white border border-plum-200 rounded-xl p-3 shadow-sm space-y-1.5">
+                    <div class="flex flex-wrap items-center justify-between gap-1.5">
+                        <div class="flex items-center gap-1.5 flex-wrap">
+                            <span class="text-xs sm:text-sm font-extrabold text-plum-900">${escapeAttr(scr.ref)}</span>
+                            ${hasPage ? `
+                                <button type="button" onclick="jumpToPdfPageFromScripture('${scr.id}')" class="px-2 py-0.5 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-[11px] font-bold">
+                                    Vai a pag. ${scr.pdfPage}
+                                </button>
+                            ` : `<span class="px-2 py-0.5 rounded-lg bg-ivory-100 text-plum-700 text-[11px] font-semibold">Nessuna pag.</span>`}
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <button type="button" onclick="openScriptureModal(${compact}, '${scr.id}')" class="px-2 py-0.5 rounded-lg bg-ivory-100 hover:bg-plum-100 text-[11px] font-bold text-plum-900">Modifica</button>
+                            ${!state.meetingMode ? `
+                                <button type="button" onclick="deleteScriptureEntry('${scr.id}')" class="p-1 rounded-lg text-rose-700 hover:bg-rose-50" title="Elimina scrittura">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                    ${scr.text ? `
+                        <p style="font-size: ${state.scriptureFontSize || 16}px;" class="text-zinc-800 leading-relaxed whitespace-pre-wrap">${escapeAttr(scr.text)}</p>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        function renderPdfScripturesDrawer() {
+            const listEl = document.getElementById('pdf-scriptures-list');
+            const countEl = document.getElementById('pdf-scriptures-count');
+            const filterBtn = document.getElementById('btn-scr-filter-toggle');
+            if (!listEl) return;
+
+            const wk = getWeekKey(state.currentWeekOffset);
+            const allSecScr = getSectionScriptures(state.activeSection, wk);
+            if (countEl) countEl.textContent = allSecScr.length;
+            if (filterBtn) {
+                filterBtn.textContent = pdfScripturesOnlyCurrentPage ? `Solo pag. ${activePdfPage}` : 'Tutte le scritture';
+            }
+
+            const shown = pdfScripturesOnlyCurrentPage
+                ? allSecScr.filter(s => s.pdfPage === activePdfPage)
+                : allSecScr;
+
+            listEl.innerHTML = shown.length === 0
+                ? `<p class="text-xs text-plum-700 bg-white border border-plum-200 rounded-xl p-2.5 col-span-full">Nessuna scrittura collegata${pdfScripturesOnlyCurrentPage ? ' a questa pagina' : ''}. Tocca <strong>+ Aggiungi Scrittura</strong> per inserirla.</p>`
+                : shown.map(s => renderSingleScriptureCardHtml(s, true)).join('');
+
+            if (window.lucide) lucide.createIcons();
         }
 
         function togglePdfSingleColumnLayout() {
@@ -1127,7 +1410,19 @@
             });
             const annotCanvas = document.getElementById('pdf-annot-canvas');
             if (annotCanvas) {
-                annotCanvas.style.pointerEvents = (tool === 'scroll' || state.meetingMode) ? 'none' : 'auto';
+                const canDraw = (tool !== 'scroll' && !state.meetingMode);
+                annotCanvas.style.pointerEvents = canDraw ? 'auto' : 'none';
+                annotCanvas.style.touchAction = canDraw ? 'none' : 'auto';
+                // Attiva automaticamente il blocco scorrimento quando scegli Penna/Evidenzia così puoi scrivere senza spostare la pagina
+                if (canDraw && !pdfScrollLocked) {
+                    pdfScrollLocked = true;
+                    document.getElementById('pdf-left-pane')?.classList.add('pdf-scroll-locked');
+                    document.getElementById('btn-pdf-lock-scroll')?.classList.add('bg-plum-200');
+                } else if (!canDraw && pdfScrollLocked) {
+                    pdfScrollLocked = false;
+                    document.getElementById('pdf-left-pane')?.classList.remove('pdf-scroll-locked');
+                    document.getElementById('btn-pdf-lock-scroll')?.classList.remove('bg-plum-200');
+                }
             }
         }
 
@@ -1135,6 +1430,95 @@
             pdfScrollLocked = !pdfScrollLocked;
             document.getElementById('pdf-left-pane').classList.toggle('pdf-scroll-locked', pdfScrollLocked);
             document.getElementById('btn-pdf-lock-scroll').classList.toggle('bg-plum-200', pdfScrollLocked);
+        }
+
+        /* IMMAGINI E INFOGRAFICHE SUL PDF */
+        async function handlePdfOverlayImageUpload(event) {
+            const file = event.target.files?.[0];
+            if (!file || !activePdfMeta || state.meetingMode) return;
+            try {
+                const dataUrl = await compressImageFileToDataUrl(file, 850);
+                if (!activePdfMeta.overlayImages) activePdfMeta.overlayImages = {};
+                if (!Array.isArray(activePdfMeta.overlayImages[activePdfPage])) {
+                    activePdfMeta.overlayImages[activePdfPage] = [];
+                }
+                activePdfMeta.overlayImages[activePdfPage].push({
+                    id: 'pimg_' + Date.now(),
+                    src: dataUrl,
+                    xPct: 12,
+                    yPct: 12,
+                    wPct: 36
+                });
+                saveState();
+                renderPdfOverlayImages();
+            } catch (_) {}
+            event.target.value = '';
+        }
+
+        function renderPdfOverlayImages() {
+            const layer = document.getElementById('pdf-images-overlay-layer');
+            if (!layer || !activePdfMeta) return;
+            const items = activePdfMeta.overlayImages?.[activePdfPage] || [];
+            layer.innerHTML = items.map((item, idx) => `
+                <div style="left: ${item.xPct}%; top: ${item.yPct}%; width: ${item.wPct}%;"
+                    class="absolute pointer-events-auto group border-2 border-plum-500/70 rounded-xl shadow-lg bg-white/90 overflow-hidden select-none">
+                    <img src="${item.src}" onpointerdown="startDragPdfImage(event, ${idx})" alt="Immagine sul PDF" class="w-full h-auto block cursor-move touch-none">
+                    ${!state.meetingMode ? `
+                        <div class="flex items-center justify-between bg-plum-900/90 text-white px-1.5 py-0.5 text-[10px] font-bold">
+                            <button type="button" onclick="resizePdfOverlayImage(${idx}, -6)" class="px-1.5 hover:bg-plum-700 rounded">−</button>
+                            <button type="button" onclick="resizePdfOverlayImage(${idx}, 6)" class="px-1.5 hover:bg-plum-700 rounded">+</button>
+                            <button type="button" onclick="removePdfOverlayImage(${idx})" class="px-1.5 text-rose-300 hover:bg-rose-700 rounded">✕</button>
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        function startDragPdfImage(event, idx) {
+            if (state.meetingMode || !activePdfMeta) return;
+            event.preventDefault();
+            const layer = document.getElementById('pdf-images-overlay-layer');
+            const items = activePdfMeta.overlayImages?.[activePdfPage];
+            if (!layer || !items || !items[idx]) return;
+
+            const rect = layer.getBoundingClientRect();
+            const startX = event.clientX;
+            const startY = event.clientY;
+            const origXPct = items[idx].xPct;
+            const origYPct = items[idx].yPct;
+
+            const onMove = (ev) => {
+                const dxPct = ((ev.clientX - startX) / rect.width) * 100;
+                const dyPct = ((ev.clientY - startY) / rect.height) * 100;
+                items[idx].xPct = Math.max(0, Math.min(85, origXPct + dxPct));
+                items[idx].yPct = Math.max(0, Math.min(85, origYPct + dyPct));
+                renderPdfOverlayImages();
+            };
+            const onUp = () => {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onUp);
+                saveState();
+            };
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', onUp);
+        }
+
+        function resizePdfOverlayImage(idx, deltaPct) {
+            if (state.meetingMode || !activePdfMeta) return;
+            const items = activePdfMeta.overlayImages?.[activePdfPage];
+            if (!items || !items[idx]) return;
+            items[idx].wPct = Math.max(15, Math.min(85, items[idx].wPct + deltaPct));
+            saveState();
+            renderPdfOverlayImages();
+        }
+
+        function removePdfOverlayImage(idx) {
+            if (state.meetingMode || !activePdfMeta) return;
+            const items = activePdfMeta.overlayImages?.[activePdfPage];
+            if (!items) return;
+            items.splice(idx, 1);
+            saveState();
+            renderPdfOverlayImages();
         }
 
         function setupPdfAnnotCanvas(canvas) {
@@ -1247,6 +1631,112 @@
             };
             reader.readAsText(file);
             event.target.value = '';
+        }
+
+        function escapeAttr(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        function updateTorreMeta(field, val) {
+            const wk = getWeekKey(state.currentWeekOffset);
+            const data = ensureWeekData(wk);
+            data[field] = val;
+            saveState();
+        }
+
+        function renderActiveSection() {
+            const main = document.getElementById('main-content');
+            if (!main) return;
+            const wk = getWeekKey(state.currentWeekOffset);
+            const weekData = ensureWeekData(wk);
+            const sec = SECTIONS.find(s => s.id === state.activeSection) || SECTIONS[0];
+            const secNotes = getSectionNotes(sec.id, wk);
+            const secPdfs = state.pdfs.filter(p => p.section === sec.id);
+            const secScriptures = getSectionScriptures(sec.id, wk);
+
+            main.innerHTML = `
+                <div class="space-y-5">
+                    <div class="bg-white border border-plum-200 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-2.5">
+                            <div class="w-10 h-10 rounded-xl bg-plum-100 text-plum-800 flex items-center justify-center">
+                                <i data-lucide="${sec.icon}" class="w-5 h-5"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-extrabold text-plum-900">${sec.label}</h2>
+                                <p class="text-xs text-plum-700">${state.meetingMode ? 'Modalità Adunanza attiva (note preparate protette)' : 'Modalità Preparazione'}</p>
+                            </div>
+                        </div>
+
+                        <div class="flex flex-wrap items-center gap-2">
+                            ${!state.meetingMode ? `
+                                <label class="px-3 py-2 rounded-xl bg-plum-50 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-100 cursor-pointer">
+                                    + Importa PDF
+                                    <input type="file" accept="application/pdf,.pdf" onchange="handlePdfUpload(event)" class="hidden">
+                                </label>
+                                <button type="button" onclick="openScriptureModal(false)" class="px-3 py-2 rounded-xl bg-plum-50 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-100">+ Scrittura</button>
+                                ${sec.id === 'torre' ? `
+                                    <button type="button" onclick="openPastePrepModal(false)" class="px-3 py-2 rounded-xl bg-white border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-100">Incolla Preparazione</button>
+                                ` : ''}
+                                <button type="button" onclick="addCustomNote(false, 'text')" class="px-3 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">+ Nuova Nota</button>
+                                <button type="button" onclick="addCustomNote(false, 'pencil')" class="px-3 py-2 rounded-xl bg-plum-100 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-200">+ Nota Pencil</button>
+                            ` : `
+                                <button type="button" onclick="openScriptureModal(false)" class="px-3 py-2 rounded-xl bg-plum-100 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-200">+ Scrittura</button>
+                                <button type="button" onclick="addQuickMeetingNote(false)" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700">+ Appunto rapido</button>
+                            `}
+                        </div>
+                    </div>
+
+                    ${secScriptures.length > 0 ? `
+                        <div class="bg-white border border-plum-200 rounded-2xl p-4 shadow-sm space-y-2.5">
+                            <div class="flex items-center justify-between gap-2">
+                                <h3 class="text-xs font-extrabold uppercase tracking-wider text-plum-700 flex items-center gap-1.5">
+                                    <i data-lucide="book-open" class="w-4 h-4"></i> Scritture della sezione (${secScriptures.length})
+                                </h3>
+                                <div class="flex items-center gap-1">
+                                    <button type="button" onclick="changeScriptureFontSize(-2)" class="px-2 py-0.5 rounded-lg bg-ivory-100 border border-plum-200 text-xs font-extrabold text-plum-900">A−</button>
+                                    <button type="button" onclick="changeScriptureFontSize(2)" class="px-2 py-0.5 rounded-lg bg-ivory-100 border border-plum-200 text-xs font-extrabold text-plum-900">A+</button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                                ${secScriptures.map(s => renderSingleScriptureCardHtml(s, false)).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${secPdfs.length > 0 ? `
+                        <div class="bg-white border border-plum-200 rounded-2xl p-4 shadow-sm space-y-2.5">
+                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-plum-700">Documenti PDF della sezione</h3>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                                ${secPdfs.map(pdf => `
+                                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-ivory-50 border border-plum-200">
+                                        <div class="min-w-0">
+                                            <p class="text-xs font-bold text-plum-900 truncate">${escapeAttr(pdf.name)}</p>
+                                            <p class="text-[11px] text-plum-700">Ultima pag. ${pdf.lastPage || 1}</p>
+                                        </div>
+                                        <div class="flex items-center gap-1 shrink-0">
+                                            <button type="button" onclick="openPdfInWorkspace('${pdf.id}')" class="px-2.5 py-1.5 rounded-lg bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">Apri PDF</button>
+                                            ${!state.meetingMode ? `<button type="button" onclick="deletePdfDocument('${pdf.id}')" class="p-1.5 rounded-lg text-rose-700 hover:bg-rose-50" title="Elimina PDF"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <div class="space-y-3">
+                        ${secNotes.length === 0
+                            ? `<div class="bg-white border border-plum-200 rounded-2xl p-6 text-center text-sm text-plum-700">Nessuna nota presente in questa sezione. Tocca <strong>+ Nuova Nota</strong> o <strong>+ Importa PDF</strong> per iniziare.</div>`
+                            : secNotes.map(n => renderSingleNoteCardHtml(n, false)).join('')}
+                    </div>
+                </div>
+            `;
+
+            if (window.lucide) lucide.createIcons();
+            initAllPencilPads();
         }
 
         window.addEventListener('beforeunload', saveState);
