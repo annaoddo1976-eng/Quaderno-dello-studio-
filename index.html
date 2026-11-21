@@ -853,6 +853,9 @@
                     <button type="button" onclick="copySelectedPdfTextToSideNote()" class="px-2 py-1 rounded-xl bg-plum-200 hover:bg-plum-300 border border-plum-400 text-black text-xs font-bold">Copia nelle note</button>
                 </div>
 
+                <!-- Visualizzatore nativo di riserva se pdf.js è bloccato dall'ambiente -->
+                <iframe id="pdf-native-fallback-frame" class="hidden w-full h-full min-h-[420px] border border-plum-200 rounded-xl bg-white"></iframe>
+
                 <div id="pdf-page-wrapper" class="relative shadow-md bg-white border border-plum-200 inline-block my-auto">
                     <canvas id="pdf-render-canvas" class="block"></canvas>
                     <div id="pdf-text-layer"></div>
@@ -912,23 +915,40 @@
         const STORAGE_KEY = 'quaderno_studio_anna_v3';
         const DB_NAME = 'QuadernoStudioAnnaPDFDB';
         const DB_STORE = 'pdfFiles';
+        const inMemoryPdfBuffers = {};
+        let activeNativeBlobUrl = null;
 
         if (window.pdfjsLib) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
 
+        async function ensurePdfJsLoaded() {
+            if (window.pdfjsLib) return true;
+            return new Promise((resolve) => {
+                const s = document.createElement('script');
+                s.src = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js';
+                s.onload = () => {
+                    if (window.pdfjsLib) {
+                        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+                    }
+                    resolve(!!window.pdfjsLib);
+                };
+                s.onerror = () => resolve(false);
+                document.head.appendChild(s);
+            });
+        }
+
         async function loadPdfDocumentSafe(arrayBuffer) {
+            await ensurePdfJsLoaded();
             if (!window.pdfjsLib) {
-                throw new Error('Libreria PDF.js non caricata');
+                throw new Error('Libreria PDF.js non disponibile');
             }
-            // Clona il buffer per evitare che worker o trasferimenti lo svuotino/stacchino
             const bytesCopy = new Uint8Array(arrayBuffer.slice(0));
             try {
-                return await pdfjsLib.getDocument({ data: bytesCopy }).promise;
-            } catch (workerErr) {
-                console.warn('Caricamento PDF con worker fallito, riprovo senza worker:', workerErr);
-                const fallbackCopy = new Uint8Array(arrayBuffer.slice(0));
-                return await pdfjsLib.getDocument({ data: fallbackCopy, disableWorker: true }).promise;
+                return await pdfjsLib.getDocument({ data: bytesCopy, disableWorker: true }).promise;
+            } catch (e1) {
+                const retryCopy = new Uint8Array(arrayBuffer.slice(0));
+                return await pdfjsLib.getDocument({ data: retryCopy }).promise;
             }
         }
 
@@ -2656,13 +2676,41 @@
         }
 
         async function savePdfBinaryToDB(id, arrayBuffer) {
-            const db = await openPdfDB();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(DB_STORE, 'readwrite');
-                tx.objectStore(DB_STORE).put(arrayBuffer, id);
-                tx.oncomplete = () => resolve();
-                tx.onerror = () => reject(tx.error);
-            });
+            const safeCopy = arrayBuffer.slice(0);
+            inMemoryPdfBuffers[id] = safeCopy;
+            try {
+                const db = await openPdfDB();
+                return await new Promise((resolve) => {
+                    const tx = db.transaction(DB_STORE, 'readwrite');
+                    tx.objectStore(DB_STORE).put(safeCopy.slice(0), id);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => resolve();
+                });
+            } catch (e) {
+                console.warn('IndexedDB non disponibile in anteprima, uso memoria attiva:', e);
+            }
+        }
+
+        async function getPdfBinaryFromDB(id) {
+            if (inMemoryPdfBuffers[id]) {
+                return inMemoryPdfBuffers[id].slice(0);
+            }
+            try {
+                const db = await openPdfDB();
+                const res = await new Promise((resolve) => {
+                    const tx = db.transaction(DB_STORE, 'readonly');
+                    const req = tx.objectStore(DB_STORE).get(id);
+                    req.onsuccess = () => resolve(req.result);
+                    req.onerror = () => resolve(null);
+                });
+                if (res) {
+                    inMemoryPdfBuffers[id] = res.slice(0);
+                    return res.slice(0);
+                }
+            } catch (e) {
+                console.warn('Errore lettura IndexedDB:', e);
+            }
+            return null;
         }
 
         async function getPdfBinaryFromDB(id) {
@@ -2733,12 +2781,14 @@
             try {
                 const buffer = await file.arrayBuffer();
                 const id = 'pdf_' + Date.now();
-                await savePdfBinaryToDB(id, buffer.slice(0));
+                await savePdfBinaryToDB(id, buffer);
 
                 let numPages = 1;
-                if (window.pdfjsLib) {
+                try {
                     const doc = await loadPdfDocumentSafe(buffer);
                     numPages = doc.numPages || 1;
+                } catch (parseErr) {
+                    console.warn('Conteggio pagine con fallback:', parseErr);
                 }
 
                 state.pdfLibrary.unshift({
@@ -2754,17 +2804,18 @@
                 });
                 saveState();
                 renderActiveSection();
-                openPdfInWorkspace(id);
+                await openPdfInWorkspace(id);
             } catch (err) {
                 console.error(err);
-                showStudioToast('Impossibile importare il file PDF.');
+                showStudioToast('Impossibile leggere il file PDF selezionato.');
             }
             event.target.value = '';
         }
 
         async function deletePdfDocument(pdfId) {
+            delete inMemoryPdfBuffers[pdfId];
             state.pdfLibrary = state.pdfLibrary.filter(p => p.id !== pdfId);
-            await deletePdfBinaryFromDB(pdfId);
+            try { await deletePdfBinaryFromDB(pdfId); } catch (_) {}
             saveState();
             renderActiveSection();
             showStudioToast('Documento PDF rimosso.');
@@ -2774,10 +2825,15 @@
             const meta = state.pdfLibrary.find(p => p.id === pdfId);
             if (!meta) return;
             showStudioToast('Apertura PDF...');
+
+            const ws = document.getElementById('pdf-studio-workspace');
+            const wrapper = document.getElementById('pdf-page-wrapper');
+            const nativeFrame = document.getElementById('pdf-native-fallback-frame');
+
             try {
                 const buffer = await getPdfBinaryFromDB(pdfId);
                 if (!buffer) {
-                    showStudioToast('File PDF non trovato in memoria: reimportalo o ripristina da iCloud.');
+                    showStudioToast('Ricarica il file PDF dal pulsante "Importa PDF".');
                     return;
                 }
 
@@ -2786,29 +2842,53 @@
                 if (!activePdfMeta.overlays) activePdfMeta.overlays = {};
                 if (typeof activePdfMeta.rotation !== 'number') activePdfMeta.rotation = state.defaultPdfRotation || 0;
 
-                activePdfInstance = await loadPdfDocumentSafe(buffer);
-                activePdfMeta.numPages = activePdfInstance.numPages;
-
                 document.getElementById('pdf-workspace-title').textContent = meta.name;
-                document.getElementById('pdf-total-pages').textContent = activePdfMeta.numPages;
-                document.getElementById('pdf-page-input').max = activePdfMeta.numPages;
-
-                const ws = document.getElementById('pdf-studio-workspace');
                 ws.classList.remove('hidden');
                 ws.classList.add('flex');
-
-                pdfAutoFitEnabled = true;
                 setPdfSplitRatio(state.pdfSplitPercent || 70);
-                setPdfAnnotTool('scroll');
-                await renderCurrentPdfPage(true);
+
+                try {
+                    activePdfInstance = await loadPdfDocumentSafe(buffer);
+                    activePdfMeta.numPages = activePdfInstance.numPages;
+                    document.getElementById('pdf-total-pages').textContent = activePdfMeta.numPages;
+                    document.getElementById('pdf-page-input').max = activePdfMeta.numPages;
+
+                    if (nativeFrame) nativeFrame.classList.add('hidden');
+                    if (wrapper) wrapper.classList.remove('hidden');
+
+                    pdfAutoFitEnabled = true;
+                    setPdfAnnotTool('scroll');
+                    await renderCurrentPdfPage(true);
+                } catch (pdfJsErr) {
+                    console.warn('Uso visualizzatore PDF nativo di riserva:', pdfJsErr);
+                    activePdfInstance = null;
+                    if (activeNativeBlobUrl) URL.revokeObjectURL(activeNativeBlobUrl);
+                    const blob = new Blob([buffer], { type: 'application/pdf' });
+                    activeNativeBlobUrl = URL.createObjectURL(blob);
+                    if (wrapper) wrapper.classList.add('hidden');
+                    if (nativeFrame) {
+                        nativeFrame.src = activeNativeBlobUrl;
+                        nativeFrame.classList.remove('hidden');
+                    }
+                    renderPdfSideNotes();
+                }
             } catch (err) {
                 console.error('Errore apertura PDF:', err);
-                showStudioToast('Errore durante l\'apertura del PDF. Prova a reimportarlo.');
+                showStudioToast('Errore apertura PDF: ' + (err.message || 'riprova'));
             }
         }
 
         function closePdfWorkspace() {
             const ws = document.getElementById('pdf-studio-workspace');
+            const nativeFrame = document.getElementById('pdf-native-fallback-frame');
+            if (nativeFrame) {
+                nativeFrame.src = 'about:blank';
+                nativeFrame.classList.add('hidden');
+            }
+            if (activeNativeBlobUrl) {
+                URL.revokeObjectURL(activeNativeBlobUrl);
+                activeNativeBlobUrl = null;
+            }
             ws.classList.add('hidden');
             ws.classList.remove('flex');
             activePdfInstance = null;
