@@ -1409,37 +1409,83 @@
             saveState();
         }
 
+        function toggleMobileDrawer() {
+            const drawer = document.getElementById('mobile-drawer');
+            const backdrop = document.getElementById('mobile-drawer-backdrop');
+            if (!drawer || !backdrop) return;
+            const isOpen = !drawer.classList.contains('-translate-x-full');
+            if (isOpen) {
+                drawer.classList.add('-translate-x-full');
+                backdrop.classList.add('hidden');
+            } else {
+                drawer.classList.remove('-translate-x-full');
+                backdrop.classList.remove('hidden');
+            }
+        }
+
+        function renderNavigation() {
+            const sections = getAllSectionsList();
+            const renderItems = (isMobile) => sections.map(sec => {
+                const isAct = state.activeSection === sec.id;
+                const clickAttr = isMobile
+                    ? `toggleMobileDrawer(); navigateTo('${sec.id}');`
+                    : `navigateTo('${sec.id}');`;
+                return `
+                    <div class="flex items-center gap-1">
+                        <button type="button" onclick="${clickAttr}" class="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-xl text-left text-xs font-bold transition ${isAct ? 'bg-plum-200 border border-plum-400 text-black' : 'bg-white/80 hover:bg-plum-100 text-black border border-transparent'}">
+                            <i data-lucide="${sec.icon}" class="w-4 h-4 text-burgundy-700 shrink-0"></i>
+                            <span class="truncate">${escapeHtml(sec.label)}</span>
+                        </button>
+                        ${sec.isCustom && !state.meetingMode ? `
+                            <button type="button" onclick="deleteCustomSession('${sec.id}')" class="meeting-hide p-1.5 rounded-lg text-red-700 hover:bg-red-50" title="Elimina sessione">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            const deskList = document.getElementById('sidebar-nav-list');
+            const mobList = document.getElementById('mobile-nav-list');
+            if (deskList) deskList.innerHTML = renderItems(false);
+            if (mobList) mobList.innerHTML = renderItems(true);
+            if (window.lucide) lucide.createIcons();
+        }
+
         function togglePencilOnlyMode() {
             state.pencilOnlyMode = !state.pencilOnlyMode;
             document.body.classList.toggle('pencil-only-mode', state.pencilOnlyMode);
             const btn = document.getElementById('btn-pencil-only');
-            btn.classList.toggle('bg-plum-200', state.pencilOnlyMode);
-            btn.classList.toggle('border-plum-500', state.pencilOnlyMode);
-            btn.classList.toggle('bg-white', !state.pencilOnlyMode);
+            if (btn) {
+                btn.classList.toggle('bg-plum-200', state.pencilOnlyMode);
+                btn.classList.toggle('border-plum-500', state.pencilOnlyMode);
+            }
             saveState();
+            showStudioToast(state.pencilOnlyMode ? 'Modalità Solo Pencil attiva' : 'Tastiera riattivata');
         }
 
         function toggleMeetingMode() {
             state.meetingMode = !state.meetingMode;
             document.body.classList.toggle('meeting-mode-active', state.meetingMode);
+
             const btn = document.getElementById('btn-meeting-mode');
             const lbl = document.getElementById('label-meeting-mode');
-            if (btn) {
+            if (btn && lbl) {
                 btn.classList.toggle('bg-emerald-100', state.meetingMode);
                 btn.classList.toggle('border-emerald-500', state.meetingMode);
                 btn.classList.toggle('bg-white', !state.meetingMode);
+                lbl.textContent = state.meetingMode ? 'Adunanza' : 'Preparazione';
             }
-            if (lbl) lbl.textContent = state.meetingMode ? 'Adunanza' : 'Preparazione';
 
             const pdfBtn = document.getElementById('btn-pdf-meeting-mode');
             const pdfLbl = document.getElementById('label-pdf-meeting-mode');
             const pdfQuickBtn = document.getElementById('btn-pdf-quick-note');
-            if (pdfBtn) {
+            if (pdfBtn && pdfLbl) {
                 pdfBtn.classList.toggle('bg-emerald-100', state.meetingMode);
                 pdfBtn.classList.toggle('border-emerald-500', state.meetingMode);
                 pdfBtn.classList.toggle('bg-white', !state.meetingMode);
+                pdfLbl.textContent = state.meetingMode ? 'Adunanza' : 'Preparazione';
             }
-            if (pdfLbl) pdfLbl.textContent = state.meetingMode ? 'Adunanza' : 'Preparazione';
             if (pdfQuickBtn) {
                 pdfQuickBtn.classList.toggle('hidden', !state.meetingMode);
                 pdfQuickBtn.classList.toggle('flex', state.meetingMode);
@@ -1448,31 +1494,35 @@
             if (state.meetingMode) {
                 setPdfAnnotTool('scroll');
             }
-
             saveState();
             renderActiveSection();
             if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
                 renderPdfSideNotes();
+                renderPdfOverlays();
             }
-            showStudioToast(state.meetingMode ? 'Modalità Adunanza attiva: commenti preparati protetti. Usa "+ Appunto rapido" per nuovi appunti.' : 'Modalità Preparazione attiva: tutti gli strumenti sbloccati.');
+            showStudioToast(state.meetingMode ? 'Modalità Adunanza: note preparate protette' : 'Modalità Preparazione attiva');
         }
 
-        function createQuickMeetingNote(sectionOverride = null) {
-            const inPdf = !document.getElementById('pdf-studio-workspace').classList.contains('hidden') && activePdfMeta;
-            const sec = sectionOverride || (inPdf ? activePdfMeta.section : (state.activeSection === 'dashboard' ? 'studio_personale' : state.activeSection));
-            const currentPage = inPdf ? (activePdfMeta.lastPage || 1) : null;
-            const quickCount = state.customNotes.filter(n => n.isQuickMeetingNote).length + 1;
+        function createQuickMeetingNote(sectionId) {
+            const targetSec = sectionId || (activePdfMeta ? activePdfMeta.section : state.activeSection) || 'studio_personale';
+            const currentPdfPage = (activePdfMeta && !document.getElementById('pdf-studio-workspace').classList.contains('hidden'))
+                ? (activePdfMeta.lastPage || 1)
+                : null;
+            const pagesArr = currentPdfPage ? [currentPdfPage] : [];
 
-            const newNote = {
+            const secNotes = getNotesForSection(targetSec);
+            const minOrder = secNotes.length > 0 ? Math.min(...secNotes.map(n => n.sortOrder ?? 0)) - 1 : 0;
+
+            const quickNote = {
                 id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-                section: sec,
+                section: targetSec,
                 weekKey: state.currentWeekKey,
-                pdfId: inPdf ? activePdfMeta.id : null,
-                pdfPages: currentPage ? [currentPage] : [],
-                title: 'Appunto rapido ' + quickCount + (currentPage ? ' (Pag. ' + currentPage + ')' : ''),
+                pdfId: activePdfMeta ? activePdfMeta.id : null,
+                pdfPages: pagesArr,
+                title: currentPdfPage ? `Appunto Adunanza (Pag. ${currentPdfPage})` : 'Appunto rapido Adunanza',
                 type: 'both',
                 isQuickMeetingNote: true,
-                sortOrder: -Date.now(),
+                sortOrder: minOrder,
                 createdAt: new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' }),
                 htmlContent: '',
                 fontSize: 16,
@@ -1483,124 +1533,73 @@
                 strokes: [],
                 drawing: null
             };
-            state.customNotes.unshift(newNote);
+
+            state.customNotes.unshift(quickNote);
             saveState();
             renderActiveSection();
-            if (inPdf) {
+            if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
                 if (pdfNotesHidden) togglePdfNotesDrawer();
                 renderPdfSideNotes();
             }
-            showStudioToast('Appunto rapido creato' + (currentPage ? ' e collegato a Pagina ' + currentPage : '') + '!');
-        }
-
-        function toggleMobileDrawer() {
-            const drawer = document.getElementById('mobile-drawer');
-            const backdrop = document.getElementById('mobile-drawer-backdrop');
-            const isClosed = drawer.classList.contains('-translate-x-full');
-            if (isClosed) {
-                drawer.classList.remove('-translate-x-full');
-                backdrop.classList.remove('hidden');
-            } else {
-                drawer.classList.add('-translate-x-full');
-                backdrop.classList.add('hidden');
-            }
-        }
-
-        function renderNavigation() {
-            const allSecs = getAllSectionsList();
-            const buildItems = (isMobile) => allSecs.map(sec => {
-                const active = state.activeSection === sec.id;
-                return `
-                    <div class="flex items-center gap-1">
-                        <button type="button" onclick="navigateTo('${sec.id}'); ${isMobile ? 'toggleMobileDrawer();' : ''}"
-                            class="flex-1 flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold transition text-left ${active ? 'bg-plum-200 text-black border border-plum-400 shadow-2xs' : 'text-black hover:bg-plum-100'}">
-                            <i data-lucide="${sec.icon}" class="w-4 h-4 shrink-0"></i>
-                            <span class="truncate">${escapeHtml(sec.label)}</span>
-                        </button>
-                        ${sec.isCustom && !state.meetingMode ? `
-                            <button type="button" onclick="deleteCustomSession('${sec.id}')" class="p-1.5 rounded-lg text-red-700 hover:bg-red-50" title="Elimina sessione">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                            </button>
-                        ` : ''}
-                    </div>
-                `;
-            }).join('');
-
-            document.getElementById('sidebar-nav-list').innerHTML = buildItems(false);
-            document.getElementById('mobile-nav-list').innerHTML = buildItems(true);
-            if (window.lucide) lucide.createIcons();
+            showStudioToast('Appunto rapido creato (Tastiera + Apple Pencil)');
         }
 
         /* =========================================================
-           4. SESSIONI PERSONALIZZATE AGGIUNTIVE
+           4. SESSIONI PERSONALIZZATE
            ========================================================= */
-        let selectedNewSessionIcon = 'bookmark';
+        let selectedSessionIcon = 'bookmark';
 
         function openNewSessionModal() {
             document.getElementById('new-session-title-input').value = '';
             document.getElementById('new-session-subtitle-input').value = '';
             selectSessionIcon('bookmark');
-            const modal = document.getElementById('new-session-modal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            setTimeout(() => document.getElementById('new-session-title-input').focus(), 60);
+            const m = document.getElementById('new-session-modal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
         }
 
         function closeNewSessionModal() {
-            const modal = document.getElementById('new-session-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
+            const m = document.getElementById('new-session-modal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
         }
 
         function selectSessionIcon(iconName) {
-            selectedNewSessionIcon = iconName;
+            selectedSessionIcon = iconName;
             document.querySelectorAll('.session-icon-btn').forEach(btn => {
-                const isSel = btn.getAttribute('data-icon') === iconName;
-                btn.classList.toggle('border-2', isSel);
-                btn.classList.toggle('border-plum-600', isSel);
-                btn.classList.toggle('bg-plum-100', isSel);
-                btn.classList.toggle('border', !isSel);
-                btn.classList.toggle('border-plum-200', !isSel);
-                btn.classList.toggle('bg-white', !isSel);
+                const act = btn.getAttribute('data-icon') === iconName;
+                btn.classList.toggle('border-2', act);
+                btn.classList.toggle('border-plum-600', act);
+                btn.classList.toggle('bg-plum-100', act);
+                btn.classList.toggle('border', !act);
+                btn.classList.toggle('border-plum-200', !act);
+                btn.classList.toggle('bg-white', !act);
             });
         }
 
         function confirmCreateCustomSession() {
             const title = document.getElementById('new-session-title-input').value.trim();
             if (!title) {
-                showStudioToast('Inserisci il nome della sessione.');
+                showStudioToast('Inserisci un nome per la sessione.');
                 return;
             }
-            const subtitle = document.getElementById('new-session-subtitle-input').value.trim() || 'Appunti, penna e PDF';
-            const newId = 'custom_' + Date.now();
-            state.customSessions.push({
-                id: newId,
+            const subtitle = document.getElementById('new-session-subtitle-input').value.trim();
+            const newSec = {
+                id: 'custom_' + Date.now(),
                 title: title,
-                subtitle: subtitle,
-                icon: selectedNewSessionIcon,
+                subtitle: subtitle || 'Appunti, penna e PDF',
+                icon: selectedSessionIcon,
                 notesHtml: '',
                 images: [],
                 paperType: 'lined',
-                padHeight: 240,
-                strokes: [],
-                drawing: null
-            });
+                padHeight: 220,
+                strokes: []
+            };
+            state.customSessions.push(newSec);
+            saveState();
             closeNewSessionModal();
-            saveState();
             renderNavigation();
-            navigateTo(newId);
-            showStudioToast('Sessione "' + title + '" creata!');
-        }
-
-        function deleteCustomSession(sessionId) {
-            state.customSessions = state.customSessions.filter(s => s.id !== sessionId);
-            if (state.activeSection === sessionId) {
-                state.activeSection = 'dashboard';
-            }
-            saveState();
-            renderNavigation();
-            renderActiveSection();
-            showStudioToast('Sessione rimossa.');
+            navigateTo(newSec.id);
         }
 
         function updateCustomSessionTitle(sessionId, newTitle) {
@@ -1614,55 +1613,67 @@
             }
         }
 
+        function deleteCustomSession(sessionId) {
+            state.customSessions = state.customSessions.filter(s => s.id !== sessionId);
+            if (state.activeSection === sessionId) state.activeSection = 'dashboard';
+            saveState();
+            renderNavigation();
+            renderActiveSection();
+        }
+
         /* =========================================================
            5. SCRITTURE DA LEGGERE A COMPARSA RAPIDA
            ========================================================= */
         function openScripturesQuickModal() {
-            const modal = document.getElementById('scriptures-quick-modal');
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
+            closeSpotlightScripture();
             renderQuickScripturesList();
+            const m = document.getElementById('scriptures-quick-modal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
             if (window.lucide) lucide.createIcons();
         }
 
         function closeScripturesQuickModal() {
-            const modal = document.getElementById('scriptures-quick-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
+            const m = document.getElementById('scriptures-quick-modal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
         }
 
         function addQuickScripture() {
-            const ref = document.getElementById('quick-scr-ref-input').value.trim();
-            const txt = document.getElementById('quick-scr-text-input').value.trim();
+            const refInp = document.getElementById('quick-scr-ref-input');
+            const txtInp = document.getElementById('quick-scr-text-input');
+            const ref = refInp.value.trim();
+            const text = txtInp.value.trim();
             if (!ref) {
-                showStudioToast('Scrivi il riferimento della scrittura (es. Salmo 83:18).');
+                showStudioToast('Inserisci il riferimento della scrittura (es. Salmo 83:18).');
                 return;
             }
             state.quickScriptures.unshift({
                 id: 'qscr_' + Date.now(),
                 ref: ref,
-                text: txt || '(Testo non incollato — tocca per modificare)'
+                text: text || '(Testo non inserito)'
             });
-            document.getElementById('quick-scr-ref-input').value = '';
-            document.getElementById('quick-scr-text-input').value = '';
+            refInp.value = '';
+            txtInp.value = '';
             saveState();
             renderQuickScripturesList();
         }
 
-        function openSpotlightScripture(id) {
-            const item = state.quickScriptures.find(s => s.id === id);
-            if (!item) return;
-            document.getElementById('spotlight-scr-ref').textContent = item.ref;
-            document.getElementById('spotlight-scr-text').textContent = item.text;
+        function openSpotlightScripture(scrId) {
+            const scr = state.quickScriptures.find(s => s.id === scrId);
+            if (!scr) return;
+            document.getElementById('spotlight-scr-ref').textContent = scr.ref;
+            document.getElementById('spotlight-scr-text').textContent = scr.text;
             document.getElementById('scripture-reader-spotlight').classList.remove('hidden');
         }
 
         function closeSpotlightScripture() {
-            document.getElementById('scripture-reader-spotlight').classList.add('hidden');
+            const box = document.getElementById('scripture-reader-spotlight');
+            if (box) box.classList.add('hidden');
         }
 
-        function deleteQuickScripture(id) {
-            state.quickScriptures = state.quickScriptures.filter(s => s.id !== id);
+        function deleteQuickScripture(scrId) {
+            state.quickScriptures = state.quickScriptures.filter(s => s.id !== scrId);
             saveState();
             renderQuickScripturesList();
         }
@@ -1670,18 +1681,18 @@
         function renderQuickScripturesList() {
             const box = document.getElementById('quick-scriptures-list');
             if (!box) return;
-            if (!state.quickScriptures || state.quickScriptures.length === 0) {
-                box.innerHTML = `<p class="text-xs text-black text-center py-4">Nessuna scrittura salvata. Inserisci qui sopra un riferimento e il testo per leggerlo ingrandito durante l'adunanza.</p>`;
+            if (state.quickScriptures.length === 0) {
+                box.innerHTML = `<p class="text-xs text-black text-center py-4">Nessuna scrittura salvata. Aggiungine una qui sopra per leggerla al volo durante lo studio o l'adunanza.</p>`;
                 return;
             }
             box.innerHTML = state.quickScriptures.map(s => `
                 <div class="bg-white border border-plum-200 rounded-2xl p-2.5 flex items-center justify-between gap-2">
-                    <div class="min-w-0 flex-1 cursor-pointer" onclick="openSpotlightScripture('${s.id}')">
+                    <button type="button" onclick="openSpotlightScripture('${s.id}')" class="flex-1 text-left min-w-0">
                         <span class="font-serif font-bold text-base text-burgundy-700 block">${escapeHtml(s.ref)}</span>
-                        <p class="text-xs text-black truncate">${escapeHtml(s.text)}</p>
-                    </div>
+                        <span class="text-xs text-black block truncate">${escapeHtml(s.text)}</span>
+                    </button>
                     <div class="flex items-center gap-1 shrink-0">
-                        <button type="button" onclick="openSpotlightScripture('${s.id}')" class="px-2.5 py-1 rounded-xl bg-plum-200 hover:bg-plum-300 border border-plum-400 text-xs font-bold text-black">Leggi</button>
+                        <button type="button" onclick="openSpotlightScripture('${s.id}')" class="px-2.5 py-1 rounded-xl bg-plum-100 hover:bg-plum-200 border border-plum-300 text-xs font-bold text-black">Leggi</button>
                         <button type="button" onclick="deleteQuickScripture('${s.id}')" class="p-1.5 rounded-xl bg-red-50 text-red-700 border border-red-200">
                             <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                         </button>
@@ -1692,90 +1703,144 @@
         }
 
         /* =========================================================
-           6. BARRA DI FORMATTAZIONE TESTO + INCOLLA PULITO
+           6. FORMATTAZIONE TESTO NOTE (SAFARI / IPAD SELECTION SAFE)
            ========================================================= */
-        function renderRichTextToolbarHtml(editorId, noteIdForSize = null) {
-            return `
-                <div class="no-print meeting-hide flex flex-wrap items-center gap-1 bg-plum-50 border border-plum-200 rounded-xl p-1 mb-1.5 text-black">
-                    ${noteIdForSize ? `
-                        <button type="button" onmousedown="event.preventDefault(); changeSingleNoteFontSize('${noteIdForSize}', -2)" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 text-xs font-bold text-black hover:bg-plum-100" title="Riduci testo di questa nota">A−</button>
-                        <button type="button" onmousedown="event.preventDefault(); changeSingleNoteFontSize('${noteIdForSize}', 2)" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 text-xs font-bold text-black hover:bg-plum-100" title="Ingrandisci testo di questa nota">A+</button>
-                    ` : ''}
+        const savedEditorRanges = {};
 
-                    <select onchange="execRichCmd('${editorId}', 'fontName', this.value)" class="text-xs rounded-lg border border-plum-300 bg-white px-1.5 py-1 text-black font-semibold">
-                        <option value="Inter">Moderno</option>
-                        <option value="Lora">Classico</option>
-                        <option value="Georgia">Editoriale</option>
-                    </select>
-
-                    <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'bold')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-200 hover:bg-plum-100 font-bold text-xs text-black" title="Grassetto">B</button>
-                    <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'italic')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-200 hover:bg-plum-100 italic text-xs text-black" title="Corsivo">I</button>
-                    <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'underline')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-200 hover:bg-plum-100 underline text-xs text-black" title="Sottolineato">U</button>
-
-                    <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'insertUnorderedList')" class="p-1 rounded-lg bg-white border border-plum-200 hover:bg-plum-100 text-black" title="Elenco puntato">
-                        <i data-lucide="list" class="w-3.5 h-3.5"></i>
-                    </button>
-                    <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'insertOrderedList')" class="p-1 rounded-lg bg-white border border-plum-200 hover:bg-plum-100 text-black" title="Elenco numerato">
-                        <i data-lucide="list-ordered" class="w-3.5 h-3.5"></i>
-                    </button>
-
-                    <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'justifyLeft')" class="p-1 rounded-lg bg-white border border-plum-200 hover:bg-plum-100 text-black" title="Sinistra">
-                        <i data-lucide="align-left" class="w-3.5 h-3.5"></i>
-                    </button>
-                    <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'justifyCenter')" class="p-1 rounded-lg bg-white border border-plum-200 hover:bg-plum-100 text-black" title="Centro">
-                        <i data-lucide="align-center" class="w-3.5 h-3.5"></i>
-                    </button>
-
-                    <div class="flex items-center gap-1 pl-1 border-l border-plum-200">
-                        <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#000000')" class="w-4 h-4 rounded-full bg-black border border-white shadow-2xs" title="Nero"></button>
-                        <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#8F3656')" class="w-4 h-4 rounded-full bg-[#8F3656] border border-white shadow-2xs" title="Bordeaux"></button>
-                        <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#1D4ED8')" class="w-4 h-4 rounded-full bg-[#1D4ED8] border border-white shadow-2xs" title="Blu"></button>
-                        <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'hiliteColor', '#FEF08A')" class="w-4 h-4 rounded-full bg-[#FEF08A] border border-plum-400 shadow-2xs" title="Evidenzia giallo"></button>
-                        <button type="button" onmousedown="event.preventDefault(); execRichCmd('${editorId}', 'hiliteColor', '#BBF7D0')" class="w-4 h-4 rounded-full bg-[#BBF7D0] border border-plum-400 shadow-2xs" title="Evidenzia verde"></button>
-                    </div>
-                </div>
-            `;
+        function saveEditorSelection(editorId) {
+            const el = document.getElementById(editorId);
+            const sel = window.getSelection();
+            if (!el || !sel || sel.rangeCount === 0) return;
+            const range = sel.getRangeAt(0);
+            if (el.contains(range.commonAncestorContainer)) {
+                savedEditorRanges[editorId] = range.cloneRange();
+            }
         }
 
-        function execRichCmd(editorId, command, value = null) {
+        function restoreEditorSelection(editorId) {
             const el = document.getElementById(editorId);
             if (!el) return;
             el.focus();
-            document.execCommand(command, false, value);
+            const range = savedEditorRanges[editorId];
+            if (range) {
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+            }
+        }
+
+        function execRichCmd(editorId, cmd, val = null) {
+            const el = document.getElementById(editorId);
+            if (!el) return;
+            restoreEditorSelection(editorId);
+            try {
+                document.execCommand('styleWithCSS', false, true);
+                document.execCommand(cmd, false, val);
+            } catch (_) {}
+            saveEditorSelection(editorId);
             el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+
+        function changeSingleNoteFontSize(noteId, delta) {
+            const editorId = 'ed_cnote_' + noteId;
+            const el = document.getElementById(editorId);
+            const n = state.customNotes.find(x => x.id === noteId);
+            if (!n || !el) return;
+
+            restoreEditorSelection(editorId);
+            const sel = window.getSelection();
+            if (sel && sel.rangeCount > 0 && !sel.isCollapsed && el.contains(sel.getRangeAt(0).commonAncestorContainer)) {
+                const range = sel.getRangeAt(0);
+                const newSpanSize = Math.max(12, Math.min(34, (n.fontSize || 16) + delta));
+                const span = document.createElement('span');
+                span.style.fontSize = newSpanSize + 'px';
+                try {
+                    span.appendChild(range.extractContents());
+                    range.insertNode(span);
+                    sel.removeAllRanges();
+                    const newRange = document.createRange();
+                    newRange.selectNodeContents(span);
+                    sel.addRange(newRange);
+                    saveEditorSelection(editorId);
+                    el.dispatchEvent(new Event('input', { bubbles: true }));
+                    return;
+                } catch (_) {}
+            }
+
+            n.fontSize = Math.max(12, Math.min(32, (n.fontSize || 16) + delta));
+            el.style.fontSize = n.fontSize + 'px';
+            saveState();
         }
 
         function handleCleanEditorPaste(event, noteId) {
             event.preventDefault();
             const text = (event.clipboardData || window.clipboardData).getData('text/plain');
             if (!text) return;
-            document.execCommand('insertText', false, text);
-            const el = event.currentTarget;
-            if (el && noteId) {
-                updateCustomNoteHtml(noteId, el.innerHTML);
+            if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
+                document.execCommand('insertText', false, text);
+            } else {
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount) {
+                    const range = sel.getRangeAt(0);
+                    range.deleteContents();
+                    range.insertNode(document.createTextNode(text));
+                    range.collapse(false);
+                }
             }
+            const el = document.getElementById('ed_cnote_' + noteId);
+            if (el) updateCustomNoteHtml(noteId, el.innerHTML);
         }
 
-        function changeSingleNoteFontSize(noteId, delta) {
-            const n = state.customNotes.find(x => x.id === noteId);
-            if (!n) return;
-            n.fontSize = Math.max(12, Math.min(34, (n.fontSize || 16) + delta));
-            saveState();
-            const ed = document.getElementById('ed_cnote_' + noteId);
-            if (ed) ed.style.fontSize = n.fontSize + 'px';
+        function renderRichTextToolbarHtml(editorId, noteId = null) {
+            const sizeControls = noteId ? `
+                <button type="button" onpointerdown="event.preventDefault(); saveEditorSelection('${editorId}'); changeSingleNoteFontSize('${noteId}', -2)" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 text-xs font-bold text-black hover:bg-plum-100" title="Riduci dimensione testo">A−</button>
+                <button type="button" onpointerdown="event.preventDefault(); saveEditorSelection('${editorId}'); changeSingleNoteFontSize('${noteId}', 2)" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 text-xs font-bold text-black hover:bg-plum-100" title="Ingrandisci dimensione testo">A+</button>
+            ` : '';
+
+            return `
+                <div class="no-print meeting-hide flex flex-wrap items-center gap-1 bg-plum-50 border border-plum-200 rounded-xl p-1 mb-1.5 text-xs">
+                    ${sizeControls}
+                    <select onmousedown="saveEditorSelection('${editorId}')" ontouchstart="saveEditorSelection('${editorId}')" onchange="execRichCmd('${editorId}', 'fontName', this.value)" class="rounded-lg border border-plum-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-black">
+                        <option value="Inter">Moderno</option>
+                        <option value="Lora">Classico</option>
+                        <option value="Georgia">Editoriale</option>
+                    </select>
+                    <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'bold')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 font-bold text-black hover:bg-plum-100" title="Grassetto">B</button>
+                    <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'italic')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 italic text-black hover:bg-plum-100" title="Corsivo">I</button>
+                    <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'underline')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 underline text-black hover:bg-plum-100" title="Sottolineato">U</button>
+                    <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'insertUnorderedList')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-black hover:bg-plum-100" title="Elenco puntato"><i data-lucide="list" class="w-3.5 h-3.5"></i></button>
+                    <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'insertOrderedList')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-black hover:bg-plum-100" title="Elenco numerato"><i data-lucide="list-ordered" class="w-3.5 h-3.5"></i></button>
+                    <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'justifyLeft')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-black hover:bg-plum-100" title="Allinea a sinistra"><i data-lucide="align-left" class="w-3.5 h-3.5"></i></button>
+                    <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'justifyFull')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-black hover:bg-plum-100" title="Giustifica"><i data-lucide="align-justify" class="w-3.5 h-3.5"></i></button>
+                    <div class="flex items-center gap-1 pl-1 border-l border-plum-200">
+                        <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#000000')" class="w-4 h-4 rounded-full bg-black border border-white shadow-2xs" title="Nero"></button>
+                        <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#8F3656')" class="w-4 h-4 rounded-full bg-[#8F3656] border border-white shadow-2xs" title="Bordeaux"></button>
+                        <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#1D4ED8')" class="w-4 h-4 rounded-full bg-[#1D4ED8] border border-white shadow-2xs" title="Blu"></button>
+                        <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'hiliteColor', '#FEF08A')" class="w-4 h-4 rounded-full bg-[#FEF08A] border border-plum-400 shadow-2xs" title="Evidenzia giallo"></button>
+                        <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'hiliteColor', '#BBF7D0')" class="w-4 h-4 rounded-full bg-[#BBF7D0] border border-plum-400 shadow-2xs" title="Evidenzia verde"></button>
+                    </div>
+                </div>
+            `;
         }
 
         /* =========================================================
-           7. NOTE PERSONALIZZATE RINOMINABILI, CHIUDIBILI, COLLEGATE ALLE PAGINE & RIORDINABILI
+           7. NOTE LIBERE, RIORDINAMENTO E COLLEGAMENTO PAGINE PDF
            ========================================================= */
-        let pendingNewNoteContext = { section: 'studio_personale', type: 'keyboard', pdfId: null, defaultPage: null };
-        let pendingDeleteNoteId = null;
+        let pendingNewNoteSection = 'studio_personale';
+        let pendingNewNoteType = 'keyboard';
+        let pendingNewNotePdfId = null;
         let draggedNoteId = null;
 
-        function parsePdfPagesString(str) {
-            if (!str || !String(str).trim()) return [];
-            const nums = String(str)
-                .split(/[\s,;\-]+/)
+        function getNotesForSection(sectionId) {
+            return (state.customNotes || [])
+                .filter(n => n.section === sectionId)
+                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+        }
+
+        function parsePdfPagesInput(rawStr) {
+            if (!rawStr) return [];
+            const nums = String(rawStr)
+                .split(/[,;\s-]+/)
                 .map(s => parseInt(s.trim(), 10))
                 .filter(n => !isNaN(n) && n > 0);
             return Array.from(new Set(nums)).sort((a, b) => a - b);
@@ -1783,23 +1848,29 @@
 
         function formatPdfPagesLabel(pagesArr) {
             if (!Array.isArray(pagesArr) || pagesArr.length === 0) return 'Nessuna pagina';
-            if (pagesArr.length === 1) return 'Pagina ' + pagesArr[0];
-            return 'Pagine ' + pagesArr.join(', ');
+            if (pagesArr.length === 1) return `Pagina ${pagesArr[0]}`;
+            return `Pagine ${pagesArr.join(', ')}`;
         }
 
-        function openNewNoteModal(section, defaultType = 'keyboard', pdfId = null) {
-            const inPdf = !document.getElementById('pdf-studio-workspace').classList.contains('hidden') && activePdfMeta;
-            const autoPage = inPdf ? (activePdfMeta.lastPage || 1) : null;
-            const resolvedPdfId = pdfId || (inPdf ? activePdfMeta.id : null);
-            pendingNewNoteContext = { section: section || 'studio_personale', type: defaultType, pdfId: resolvedPdfId, defaultPage: autoPage };
+        function openNewNoteModal(sectionId, defaultType = 'keyboard', pdfId = null) {
+            if (state.meetingMode) {
+                createQuickMeetingNote(sectionId);
+                return;
+            }
+            pendingNewNoteSection = sectionId || state.activeSection || 'studio_personale';
+            pendingNewNoteType = defaultType;
+            pendingNewNotePdfId = pdfId;
+
             document.getElementById('new-note-title-input').value = '';
-            const pagesIn = document.getElementById('new-note-pages-input');
-            if (pagesIn) pagesIn.value = autoPage ? String(autoPage) : '';
+            const currentPdfPage = (activePdfMeta && (pdfId === activePdfMeta.id || !document.getElementById('pdf-studio-workspace').classList.contains('hidden')))
+                ? (activePdfMeta.lastPage || 1)
+                : '';
+            document.getElementById('new-note-pages-input').value = currentPdfPage ? String(currentPdfPage) : '';
             selectNewNoteType(defaultType);
+
             const modal = document.getElementById('new-note-modal');
             modal.classList.remove('hidden');
             modal.classList.add('flex');
-            if (window.lucide) lucide.createIcons();
             setTimeout(() => document.getElementById('new-note-title-input').focus(), 60);
         }
 
@@ -1809,71 +1880,69 @@
             modal.classList.remove('flex');
         }
 
-        function selectNewNoteType(t) {
-            pendingNewNoteContext.type = t;
-            const kBtn = document.getElementById('btn-note-type-keyboard');
-            const pBtn = document.getElementById('btn-note-type-pen');
+        function selectNewNoteType(type) {
+            pendingNewNoteType = type;
+            const btnKb = document.getElementById('btn-note-type-keyboard');
+            const btnPen = document.getElementById('btn-note-type-pen');
             const paperRow = document.getElementById('new-note-paper-row');
+            if (btnKb && btnPen) {
+                btnKb.classList.toggle('border-2', type === 'keyboard');
+                btnKb.classList.toggle('border-plum-600', type === 'keyboard');
+                btnKb.classList.toggle('bg-plum-100', type === 'keyboard');
+                btnKb.classList.toggle('border', type !== 'keyboard');
+                btnKb.classList.toggle('border-plum-200', type !== 'keyboard');
+                btnKb.classList.toggle('bg-white', type !== 'keyboard');
 
-            kBtn.classList.toggle('border-2', t === 'keyboard');
-            kBtn.classList.toggle('border-plum-600', t === 'keyboard');
-            kBtn.classList.toggle('bg-plum-100', t === 'keyboard');
-            kBtn.classList.toggle('border', t !== 'keyboard');
-            kBtn.classList.toggle('border-plum-200', t !== 'keyboard');
-            kBtn.classList.toggle('bg-white', t !== 'keyboard');
-
-            pBtn.classList.toggle('border-2', t === 'pen');
-            pBtn.classList.toggle('border-plum-600', t === 'pen');
-            pBtn.classList.toggle('bg-plum-100', t === 'pen');
-            pBtn.classList.toggle('border', t !== 'pen');
-            pBtn.classList.toggle('border-plum-200', t !== 'pen');
-            pBtn.classList.toggle('bg-white', t !== 'pen');
-
-            paperRow.classList.toggle('hidden', t !== 'pen');
+                btnPen.classList.toggle('border-2', type === 'pen');
+                btnPen.classList.toggle('border-plum-600', type === 'pen');
+                btnPen.classList.toggle('bg-plum-100', type === 'pen');
+                btnPen.classList.toggle('border', type !== 'pen');
+                btnPen.classList.toggle('border-plum-200', type !== 'pen');
+                btnPen.classList.toggle('bg-white', type !== 'pen');
+            }
+            if (paperRow) {
+                paperRow.classList.toggle('hidden', type !== 'pen');
+            }
         }
 
         function confirmCreateCustomNote() {
-            const rawTitle = document.getElementById('new-note-title-input').value.trim();
-            const title = rawTitle || ('Nota ' + (state.customNotes.length + 1));
-            const paper = document.getElementById('new-note-paper-select').value;
-            const pagesRaw = document.getElementById('new-note-pages-input') ? document.getElementById('new-note-pages-input').value : '';
-            const pdfPages = parsePdfPagesString(pagesRaw);
-            const minOrder = state.customNotes.reduce((acc, item) => Math.min(acc, typeof item.sortOrder === 'number' ? item.sortOrder : 0), 0);
+            const titleRaw = document.getElementById('new-note-title-input').value.trim();
+            const pagesRaw = document.getElementById('new-note-pages-input').value.trim();
+            const paperType = document.getElementById('new-note-paper-select').value || 'lined';
+            const pagesArr = parsePdfPagesInput(pagesRaw);
+
+            const secNotes = getNotesForSection(pendingNewNoteSection);
+            const minOrder = secNotes.length > 0 ? Math.min(...secNotes.map(n => n.sortOrder ?? 0)) - 1 : 0;
 
             const newNote = {
                 id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-                section: pendingNewNoteContext.section,
+                section: pendingNewNoteSection,
                 weekKey: state.currentWeekKey,
-                pdfId: pendingNewNoteContext.pdfId,
-                pdfPages: pdfPages,
-                title: title,
-                type: pendingNewNoteContext.type,
-                isQuickMeetingNote: !!state.meetingMode,
-                sortOrder: minOrder - 1,
+                pdfId: pendingNewNotePdfId || (activePdfMeta ? activePdfMeta.id : null),
+                pdfPages: pagesArr,
+                title: titleRaw || (pagesArr.length > 0 ? `Commento Pagina ${pagesArr[0]}` : 'Nuova nota'),
+                type: pendingNewNoteType,
+                isQuickMeetingNote: false,
+                sortOrder: minOrder,
                 createdAt: new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' }),
                 htmlContent: '',
                 fontSize: 16,
                 collapsed: false,
                 images: [],
-                paperType: paper,
-                padHeight: 240,
+                paperType: paperType,
+                padHeight: 220,
                 strokes: [],
                 drawing: null
             };
+
             state.customNotes.unshift(newNote);
-            closeNewNoteModal();
             saveState();
+            closeNewNoteModal();
             renderActiveSection();
             if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
                 renderPdfSideNotes();
             }
-            showStudioToast('Nota "' + title + '"' + (pdfPages.length ? ' collegata a ' + formatPdfPagesLabel(pdfPages) : '') + '!');
-        }
-
-        function getNotesForSection(sectionId) {
-            return state.customNotes
-                .filter(n => n.section === sectionId && (!n.weekKey || n.weekKey === state.currentWeekKey || sectionId === 'studio_personale' || sectionId.startsWith('custom_')))
-                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+            showStudioToast('Nota creata' + (pagesArr.length > 0 ? ` (${formatPdfPagesLabel(pagesArr)})` : '') + '!');
         }
 
         function updateCustomNoteTitle(noteId, newTitle) {
@@ -1904,25 +1973,14 @@
             }
         }
 
-        function requestDeleteCustomNote(noteId) {
-            pendingDeleteNoteId = noteId;
-            renderActiveSection();
-            if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
-                renderPdfSideNotes();
+        function deleteCustomNote(noteId) {
+            const n = state.customNotes.find(x => x.id === noteId);
+            if (!n) return;
+            if (state.meetingMode && !n.isQuickMeetingNote) {
+                showStudioToast('Nota protetta in Modalità Adunanza.');
+                return;
             }
-        }
-
-        function cancelDeleteCustomNote() {
-            pendingDeleteNoteId = null;
-            renderActiveSection();
-            if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
-                renderPdfSideNotes();
-            }
-        }
-
-        function confirmDeleteCustomNote(noteId) {
             state.customNotes = state.customNotes.filter(x => x.id !== noteId);
-            pendingDeleteNoteId = null;
             saveState();
             renderActiveSection();
             if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
@@ -1931,19 +1989,11 @@
             showStudioToast('Nota eliminata.');
         }
 
-        function updateCustomNotePdfPages(noteId, rawStr) {
+        function editNotePdfPages(noteId) {
             const n = state.customNotes.find(x => x.id === noteId);
             if (!n) return;
-            n.pdfPages = parsePdfPagesString(rawStr);
-            saveState();
-            renderActiveSection();
-            if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
-                renderPdfSideNotes();
-            }
-        }
-
-        function promptEditNotePdfPages(noteId) {
-            const box = document.getElementById('page-edit-box-' + noteId);
+            if (state.meetingMode && !n.isQuickMeetingNote) return;
+            const box = document.getElementById('page_edit_box_' + noteId);
             if (box) {
                 box.classList.toggle('hidden');
                 const inp = box.querySelector('input');
@@ -1951,48 +2001,63 @@
             }
         }
 
-        async function goToPdfPageFromNote(noteId, targetPageNum) {
+        function saveEditedNotePdfPages(noteId, rawVal) {
             const n = state.customNotes.find(x => x.id === noteId);
             if (!n) return;
-            const pageNum = Math.max(1, parseInt(targetPageNum, 10) || 1);
-            const ws = document.getElementById('pdf-studio-workspace');
-            const isWsOpen = ws && !ws.classList.contains('hidden') && activePdfMeta;
+            n.pdfPages = parsePdfPagesInput(rawVal);
+            saveState();
+            renderActiveSection();
+            if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
+                renderPdfSideNotes();
+            }
+            showStudioToast('Collegamento aggiornato: ' + formatPdfPagesLabel(n.pdfPages));
+        }
 
-            if (isWsOpen && (!n.pdfId || n.pdfId === activePdfMeta.id)) {
+        function goToNoteLinkedPage(noteId, targetPage = null) {
+            const n = state.customNotes.find(x => x.id === noteId);
+            if (!n || !Array.isArray(n.pdfPages) || n.pdfPages.length === 0) return;
+            const pageNum = targetPage || n.pdfPages[0];
+
+            if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden') && activePdfMeta) {
                 pdfJumpToPage(pageNum);
                 showStudioToast('Spostato a Pagina ' + pageNum);
                 return;
             }
 
-            let targetPdf = n.pdfId ? state.pdfLibrary.find(p => p.id === n.pdfId) : null;
-            if (!targetPdf) {
-                targetPdf = state.pdfLibrary.find(p => p.section === n.section) || state.pdfLibrary[0];
+            const pdfMeta = (n.pdfId && state.pdfLibrary.find(p => p.id === n.pdfId))
+                || state.pdfLibrary.find(p => p.section === n.section)
+                || state.pdfLibrary[0];
+            if (pdfMeta) {
+                pdfMeta.lastPage = pageNum;
+                saveState();
+                openPdfInWorkspace(pdfMeta.id);
+            } else {
+                showStudioToast('Nessun PDF caricato in questa sessione.');
             }
-            if (!targetPdf) {
-                showStudioToast('Importa prima un PDF in questa sessione per aprire Pagina ' + pageNum + '.');
-                return;
-            }
-            targetPdf.lastPage = pageNum;
-            saveState();
-            await openPdfInWorkspace(targetPdf.id);
-            showStudioToast('Aperto PDF a Pagina ' + pageNum);
         }
 
-        function moveCustomNoteOrder(noteId, direction, scopeNotesIds = null) {
-            if (state.meetingMode) {
-                showStudioToast('Riordinamento disattivato in Modalità Adunanza.');
-                return;
-            }
-            const targetNote = state.customNotes.find(n => n.id === noteId);
+        function moveCustomNoteOrder(noteId, dir, inPdfSide = false) {
+            if (state.meetingMode) return;
+            const targetNote = state.customNotes.find(x => x.id === noteId);
             if (!targetNote) return;
 
-            const list = scopeNotesIds && scopeNotesIds.length
-                ? scopeNotesIds.map(id => state.customNotes.find(n => n.id === id)).filter(Boolean)
-                : getNotesForSection(targetNote.section);
+            let list;
+            if (inPdfSide && activePdfMeta) {
+                const currentPage = activePdfMeta.lastPage || 1;
+                const filterMode = state.pdfNotesFilterMode || 'page';
+                const sessionNotes = state.customNotes
+                    .filter(n => n.pdfId === activePdfMeta.id || n.section === activePdfMeta.section)
+                    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+                list = filterMode === 'page'
+                    ? sessionNotes.filter(n => !n.pdfPages || n.pdfPages.length === 0 || n.pdfPages.includes(currentPage))
+                    : sessionNotes;
+            } else {
+                list = getNotesForSection(targetNote.section);
+            }
 
-            list.forEach((item, i) => { item.sortOrder = i * 10; });
-            const idx = list.findIndex(item => item.id === noteId);
-            const swapIdx = idx + direction;
+            list.forEach((item, idx) => { item.sortOrder = idx * 10; });
+            const idx = list.findIndex(x => x.id === noteId);
+            const swapIdx = idx + dir;
             if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) return;
 
             const tempOrder = list[idx].sortOrder;
@@ -2006,21 +2071,48 @@
             }
         }
 
-        function reorderNotesByDrop(sourceId, targetId) {
-            if (state.meetingMode || !sourceId || !targetId || sourceId === targetId) return;
-            const src = state.customNotes.find(n => n.id === sourceId);
-            const dst = state.customNotes.find(n => n.id === targetId);
-            if (!src || !dst) return;
+        function handleNoteDragStart(e, noteId) {
+            if (state.meetingMode) {
+                e.preventDefault();
+                return;
+            }
+            draggedNoteId = noteId;
+            if (e.dataTransfer) {
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', noteId);
+            }
+            e.currentTarget.classList.add('note-dragging');
+        }
 
-            const list = getNotesForSection(src.section);
-            list.forEach((item, i) => { item.sortOrder = i * 10; });
-            const fromIdx = list.findIndex(x => x.id === sourceId);
-            const toIdx = list.findIndex(x => x.id === targetId);
-            if (fromIdx < 0 || toIdx < 0) return;
+        function handleNoteDragOver(e) {
+            if (state.meetingMode || !draggedNoteId) return;
+            e.preventDefault();
+            e.currentTarget.classList.add('note-drop-target');
+        }
 
-            const [moved] = list.splice(fromIdx, 1);
-            list.splice(toIdx, 0, moved);
-            list.forEach((item, i) => { item.sortOrder = i * 10; });
+        function handleNoteDragLeave(e) {
+            e.currentTarget.classList.remove('note-drop-target');
+        }
+
+        function handleNoteDrop(e, targetNoteId) {
+            e.preventDefault();
+            e.currentTarget.classList.remove('note-drop-target');
+            if (state.meetingMode || !draggedNoteId || draggedNoteId === targetNoteId) return;
+
+            const srcNote = state.customNotes.find(x => x.id === draggedNoteId);
+            const dstNote = state.customNotes.find(x => x.id === targetNoteId);
+            draggedNoteId = null;
+            if (!srcNote || !dstNote) return;
+
+            const list = getNotesForSection(dstNote.section);
+            list.forEach((item, idx) => { item.sortOrder = idx * 10; });
+            const srcIdx = list.findIndex(x => x.id === srcNote.id);
+            const dstIdx = list.findIndex(x => x.id === dstNote.id);
+            if (srcIdx < 0 || dstIdx < 0) return;
+
+            const [moved] = list.splice(srcIdx, 1);
+            list.splice(dstIdx, 0, moved);
+            list.forEach((item, idx) => { item.sortOrder = idx * 10; });
 
             saveState();
             renderActiveSection();
@@ -2029,133 +2121,94 @@
             }
         }
 
-        function handleNoteDragStart(event, noteId) {
-            if (state.meetingMode) {
-                event.preventDefault();
-                return;
-            }
-            draggedNoteId = noteId;
-            if (event.dataTransfer) {
-                event.dataTransfer.effectAllowed = 'move';
-                event.dataTransfer.setData('text/plain', noteId);
-            }
-            event.currentTarget.classList.add('note-dragging');
-        }
-
-        function handleNoteDragOver(event) {
-            if (state.meetingMode || !draggedNoteId) return;
-            event.preventDefault();
-            event.currentTarget.classList.add('note-drop-target');
-        }
-
-        function handleNoteDragLeave(event) {
-            event.currentTarget.classList.remove('note-drop-target');
-        }
-
-        function handleNoteDrop(event, targetNoteId) {
-            event.preventDefault();
-            event.currentTarget.classList.remove('note-drop-target');
-            const srcId = draggedNoteId || (event.dataTransfer && event.dataTransfer.getData('text/plain'));
+        function handleNoteDragEnd(e) {
             draggedNoteId = null;
-            if (srcId && srcId !== targetNoteId) {
-                reorderNotesByDrop(srcId, targetNoteId);
-            }
-        }
-
-        function handleNoteDragEnd(event) {
-            draggedNoteId = null;
-            event.currentTarget.classList.remove('note-dragging');
-            document.querySelectorAll('.note-drop-target').forEach(el => el.classList.remove('note-drop-target'));
+            document.querySelectorAll('.note-dragging, .note-drop-target').forEach(el => {
+                el.classList.remove('note-dragging', 'note-drop-target');
+            });
         }
 
         function renderSingleCustomNoteCardHtml(note, compact = false) {
-            const isDeleting = pendingDeleteNoteId === note.id;
             const isCollapsed = !!note.collapsed;
+            const isLockedInMeeting = !!state.meetingMode && !note.isQuickMeetingNote;
             const noteFont = note.fontSize || 16;
             const pagesArr = Array.isArray(note.pdfPages) ? note.pdfPages : [];
-            const isQuickNote = !!note.isQuickMeetingNote;
-            const isLockedInMeeting = state.meetingMode && !isQuickNote;
-            const canReorder = !state.meetingMode;
+
+            const pageButtonsHtml = pagesArr.map(pg => `
+                <button type="button" onclick="goToNoteLinkedPage('${note.id}', ${pg})" class="px-2 py-0.5 rounded-lg bg-plum-100 hover:bg-plum-200 border border-plum-300 text-black text-[11px] font-bold flex items-center gap-1" title="Vai alla pagina ${pg} del PDF">
+                    <i data-lucide="bookmark" class="w-3 h-3 text-burgundy-700"></i>
+                    <span>Vai a pag. ${pg}</span>
+                </button>
+            `).join('');
 
             return `
-                <div draggable="${canReorder ? 'true' : 'false'}"
+                <div draggable="${state.meetingMode ? 'false' : 'true'}"
                     ondragstart="handleNoteDragStart(event, '${note.id}')"
                     ondragover="handleNoteDragOver(event)"
                     ondragleave="handleNoteDragLeave(event)"
                     ondrop="handleNoteDrop(event, '${note.id}')"
                     ondragend="handleNoteDragEnd(event)"
-                    class="card-box ${isQuickNote ? 'quick-meeting-note-card border-2 border-burgundy-400 bg-burgundy-50/20' : 'prepared-note-card border border-plum-200 bg-white'} ${isCollapsed ? 'border-emerald-400 bg-emerald-50/30' : ''} rounded-2xl p-2 sm:p-2.5 shadow-2xs space-y-2 transition">
-                    <div class="flex flex-col gap-1.5">
-                        <!-- Riga 1: Maniglia, Apri/Chiudi e comandi compatti -->
-                        <div class="flex flex-wrap items-center justify-between gap-1">
-                            <div class="flex items-center gap-1">
-                                ${canReorder ? `
-                                    <span class="cursor-grab active:cursor-grabbing text-plum-600 hover:text-black select-none shrink-0" title="Tieni premuto e trascina per riordinare">
-                                        <i data-lucide="grip-vertical" class="w-4 h-4"></i>
-                                    </span>
-                                ` : ''}
-                                <button type="button" onclick="toggleCustomNoteCollapse('${note.id}')" class="p-1 rounded-lg border ${isCollapsed ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-plum-50 border-plum-300 text-black'} shrink-0" title="${isCollapsed ? 'Apri nota' : 'Chiudi nota completata'}">
-                                    <i data-lucide="${isCollapsed ? 'chevron-right' : 'chevron-down'}" class="w-4 h-4"></i>
-                                </button>
-                                <button type="button" onclick="toggleCustomNoteCollapse('${note.id}')" class="px-2 py-0.5 rounded-lg border text-[11px] font-bold ${isCollapsed ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-white border-plum-300 text-black hover:bg-plum-50'}">
-                                    ${isCollapsed ? 'Apri' : 'Chiudi'}
-                                </button>
-                            </div>
+                    class="card-box ${note.isQuickMeetingNote ? 'quick-meeting-note-card border-burgundy-500 bg-plum-50/20' : 'prepared-note-card'} rounded-2xl p-2.5 sm:p-3 space-y-2 shadow-2xs transition">
 
-                            <div class="no-print flex flex-wrap items-center gap-1">
-                                ${canReorder ? `
-                                    <button type="button" onclick="moveCustomNoteOrder('${note.id}', -1)" class="p-1 rounded-lg bg-white hover:bg-plum-100 border border-plum-300 text-black" title="Sposta su">
-                                        <i data-lucide="arrow-up" class="w-3.5 h-3.5"></i>
-                                    </button>
-                                    <button type="button" onclick="moveCustomNoteOrder('${note.id}', 1)" class="p-1 rounded-lg bg-white hover:bg-plum-100 border border-plum-300 text-black" title="Sposta giù">
-                                        <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>
-                                    </button>
-                                ` : ''}
-                                ${!isCollapsed && !isLockedInMeeting && (note.type === 'keyboard' || note.type === 'both') ? `
-                                    <button type="button" onmousedown="event.preventDefault(); changeSingleNoteFontSize('${note.id}', -2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Riduci testo">A−</button>
-                                    <button type="button" onmousedown="event.preventDefault(); changeSingleNoteFontSize('${note.id}', 2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Ingrandisci testo">A+</button>
-                                    <button type="button" onmousedown="event.preventDefault(); execRichCmd('ed_cnote_${note.id}', 'bold')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Grassetto">B</button>
-                                ` : ''}
-                                ${!isLockedInMeeting ? (isDeleting ? `
-                                    <button type="button" onclick="confirmDeleteCustomNote('${note.id}')" class="px-2 py-0.5 rounded-lg bg-red-600 text-white text-[11px] font-bold">Conferma</button>
-                                    <button type="button" onclick="cancelDeleteCustomNote()" class="px-2 py-0.5 rounded-lg bg-plum-100 text-black text-[11px] font-bold">Annulla</button>
-                                ` : `
-                                    <button type="button" onclick="requestDeleteCustomNote('${note.id}')" class="p-1 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 text-red-700" title="Elimina nota">
-                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                    </button>
-                                `) : ''}
-                            </div>
+                    <!-- Riga superiore comandi -->
+                    <div class="flex flex-wrap items-center justify-between gap-1 border-b border-plum-100 pb-1.5">
+                        <div class="flex items-center gap-1">
+                            ${!state.meetingMode ? `
+                                <span class="cursor-grab text-plum-600 px-0.5 select-none" title="Trascina per riordinare">⋮⋮</span>
+                                <button type="button" onclick="moveCustomNoteOrder('${note.id}', -1, ${compact})" class="p-1 rounded-lg bg-white border border-plum-200 text-black hover:bg-plum-100" title="Sposta su">
+                                    <i data-lucide="arrow-up" class="w-3 h-3"></i>
+                                </button>
+                                <button type="button" onclick="moveCustomNoteOrder('${note.id}', 1, ${compact})" class="p-1 rounded-lg bg-white border border-plum-200 text-black hover:bg-plum-100" title="Sposta giù">
+                                    <i data-lucide="arrow-down" class="w-3 h-3"></i>
+                                </button>
+                            ` : ''}
+                            ${note.isQuickMeetingNote ? `<span class="px-2 py-0.5 rounded-full bg-burgundy-600 text-white text-[10px] font-bold">Appunto rapido</span>` : ''}
                         </div>
 
-                        <!-- Riga 2: Titolo a tutta larghezza (mai spezzato per lettera) -->
-                        <div contenteditable="${isLockedInMeeting ? 'false' : 'true'}" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"
-                            onblur="updateCustomNoteTitle('${note.id}', this.innerText)"
-                            onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}"
-                            style="user-select:text;-webkit-user-select:text;pointer-events:auto;overflow-wrap:break-word;word-break:normal;"
-                            class="font-serif font-bold ${compact ? 'text-base' : 'text-base sm:text-lg'} leading-snug ${isCollapsed ? 'line-through text-gray-500' : 'text-black'} bg-white/80 rounded-lg px-2 py-1 border border-plum-200 focus:border-plum-600 outline-none w-full whitespace-pre-wrap" title="${isLockedInMeeting ? 'Nota preparata protetta in Adunanza' : 'Tocca per rinominare'}">${escapeHtml(note.title)}</div>
-
-                        <!-- Riga 3: Badge Pagina PDF e comandi rapidi su una riga pulita -->
-                        <div class="flex flex-wrap items-center gap-1 text-[11px]">
-                            ${isQuickNote ? `<span class="px-1.5 py-0.5 rounded-md bg-burgundy-100 border border-burgundy-300 text-burgundy-800 font-bold">Appunto rapido</span>` : ''}
-                            <span class="px-2 py-0.5 rounded-md bg-plum-100 border border-plum-300 text-black font-bold inline-flex items-center gap-1 whitespace-nowrap">
-                                <i data-lucide="bookmark" class="w-3 h-3 text-burgundy-700 shrink-0"></i> ${formatPdfPagesLabel(pagesArr)}
-                            </span>
-                            ${pagesArr.map(pg => `
-                                <button type="button" onclick="goToPdfPageFromNote('${note.id}', ${pg})" class="px-2 py-0.5 rounded-md bg-plum-200 hover:bg-plum-300 border border-plum-400 text-black font-bold whitespace-nowrap" title="Apri PDF a pagina ${pg}">
-                                    Vai a pag. ${pg}
-                                </button>
-                            `).join('')}
+                        <div class="flex items-center gap-1 flex-wrap">
+                            <button type="button" onclick="toggleCustomNoteCollapse('${note.id}')" class="px-2 py-0.5 rounded-lg border text-[11px] font-bold ${isCollapsed ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-white border-plum-300 text-black'}">
+                                ${isCollapsed ? 'Apri' : 'Chiudi'}
+                            </button>
+                            ${!isCollapsed && !isLockedInMeeting && (note.type === 'keyboard' || note.type === 'both') ? `
+                                <button type="button" onpointerdown="event.preventDefault(); saveEditorSelection('ed_cnote_${note.id}'); changeSingleNoteFontSize('${note.id}', -2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Riduci testo">A−</button>
+                                <button type="button" onpointerdown="event.preventDefault(); saveEditorSelection('ed_cnote_${note.id}'); changeSingleNoteFontSize('${note.id}', 2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Ingrandisci testo">A+</button>
+                                <button type="button" onpointerdown="event.preventDefault(); execRichCmd('ed_cnote_${note.id}', 'bold')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Grassetto">B</button>
+                            ` : ''}
                             ${!isLockedInMeeting ? `
-                                <button type="button" onclick="promptEditNotePdfPages('${note.id}')" class="px-1.5 py-0.5 rounded-md bg-white hover:bg-plum-50 border border-plum-300 text-plum-900 font-semibold whitespace-nowrap" title="Modifica pagine PDF collegate">
-                                    Cambia pag.
+                                <button type="button" onclick="deleteCustomNote('${note.id}')" class="p-1 rounded-lg bg-red-50 text-red-700 border border-red-200" title="Elimina nota">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                 </button>
                             ` : ''}
                         </div>
+                    </div>
 
-                        <div id="page-edit-box-${note.id}" class="hidden pt-1 flex items-center gap-1">
-                            <input type="text" value="${escapeAttr(pagesArr.join(', '))}" placeholder="Es. 5 oppure 4, 5" class="flex-1 min-w-0 rounded-lg border border-plum-300 bg-white px-2 py-0.5 text-xs text-black">
-                            <button type="button" onclick="updateCustomNotePdfPages('${note.id}', this.previousElementSibling.value)" class="px-2 py-0.5 rounded-lg bg-plum-200 border border-plum-400 text-xs font-bold text-black shrink-0">Salva</button>
-                        </div>
+                    <!-- Titolo nota a larghezza intera che va sempre a capo -->
+                    <div class="w-full">
+                        <div contenteditable="${isLockedInMeeting ? 'false' : 'true'}"
+                            onblur="updateCustomNoteTitle('${note.id}', this.innerText)"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}"
+                            class="font-serif font-bold text-base sm:text-lg text-black outline-none border-b border-transparent focus:border-plum-500 whitespace-pre-wrap break-words leading-snug">${escapeHtml(note.title || 'Nota')}</div>
+                    </div>
+
+                    <!-- Badge collegamento pagina PDF e comando Vai alla pagina -->
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        <span class="px-2 py-0.5 rounded-lg bg-ivory-100 border border-plum-200 text-black text-[11px] font-bold">
+                            ${formatPdfPagesLabel(pagesArr)}
+                        </span>
+                        ${pageButtonsHtml}
+                        ${!isLockedInMeeting ? `
+                            <button type="button" onclick="editNotePdfPages('${note.id}')" class="px-2 py-0.5 rounded-lg bg-white hover:bg-plum-100 border border-plum-300 text-black text-[11px] font-bold">
+                                Cambia pag.
+                            </button>
+                        ` : ''}
+                    </div>
+
+                    <!-- Input rapido modifica pagine PDF collegate -->
+                    <div id="page_edit_box_${note.id}" class="hidden flex items-center gap-1.5 bg-plum-50 p-1.5 rounded-xl border border-plum-200">
+                        <input type="text" value="${escapeAttr(pagesArr.join(', '))}" placeholder="Es. 5 oppure 4, 5 (vuoto = nessuna)"
+                            onkeydown="if(event.key==='Enter'){ saveEditedNotePdfPages('${note.id}', this.value); }"
+                            class="flex-1 rounded-lg border border-plum-300 bg-white px-2 py-1 text-xs text-black">
+                        <button type="button" onclick="saveEditedNotePdfPages('${note.id}', this.previousElementSibling.value)" class="px-2.5 py-1 rounded-lg bg-plum-200 border border-plum-400 text-xs font-bold text-black">Salva</button>
                     </div>
 
                     ${!isCollapsed ? `
@@ -2164,8 +2217,9 @@
                                 ${!isLockedInMeeting ? renderRichTextToolbarHtml('ed_cnote_' + note.id, note.id) : ''}
                                 <div id="ed_cnote_${note.id}" contenteditable="${isLockedInMeeting ? 'false' : 'true'}" style="font-size:${noteFont}px;user-select:text;-webkit-user-select:text;pointer-events:auto;"
                                     onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"
+                                    onkeyup="saveEditorSelection('ed_cnote_${note.id}')" onmouseup="saveEditorSelection('ed_cnote_${note.id}')" ontouchend="saveEditorSelection('ed_cnote_${note.id}')"
                                     onpaste="handleCleanEditorPaste(event, '${note.id}')"
-                                    oninput="updateCustomNoteHtml('${note.id}', this.innerHTML)"
+                                    oninput="updateCustomNoteHtml('${note.id}', this.innerHTML); saveEditorSelection('ed_cnote_${note.id}')"
                                     data-placeholder="Tocca qui per scrivere o incollare i tuoi appunti..."
                                     class="rich-editor rounded-xl border border-plum-300 bg-white p-2.5 text-black">${note.htmlContent || ''}</div>
                             </div>
@@ -2175,76 +2229,30 @@
                                     ${!isLockedInMeeting ? renderRichTextToolbarHtml('ed_cnote_' + note.id, note.id) : ''}
                                     <div id="ed_cnote_${note.id}" contenteditable="${isLockedInMeeting ? 'false' : 'true'}" style="font-size:${noteFont}px;user-select:text;-webkit-user-select:text;pointer-events:auto;min-height:74px;"
                                         onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"
+                                        onkeyup="saveEditorSelection('ed_cnote_${note.id}')" onmouseup="saveEditorSelection('ed_cnote_${note.id}')" ontouchend="saveEditorSelection('ed_cnote_${note.id}')"
                                         onpaste="handleCleanEditorPaste(event, '${note.id}')"
-                                        oninput="updateCustomNoteHtml('${note.id}', this.innerHTML)"
+                                        oninput="updateCustomNoteHtml('${note.id}', this.innerHTML); saveEditorSelection('ed_cnote_${note.id}')"
                                         data-placeholder="Scrivi qui con la tastiera..."
                                         class="rich-editor rounded-xl border border-plum-300 bg-white p-2 text-black">${note.htmlContent || ''}</div>
                                 </div>
                                 ${renderHandwritingPadHtml('cnote_' + note.id, note.paperType, compact ? 180 : note.padHeight, 'Scrivi a mano con Apple Pencil')}
                             </div>
                         ` : `
-                            ${renderHandwritingPadHtml('cnote_' + note.id, note.paperType, compact ? 200 : note.padHeight, 'Foglio Penna / Apple Pencil')}
+                            ${renderHandwritingPadHtml('cnote_' + note.id, note.paperType, compact ? 200 : note.padHeight, 'Scrivi a mano con Apple Pencil')}
                         `}
 
-                        ${renderImagesBlockHtml('cnote:' + note.id, note.images, false)}
+                        ${renderImagesBlockHtml('cnote:' + note.id, note.images, isLockedInMeeting)}
                     ` : ''}
                 </div>
             `;
         }
 
         /* =========================================================
-           8. FOGLIO APPLE PENCIL CON SPOSTA TRATTI, ZOOM E CONTROLLI
+           8. FOGLIO DI SCRITTURA APPLE PENCIL (VETTORIALE FLUIDO)
            ========================================================= */
-        const padRuntime = {};
-
-        function renderHandwritingPadHtml(padKey, paperType = 'lined', padHeight = 220, label = 'Foglio Penna / Apple Pencil') {
-            const pClass = paperType === 'grid' ? 'paper-grid' : (paperType === 'blank' ? 'paper-blank' : 'paper-lined');
-            return `
-                <div class="border border-plum-200 rounded-2xl overflow-hidden bg-white">
-                    <div class="no-print bg-plum-50 border-b border-plum-200 px-2 py-1 flex flex-wrap items-center justify-between gap-1 text-xs">
-                        <div class="flex items-center gap-1 flex-wrap">
-                            <span class="font-bold text-black flex items-center gap-1 mr-1">
-                                <i data-lucide="pen-tool" class="w-3.5 h-3.5"></i> ${label}
-                            </span>
-                            <button type="button" onclick="setPadTool('${padKey}', 'pen')" class="pad-tool-btn px-2 py-0.5 rounded-lg bg-plum-200 border border-plum-400 text-black font-bold" data-pad="${padKey}" data-tool="pen">Penna</button>
-                            <button type="button" onclick="setPadTool('${padKey}', 'select')" class="pad-tool-btn px-2 py-0.5 rounded-lg bg-white border border-plum-200 text-black font-bold" data-pad="${padKey}" data-tool="select">Sposta</button>
-                            <button type="button" onclick="setPadTool('${padKey}', 'eraser')" class="pad-tool-btn px-2 py-0.5 rounded-lg bg-white border border-plum-200 text-black font-bold" data-pad="${padKey}" data-tool="eraser">Gomma</button>
-
-                            <div class="flex items-center gap-1 pl-1 border-l border-plum-200">
-                                <button type="button" onclick="setPadColor('${padKey}', '#000000')" class="w-4 h-4 rounded-full bg-black border border-white shadow-2xs"></button>
-                                <button type="button" onclick="setPadColor('${padKey}', '#4B2140')" class="w-4 h-4 rounded-full bg-[#4B2140] border border-white shadow-2xs"></button>
-                                <button type="button" onclick="setPadColor('${padKey}', '#8F3656')" class="w-4 h-4 rounded-full bg-[#8F3656] border border-white shadow-2xs"></button>
-                                <button type="button" onclick="setPadColor('${padKey}', '#1D4ED8')" class="w-4 h-4 rounded-full bg-[#1D4ED8] border border-white shadow-2xs"></button>
-                            </div>
-
-                            <select onchange="setPadThickness('${padKey}', this.value)" class="rounded-lg border border-plum-200 bg-white px-1 py-0.5 text-[11px] font-bold text-black">
-                                <option value="2">Fine</option>
-                                <option value="3.5" selected>Medio</option>
-                                <option value="6">Spesso</option>
-                            </select>
-                            <button type="button" onclick="scalePadStrokes('${padKey}', 0.88)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-200 text-[11px] font-bold text-black" title="Riduci scrittura">A−</button>
-                            <button type="button" onclick="scalePadStrokes('${padKey}', 1.14)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-200 text-[11px] font-bold text-black" title="Ingrandisci scrittura">A+</button>
-                        </div>
-
-                        <div class="flex items-center gap-1">
-                            <select onchange="changePadPaper('${padKey}', this.value)" class="rounded-lg border border-plum-200 bg-white px-1 py-0.5 text-[11px] font-bold text-black">
-                                <option value="lined" ${paperType === 'lined' ? 'selected' : ''}>Righe</option>
-                                <option value="blank" ${paperType === 'blank' ? 'selected' : ''}>Bianco</option>
-                                <option value="grid" ${paperType === 'grid' ? 'selected' : ''}>Quadretti</option>
-                            </select>
-                            <button type="button" onclick="resizePadHeight('${padKey}', 90)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-200 text-[11px] font-bold text-black">+Altezza</button>
-                            <button type="button" onclick="padUndo('${padKey}')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-200 text-[11px] font-bold text-black">Annulla</button>
-                        </div>
-                    </div>
-                    <div class="relative ${pClass}">
-                        <canvas id="canvas_${padKey}" data-pad-key="${padKey}" height="${padHeight || 220}" class="drawing-pad"></canvas>
-                    </div>
-                </div>
-            `;
-        }
+        const padRuntimeState = {};
 
         function getPadTargetObj(padKey) {
-            const wk = ensureWeekExists(state.currentWeekKey);
             if (padKey.startsWith('cnote_')) {
                 const id = padKey.slice(6);
                 return state.customNotes.find(n => n.id === id);
@@ -2253,343 +2261,279 @@
                 const id = padKey.slice(6);
                 return state.customSessions.find(s => s.id === id);
             }
-            if (padKey.startsWith('sp_')) {
-                const id = padKey.slice(3);
-                return state.studioPersonale.find(s => s.id === id);
-            }
+            const wk = ensureWeekExists(state.currentWeekKey);
             return wk[padKey];
         }
 
-        function scalePadStrokes(padKey, factor) {
+        function renderHandwritingPadHtml(padKey, paperType = 'lined', padHeight = 220, labelText = 'Foglio Penna / Apple Pencil') {
+            const pType = paperType || 'lined';
+            const pHeight = padHeight || 220;
+            const paperClass = pType === 'grid' ? 'paper-grid' : (pType === 'blank' ? 'paper-blank' : 'paper-lined');
+
+            return `
+                <div class="space-y-1.5 pt-1">
+                    <div class="no-print meeting-hide flex flex-wrap items-center justify-between gap-1 bg-plum-50 border border-plum-200 rounded-xl p-1 text-xs">
+                        <span class="font-bold text-black px-1.5 flex items-center gap-1">
+                            <i data-lucide="pen-tool" class="w-3.5 h-3.5 text-burgundy-700"></i> ${escapeHtml(labelText)}
+                        </span>
+                        <div class="flex flex-wrap items-center gap-1">
+                            <button type="button" onclick="setPadTool('${padKey}', 'pen')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 font-bold text-black hover:bg-plum-100">Penna</button>
+                            <button type="button" onclick="setPadTool('${padKey}', 'highlight')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 font-bold text-black hover:bg-plum-100">Evidenzia</button>
+                            <button type="button" onclick="setPadTool('${padKey}', 'eraser')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 font-bold text-black hover:bg-plum-100">Gomma</button>
+                            <button type="button" onclick="setPadColor('${padKey}', '#000000')" class="w-4 h-4 rounded-full bg-black border border-white shadow-2xs"></button>
+                            <button type="button" onclick="setPadColor('${padKey}', '#8F3656')" class="w-4 h-4 rounded-full bg-[#8F3656] border border-white shadow-2xs"></button>
+                            <button type="button" onclick="setPadColor('${padKey}', '#1D4ED8')" class="w-4 h-4 rounded-full bg-[#1D4ED8] border border-white shadow-2xs"></button>
+                            <button type="button" onclick="setPadColor('${padKey}', '#FEF08A')" class="w-4 h-4 rounded-full bg-[#FEF08A] border border-plum-400 shadow-2xs"></button>
+                            <select onchange="setPadPaperType('${padKey}', this.value)" class="rounded-lg border border-plum-300 bg-white px-1.5 py-0.5 text-[11px] font-bold text-black">
+                                <option value="lined" ${pType === 'lined' ? 'selected' : ''}>Righe</option>
+                                <option value="blank" ${pType === 'blank' ? 'selected' : ''}>Bianco</option>
+                                <option value="grid" ${pType === 'grid' ? 'selected' : ''}>Quadretti</option>
+                            </select>
+                            <button type="button" onclick="undoPadStroke('${padKey}')" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 font-bold text-black hover:bg-plum-100">Annulla</button>
+                            <button type="button" onclick="expandPadHeight('${padKey}', 90)" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 font-bold text-black hover:bg-plum-100" title="Allunga foglio">+ Spazio</button>
+                        </div>
+                    </div>
+                    <div class="rounded-xl border border-plum-300 overflow-hidden ${paperClass}">
+                        <canvas id="pad_canvas_${padKey}" data-pad-key="${padKey}" style="height:${pHeight}px;" class="drawing-pad"></canvas>
+                    </div>
+                </div>
+            `;
+        }
+
+        function setPadTool(padKey, tool) {
+            if (!padRuntimeState[padKey]) padRuntimeState[padKey] = { tool: 'pen', color: '#000000', width: 2.5 };
+            padRuntimeState[padKey].tool = tool;
+            if (tool === 'highlight') padRuntimeState[padKey].color = '#FEF08A';
+        }
+
+        function setPadColor(padKey, color) {
+            if (!padRuntimeState[padKey]) padRuntimeState[padKey] = { tool: 'pen', color: '#000000', width: 2.5 };
+            padRuntimeState[padKey].color = color;
+            padRuntimeState[padKey].tool = (color === '#FEF08A') ? 'highlight' : 'pen';
+        }
+
+        function setPadPaperType(padKey, paperType) {
             const target = getPadTargetObj(padKey);
-            if (!target || !Array.isArray(target.strokes) || target.strokes.length === 0) return;
-            target.strokes.forEach(st => {
-                if (!st.points) return;
-                st.points.forEach(p => {
-                    p.x = Math.max(0.01, Math.min(0.99, p.x * factor));
-                    p.y = Math.max(0.01, Math.min(0.99, p.y * factor));
-                });
-            });
+            if (!target) return;
+            target.paperType = paperType;
             saveState();
-            redrawPadCanvas(padKey);
+            renderActiveSection();
+            if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
+                renderPdfSideNotes();
+            }
+        }
+
+        function expandPadHeight(padKey, delta) {
+            const target = getPadTargetObj(padKey);
+            if (!target) return;
+            target.padHeight = Math.min(900, (target.padHeight || 220) + delta);
+            saveState();
+            renderActiveSection();
+            if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
+                renderPdfSideNotes();
+            }
+        }
+
+        function undoPadStroke(padKey) {
+            const target = getPadTargetObj(padKey);
+            if (!target || !Array.isArray(target.strokes)) return;
+            target.strokes.pop();
+            saveState();
+            const canvas = document.getElementById('pad_canvas_' + padKey);
+            if (canvas) redrawSinglePadCanvas(canvas, target);
+        }
+
+        function redrawSinglePadCanvas(canvas, target) {
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const strokes = (target && target.strokes) || [];
+            strokes.forEach(st => {
+                if (!st.points || st.points.length === 0) return;
+                ctx.save();
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                if (st.tool === 'highlight') {
+                    ctx.globalCompositeOperation = 'multiply';
+                    ctx.globalAlpha = 0.42;
+                    ctx.strokeStyle = st.color || '#FEF08A';
+                    ctx.lineWidth = 14;
+                } else {
+                    ctx.globalCompositeOperation = 'source-over';
+                    ctx.globalAlpha = 0.96;
+                    ctx.strokeStyle = st.color || '#000000';
+                    ctx.lineWidth = st.width || 2.5;
+                }
+                ctx.beginPath();
+                st.points.forEach((pt, idx) => {
+                    const x = pt.x * canvas.width;
+                    const y = pt.y * canvas.height;
+                    if (idx === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+                ctx.restore();
+            });
         }
 
         function initAllVisiblePads() {
             document.querySelectorAll('canvas.drawing-pad').forEach(canvas => {
                 const padKey = canvas.getAttribute('data-pad-key');
-                if (!padKey) return;
-                const rect = canvas.parentElement.getBoundingClientRect();
-                if (rect.width > 0) {
-                    canvas.width = Math.floor(rect.width);
-                }
-                if (!padRuntime[padKey]) {
-                    padRuntime[padKey] = {
-                        tool: 'pen',
-                        color: '#000000',
-                        thickness: 3.5,
-                        isDrawing: false,
-                        currentStroke: null,
-                        selectedStrokeIdx: -1,
-                        dragLastNorm: null,
-                        undoStack: []
-                    };
-                }
-                redrawPadCanvas(padKey);
-                bindPadPointerEvents(canvas, padKey);
-            });
-        }
+                const target = getPadTargetObj(padKey);
+                if (!target) return;
 
-        function redrawPadCanvas(padKey) {
-            const canvas = document.getElementById('canvas_' + padKey);
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const target = getPadTargetObj(padKey);
-            if (!target) return;
-
-            if (target.drawing && (!target.strokes || target.strokes.length === 0)) {
-                const img = new Image();
-                img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                img.src = target.drawing;
-                return;
-            }
-
-            const strokes = target.strokes || [];
-            const rt = padRuntime[padKey];
-
-            strokes.forEach((st, idx) => {
-                if (!st.points || st.points.length === 0) return;
-                ctx.save();
-                ctx.beginPath();
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = st.color || '#000000';
-                ctx.lineWidth = st.thickness || 3;
-                st.points.forEach((pt, pIdx) => {
-                    const x = pt.x * canvas.width;
-                    const y = pt.y * canvas.height;
-                    if (pIdx === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
-                });
-                ctx.stroke();
-
-                if (rt && rt.tool === 'select' && rt.selectedStrokeIdx === idx) {
-                    const xs = st.points.map(p => p.x * canvas.width);
-                    const ys = st.points.map(p => p.y * canvas.height);
-                    const minX = Math.min(...xs) - 8;
-                    const minY = Math.min(...ys) - 8;
-                    const maxX = Math.max(...xs) + 8;
-                    const maxY = Math.max(...ys) + 8;
-                    ctx.setLineDash([4, 4]);
-                    ctx.strokeStyle = '#7D486E';
-                    ctx.lineWidth = 1.5;
-                    ctx.strokeRect(minX, minY, maxX - minX, maxY - minY);
-                }
-                ctx.restore();
-            });
-        }
-
-        function bindPadPointerEvents(canvas, padKey) {
-            if (canvas.dataset.bound === '1') return;
-            canvas.dataset.bound = '1';
-
-            const getNormPt = (e) => {
                 const rect = canvas.getBoundingClientRect();
-                const force = (e.pressure && e.pressure > 0 && e.pointerType === 'pen') ? (0.75 + e.pressure * 0.6) : 1;
-                return {
-                    x: (e.clientX - rect.left) / rect.width,
-                    y: (e.clientY - rect.top) / rect.height,
-                    f: force
+                if (rect.width > 0 && rect.height > 0) {
+                    canvas.width = Math.floor(rect.width);
+                    canvas.height = Math.floor(rect.height);
+                }
+                redrawSinglePadCanvas(canvas, target);
+
+                if (canvas.dataset.padBound === '1') return;
+                canvas.dataset.padBound = '1';
+
+                let drawing = false;
+                let currStroke = null;
+
+                const getNorm = (e) => {
+                    const r = canvas.getBoundingClientRect();
+                    return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
                 };
-            };
 
-            canvas.addEventListener('pointerdown', (e) => {
-                if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
-                e.preventDefault();
-                try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+                canvas.addEventListener('pointerdown', (e) => {
+                    if (e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+                    e.preventDefault();
+                    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+                    const toolCfg = padRuntimeState[padKey] || { tool: 'pen', color: '#000000', width: 2.5 };
+                    drawing = true;
+                    const pt = getNorm(e);
 
-                const rt = padRuntime[padKey];
-                const target = getPadTargetObj(padKey);
-                if (!rt || !target) return;
-                if (!Array.isArray(target.strokes)) target.strokes = [];
-
-                const pt = getNormPt(e);
-
-                if (rt.tool === 'select') {
-                    let found = -1;
-                    for (let i = target.strokes.length - 1; i >= 0; i--) {
-                        const st = target.strokes[i];
-                        if (st.points.some(p => Math.hypot(p.x - pt.x, p.y - pt.y) < 0.04)) {
-                            found = i;
-                            break;
+                    if (toolCfg.tool === 'eraser') {
+                        if (Array.isArray(target.strokes)) {
+                            target.strokes = target.strokes.filter(st => !st.points.some(p => Math.hypot(p.x - pt.x, p.y - pt.y) < 0.04));
+                            redrawSinglePadCanvas(canvas, target);
                         }
+                        return;
                     }
-                    rt.selectedStrokeIdx = found;
-                    rt.dragLastNorm = found >= 0 ? pt : null;
-                    redrawPadCanvas(padKey);
-                    return;
-                }
 
-                if (rt.tool === 'eraser') {
-                    rt.undoStack.push(JSON.stringify(target.strokes));
-                    target.strokes = target.strokes.filter(st => !st.points.some(p => Math.hypot(p.x - pt.x, p.y - pt.y) < 0.035));
+                    if (!Array.isArray(target.strokes)) target.strokes = [];
+                    currStroke = {
+                        tool: toolCfg.tool,
+                        color: toolCfg.color,
+                        width: toolCfg.width || 2.5,
+                        points: [pt]
+                    };
+                    target.strokes.push(currStroke);
+                    redrawSinglePadCanvas(canvas, target);
+                });
+
+                canvas.addEventListener('pointermove', (e) => {
+                    if (!drawing) return;
+                    e.preventDefault();
+                    const toolCfg = padRuntimeState[padKey] || { tool: 'pen', color: '#000000', width: 2.5 };
+                    const pt = getNorm(e);
+                    if (toolCfg.tool === 'eraser') {
+                        if (Array.isArray(target.strokes)) {
+                            target.strokes = target.strokes.filter(st => !st.points.some(p => Math.hypot(p.x - pt.x, p.y - pt.y) < 0.04));
+                            redrawSinglePadCanvas(canvas, target);
+                        }
+                        return;
+                    }
+                    if (currStroke) {
+                        currStroke.points.push(pt);
+                        redrawSinglePadCanvas(canvas, target);
+                    }
+                });
+
+                const finish = () => {
+                    if (!drawing) return;
+                    drawing = false;
+                    currStroke = null;
                     saveState();
-                    redrawPadCanvas(padKey);
-                    return;
-                }
-
-                rt.undoStack.push(JSON.stringify(target.strokes));
-                if (rt.undoStack.length > 20) rt.undoStack.shift();
-
-                rt.isDrawing = true;
-                rt.currentStroke = {
-                    color: rt.color,
-                    thickness: rt.thickness * pt.f,
-                    points: [{ x: pt.x, y: pt.y }]
                 };
-                target.strokes.push(rt.currentStroke);
-                redrawPadCanvas(padKey);
+                canvas.addEventListener('pointerup', finish);
+                canvas.addEventListener('pointercancel', finish);
             });
-
-            canvas.addEventListener('pointermove', (e) => {
-                const rt = padRuntime[padKey];
-                const target = getPadTargetObj(padKey);
-                if (!rt || !target) return;
-                const pt = getNormPt(e);
-
-                if (rt.tool === 'select' && rt.selectedStrokeIdx >= 0 && rt.dragLastNorm && e.buttons > 0) {
-                    const dx = pt.x - rt.dragLastNorm.x;
-                    const dy = pt.y - rt.dragLastNorm.y;
-                    const st = target.strokes[rt.selectedStrokeIdx];
-                    if (st) {
-                        st.points.forEach(p => { p.x += dx; p.y += dy; });
-                        rt.dragLastNorm = pt;
-                        redrawPadCanvas(padKey);
-                    }
-                    return;
-                }
-
-                if (!rt.isDrawing || !rt.currentStroke) return;
-                e.preventDefault();
-                rt.currentStroke.points.push({ x: pt.x, y: pt.y });
-                redrawPadCanvas(padKey);
-            });
-
-            const finishPointer = () => {
-                const rt = padRuntime[padKey];
-                if (!rt) return;
-                if (rt.isDrawing || rt.dragLastNorm) {
-                    rt.isDrawing = false;
-                    rt.currentStroke = null;
-                    rt.dragLastNorm = null;
-                    saveState();
-                }
-            };
-            canvas.addEventListener('pointerup', finishPointer);
-            canvas.addEventListener('pointercancel', finishPointer);
-        }
-
-        function setPadTool(padKey, tool) {
-            if (!padRuntime[padKey]) return;
-            padRuntime[padKey].tool = tool;
-            padRuntime[padKey].selectedStrokeIdx = -1;
-            document.querySelectorAll(`.pad-tool-btn[data-pad="${padKey}"]`).forEach(btn => {
-                const active = btn.getAttribute('data-tool') === tool;
-                btn.classList.toggle('bg-plum-200', active);
-                btn.classList.toggle('border-plum-400', active);
-                btn.classList.toggle('bg-white', !active);
-                btn.classList.toggle('border-plum-200', !active);
-            });
-            redrawPadCanvas(padKey);
-        }
-
-        function setPadColor(padKey, color) {
-            if (!padRuntime[padKey]) return;
-            padRuntime[padKey].color = color;
-            setPadTool(padKey, 'pen');
-        }
-
-        function setPadThickness(padKey, val) {
-            if (!padRuntime[padKey]) return;
-            padRuntime[padKey].thickness = parseFloat(val);
-        }
-
-        function changePadPaper(padKey, newPaper) {
-            const target = getPadTargetObj(padKey);
-            if (!target) return;
-            target.paperType = newPaper;
-            saveState();
-            renderActiveSection();
-            if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
-                renderPdfSideNotes();
-            }
-        }
-
-        function resizePadHeight(padKey, delta) {
-            const target = getPadTargetObj(padKey);
-            if (!target) return;
-            target.padHeight = Math.max(150, Math.min(720, (target.padHeight || 220) + delta));
-            saveState();
-            renderActiveSection();
-            if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
-                renderPdfSideNotes();
-            }
-        }
-
-        function padUndo(padKey) {
-            const rt = padRuntime[padKey];
-            const target = getPadTargetObj(padKey);
-            if (!rt || !target || !rt.undoStack || rt.undoStack.length === 0) return;
-            target.strokes = JSON.parse(rt.undoStack.pop());
-            saveState();
-            redrawPadCanvas(padKey);
         }
 
         /* =========================================================
-           9. IMMAGINI & INFOGRAFICHE 1:1 SENZA RITAGLI
+           9. IMMAGINI E INFOGRAFICHE 1:1 SENZA RITAGLI
            ========================================================= */
-        function renderImagesBlockHtml(targetPath, images = [], isLocked = false) {
-            const imgs = Array.isArray(images) ? images : [];
-            const cardsHtml = imgs.map((img, idx) => {
-                const sizeClass = img.size === 'small' ? 'w-28' : (img.size === 'large' ? 'w-72' : 'w-44');
+        function getImagesArrayByTarget(targetKey) {
+            if (targetKey.startsWith('cnote:')) {
+                const id = targetKey.slice(6);
+                const n = state.customNotes.find(x => x.id === id);
+                if (n && !Array.isArray(n.images)) n.images = [];
+                return n ? n.images : null;
+            }
+            if (targetKey.startsWith('csess:')) {
+                const id = targetKey.slice(6);
+                const s = state.customSessions.find(x => x.id === id);
+                if (s && !Array.isArray(s.images)) s.images = [];
+                return s ? s.images : null;
+            }
+            const wk = ensureWeekExists(state.currentWeekKey);
+            if (targetKey.startsWith('torre.p.')) {
+                const idx = parseInt(targetKey.slice(8), 10);
+                const p = wk.torre.paragraphs[idx];
+                if (p && !Array.isArray(p.images)) p.images = [];
+                return p ? p.images : null;
+            }
+            if (wk[targetKey]) {
+                if (!Array.isArray(wk[targetKey].images)) wk[targetKey].images = [];
+                return wk[targetKey].images;
+            }
+            return null;
+        }
+
+        function renderImagesBlockHtml(targetKey, imagesArr, isLocked = false) {
+            const imgs = Array.isArray(imagesArr) ? imagesArr : [];
+            const cards = imgs.map((img, idx) => {
+                const sizeClass = img.size === 'L' ? 'w-56 sm:w-72' : (img.size === 'M' ? 'w-40 sm:w-52' : 'w-28 sm:w-36');
                 return `
-                    <div class="${sizeClass} shrink-0 space-y-1">
-                        <div class="square-img-wrapper relative group">
-                            <img src="${img.dataUrl}" alt="Infografica" onclick="openLightbox('${img.dataUrl}', '${escapeAttr(img.caption || '')}')" class="cursor-zoom-in">
-                            <button type="button" onclick="openLightbox('${img.dataUrl}', '${escapeAttr(img.caption || '')}')" class="no-print absolute top-1 left-1 p-1 rounded-lg bg-white/95 border border-plum-300 text-black shadow-2xs">
-                                <i data-lucide="maximize-2" class="w-3 h-3"></i>
-                            </button>
-                            ${!isLocked && !state.meetingMode ? `
-                                <button type="button" onclick="removeImageAt('${targetPath}', ${idx})" class="no-print absolute top-1 right-1 p-1 rounded-lg bg-red-600 text-white shadow-2xs">
-                                    <i data-lucide="trash-2" class="w-3 h-3"></i>
+                    <div class="space-y-1 ${sizeClass}">
+                        <div class="square-img-wrapper relative group shadow-2xs">
+                            <img src="${img.dataUrl}" alt="${escapeAttr(img.caption || 'Immagine')}" onclick="openLightbox('${img.dataUrl}', '${escapeAttr(img.caption || '')}')" class="cursor-zoom-in">
+                            ${!isLocked ? `
+                                <button type="button" onclick="removeStudyImage('${targetKey}', ${idx})" class="absolute top-1.5 right-1.5 p-1 rounded-lg bg-red-600 text-white shadow" title="Rimuovi immagine">
+                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
                                 </button>
                             ` : ''}
                         </div>
-                        ${!isLocked && !state.meetingMode ? `
-                            <div class="no-print flex items-center justify-between gap-1 text-[10px]">
-                                <span class="text-black font-bold">Dim:</span>
-                                <button type="button" onclick="resizeImageAt('${targetPath}', ${idx}, 'small')" class="px-1.5 py-0.5 rounded bg-white border border-plum-200 font-bold text-black">P</button>
-                                <button type="button" onclick="resizeImageAt('${targetPath}', ${idx}, 'medium')" class="px-1.5 py-0.5 rounded bg-white border border-plum-200 font-bold text-black">M</button>
-                                <button type="button" onclick="resizeImageAt('${targetPath}', ${idx}, 'large')" class="px-1.5 py-0.5 rounded bg-white border border-plum-200 font-bold text-black">G</button>
-                                <span class="px-1 rounded bg-plum-100 text-black font-bold">100%</span>
+                        ${!isLocked ? `
+                            <div class="flex items-center justify-between gap-1 text-[10px] font-bold text-black">
+                                <span>Dim:</span>
+                                <div class="flex gap-0.5">
+                                    <button type="button" onclick="resizeStudyImage('${targetKey}', ${idx}, 'S')" class="px-1.5 py-0.5 rounded border ${(!img.size || img.size === 'S') ? 'bg-plum-200 border-plum-400' : 'bg-white border-plum-200'}">P</button>
+                                    <button type="button" onclick="resizeStudyImage('${targetKey}', ${idx}, 'M')" class="px-1.5 py-0.5 rounded border ${img.size === 'M' ? 'bg-plum-200 border-plum-400' : 'bg-white border-plum-200'}">M</button>
+                                    <button type="button" onclick="resizeStudyImage('${targetKey}', ${idx}, 'L')" class="px-1.5 py-0.5 rounded border ${img.size === 'L' ? 'bg-plum-200 border-plum-400' : 'bg-white border-plum-200'}">G</button>
+                                </div>
                             </div>
                         ` : ''}
-                        <input type="text" value="${escapeAttr(img.caption || '')}" ${isLocked || state.meetingMode ? 'disabled' : ''}
-                            onchange="updateImageCaptionAt('${targetPath}', ${idx}, this.value)"
-                            placeholder="Didascalia..."
-                            class="w-full text-[11px] rounded-lg border border-plum-200 bg-white px-2 py-0.5 text-black">
                     </div>
                 `;
             }).join('');
 
             return `
-                <div class="border border-plum-200 rounded-2xl p-2 bg-plum-50/40 space-y-2">
-                    <div class="flex items-center justify-between gap-2">
-                        <span class="text-xs font-bold text-black flex items-center gap-1">
-                            <i data-lucide="image" class="w-3.5 h-3.5"></i> Immagini e Infografiche (1:1 senza ritagli)
+                <div class="pt-1 space-y-2">
+                    <div class="flex items-center justify-between gap-2 bg-ivory-50 border border-plum-200 rounded-xl px-2.5 py-1.5">
+                        <span class="text-xs font-bold text-black flex items-center gap-1.5">
+                            <i data-lucide="image" class="w-4 h-4 text-burgundy-700"></i>
+                            <span>Immagini e Infografiche (${imgs.length})</span>
                         </span>
-                        ${!isLocked && !state.meetingMode ? `
-                            <label class="no-print px-2.5 py-1 rounded-xl bg-white hover:bg-plum-100 border border-plum-300 text-black text-xs font-bold cursor-pointer flex items-center gap-1">
-                                <i data-lucide="plus" class="w-3.5 h-3.5"></i> Aggiungi immagine
-                                <input type="file" accept="image/*" onchange="handleImageUpload(event, '${targetPath}')" class="hidden">
+                        ${!isLocked ? `
+                            <label class="px-2.5 py-1 rounded-xl bg-white hover:bg-plum-100 border border-plum-300 text-black text-xs font-bold cursor-pointer flex items-center gap-1">
+                                <i data-lucide="plus" class="w-3.5 h-3.5"></i>
+                                <span>Aggiungi immagine</span>
+                                <input type="file" accept="image/*" onchange="uploadStudyImage(event, '${targetKey}')" class="hidden">
                             </label>
                         ` : ''}
                     </div>
-                    ${imgs.length > 0 ? `<div class="flex flex-wrap gap-2.5 pt-1">${cardsHtml}</div>` : ''}
+                    ${imgs.length > 0 ? `<div class="flex flex-wrap gap-2.5">${cards}</div>` : ''}
                 </div>
             `;
         }
 
-        function getTargetImagesArray(targetPath) {
-            const wk = ensureWeekExists(state.currentWeekKey);
-            if (targetPath.startsWith('torre.p.')) {
-                const idx = parseInt(targetPath.split('.')[2], 10);
-                return wk.torre.paragraphs[idx].images;
-            }
-            if (targetPath.startsWith('cnote:')) {
-                const id = targetPath.split(':')[1];
-                const note = state.customNotes.find(x => x.id === id);
-                if (!note.images) note.images = [];
-                return note.images;
-            }
-            if (targetPath.startsWith('csess:')) {
-                const id = targetPath.split(':')[1];
-                const cs = state.customSessions.find(x => x.id === id);
-                if (!cs.images) cs.images = [];
-                return cs.images;
-            }
-            if (targetPath.startsWith('sp:')) {
-                const id = targetPath.split(':')[1];
-                const item = state.studioPersonale.find(x => x.id === id);
-                if (!item.images) item.images = [];
-                return item.images;
-            }
-            if (!wk[targetPath].images) wk[targetPath].images = [];
-            return wk[targetPath].images;
-        }
-
-        function handleImageUpload(event, targetPath) {
+        function uploadStudyImage(event, targetKey) {
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
@@ -2603,19 +2547,18 @@
                         if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; }
                         else { w = Math.round(w * maxDim / h); h = maxDim; }
                     }
-                    const canvas = document.createElement('canvas');
-                    canvas.width = w;
-                    canvas.height = h;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, w, h);
-                    const compressedUrl = canvas.toDataURL('image/jpeg', 0.85);
-
-                    const arr = getTargetImagesArray(targetPath);
-                    arr.push({ id: 'img_' + Date.now(), dataUrl: compressedUrl, caption: '', size: 'medium' });
-                    saveState();
-                    renderActiveSection();
-                    if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
-                        renderPdfSideNotes();
+                    const c = document.createElement('canvas');
+                    c.width = w;
+                    c.height = h;
+                    c.getContext('2d').drawImage(img, 0, 0, w, h);
+                    const arr = getImagesArrayByTarget(targetKey);
+                    if (arr) {
+                        arr.push({ dataUrl: c.toDataURL('image/jpeg', 0.86), caption: '', size: 'M' });
+                        saveState();
+                        renderActiveSection();
+                        if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
+                            renderPdfSideNotes();
+                        }
                     }
                 };
                 img.src = e.target.result;
@@ -2624,19 +2567,9 @@
             event.target.value = '';
         }
 
-        function removeImageAt(targetPath, idx) {
-            const arr = getTargetImagesArray(targetPath);
-            arr.splice(idx, 1);
-            saveState();
-            renderActiveSection();
-            if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
-                renderPdfSideNotes();
-            }
-        }
-
-        function resizeImageAt(targetPath, idx, size) {
-            const arr = getTargetImagesArray(targetPath);
-            if (arr[idx]) {
+        function resizeStudyImage(targetKey, idx, size) {
+            const arr = getImagesArrayByTarget(targetKey);
+            if (arr && arr[idx]) {
                 arr[idx].size = size;
                 saveState();
                 renderActiveSection();
@@ -2646,11 +2579,15 @@
             }
         }
 
-        function updateImageCaptionAt(targetPath, idx, val) {
-            const arr = getTargetImagesArray(targetPath);
-            if (arr[idx]) {
-                arr[idx].caption = val;
+        function removeStudyImage(targetKey, idx) {
+            const arr = getImagesArrayByTarget(targetKey);
+            if (arr) {
+                arr.splice(idx, 1);
                 saveState();
+                renderActiveSection();
+                if (!document.getElementById('pdf-studio-workspace').classList.contains('hidden')) {
+                    renderPdfSideNotes();
+                }
             }
         }
 
@@ -2669,19 +2606,37 @@
         }
 
         /* =========================================================
-           10. GESTIONE PDF LOCALI (INDEXEDDB) + RADDRIZZAMENTO AUTOMATICO + SFOGLIO LIBRO + 3 SPESSORI
+           10. ARCHIVIO PDF (INDEXEDDB) & LETTORE A SCHERMO DIVISO
            ========================================================= */
+        let activePdfInstance = null;
+        let activePdfMeta = null;
+        let pdfZoomScale = 1.0;
+        let pdfAutoFitEnabled = true;
+        let pdfNotesHidden = false;
+        let pdfScrollLocked = false;
+        let pdfThumbsOpen = false;
+        let pdfSwipeBound = false;
+        let pdfAnnotTool = 'scroll';
+        let pdfAnnotColor = '#4B2140';
+        let pdfPenWidth = 3.5;
+        let pdfHighlightWidth = 17;
+        let pdfIsDrawing = false;
+        let pdfCurrentStroke = null;
+        let currentPdfRenderTask = null;
+        let pdfRenderSeq = 0;
+        let lastSelectedPdfText = '';
+
         function openPdfDB() {
             return new Promise((resolve, reject) => {
                 const req = indexedDB.open(DB_NAME, 1);
                 req.onupgradeneeded = (e) => {
                     const db = e.target.result;
                     if (!db.objectStoreNames.contains(DB_STORE)) {
-                        db.createObjectStore(DB_STORE, { keyPath: 'id' });
+                        db.createObjectStore(DB_STORE);
                     }
                 };
-                req.onsuccess = (e) => resolve(e.target.result);
-                req.onerror = (e) => reject(e.target.error);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
             });
         }
 
@@ -2689,9 +2644,9 @@
             const db = await openPdfDB();
             return new Promise((resolve, reject) => {
                 const tx = db.transaction(DB_STORE, 'readwrite');
-                tx.objectStore(DB_STORE).put({ id, data: arrayBuffer });
+                tx.objectStore(DB_STORE).put(arrayBuffer, id);
                 tx.oncomplete = () => resolve();
-                tx.onerror = (e) => reject(e.target.error);
+                tx.onerror = () => reject(tx.error);
             });
         }
 
@@ -2700,8 +2655,8 @@
             return new Promise((resolve, reject) => {
                 const tx = db.transaction(DB_STORE, 'readonly');
                 const req = tx.objectStore(DB_STORE).get(id);
-                req.onsuccess = () => resolve(req.result ? req.result.data : null);
-                req.onerror = (e) => reject(e.target.error);
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
             });
         }
 
@@ -2714,25 +2669,68 @@
             });
         }
 
-        async function handlePdfUpload(event, targetSection) {
+        function renderPdfSessionStripHtml(sectionId) {
+            const secPdfs = state.pdfLibrary.filter(p => p.section === sectionId);
+            const listHtml = secPdfs.map(p => `
+                <div class="flex items-center justify-between gap-2 bg-plum-50 border border-plum-200 rounded-xl px-2.5 py-1.5">
+                    <button type="button" onclick="openPdfInWorkspace('${p.id}')" class="flex items-center gap-2 text-left min-w-0 flex-1">
+                        <i data-lucide="file-text" class="w-4 h-4 text-burgundy-700 shrink-0"></i>
+                        <div class="min-w-0">
+                            <span class="text-xs font-bold text-black block truncate">${escapeHtml(p.name)}</span>
+                            <span class="text-[10px] text-plum-800">Pag. ${p.lastPage || 1} di ${p.numPages || '?'}</span>
+                        </div>
+                    </button>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button type="button" onclick="openPdfInWorkspace('${p.id}')" class="px-2.5 py-1 rounded-lg bg-plum-200 hover:bg-plum-300 border border-plum-400 text-black text-xs font-bold">Apri PDF</button>
+                        ${!state.meetingMode ? `
+                            <button type="button" onclick="deletePdfDocument('${p.id}')" class="p-1 rounded-lg bg-red-50 text-red-700 border border-red-200" title="Elimina PDF">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+
+            return `
+                <div class="card-box rounded-2xl p-2.5 space-y-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-xs font-bold uppercase tracking-wider text-burgundy-700 flex items-center gap-1.5">
+                            <i data-lucide="file-stack" class="w-4 h-4"></i>
+                            <span>Documenti PDF della sessione (${secPdfs.length})</span>
+                        </span>
+                        ${!state.meetingMode ? `
+                            <label class="px-3 py-1 rounded-xl bg-plum-200 hover:bg-plum-300 border border-plum-400 text-black text-xs font-bold cursor-pointer flex items-center gap-1">
+                                <i data-lucide="file-plus" class="w-3.5 h-3.5"></i>
+                                <span>Importa PDF</span>
+                                <input type="file" accept="application/pdf" onchange="handlePdfUpload(event, '${sectionId}')" class="hidden">
+                            </label>
+                        ` : ''}
+                    </div>
+                    ${secPdfs.length > 0 ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-1.5">${listHtml}</div>` : ''}
+                </div>
+            `;
+        }
+
+        async function handlePdfUpload(event, sectionId) {
             const file = event.target.files[0];
             if (!file) return;
+            showStudioToast('Importazione PDF in corso...');
             try {
-                const arrayBuffer = await file.arrayBuffer();
-                const pdfId = 'pdf_' + Date.now();
-                await savePdfBinaryToDB(pdfId, arrayBuffer);
+                const buffer = await file.arrayBuffer();
+                const id = 'pdf_' + Date.now();
+                await savePdfBinaryToDB(id, buffer.slice(0));
 
                 let numPages = 1;
                 if (window.pdfjsLib) {
-                    const doc = await pdfjsLib.getDocument({ data: arrayBuffer.slice(0) }).promise;
-                    numPages = doc.numPages;
+                    const doc = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
+                    numPages = doc.numPages || 1;
                 }
 
                 state.pdfLibrary.unshift({
-                    id: pdfId,
-                    name: file.name,
-                    section: targetSection,
+                    id: id,
+                    section: sectionId,
                     weekKey: state.currentWeekKey,
+                    name: file.name,
                     numPages: numPages,
                     lastPage: 1,
                     rotation: state.defaultPdfRotation || 0,
@@ -2741,136 +2739,105 @@
                 });
                 saveState();
                 renderActiveSection();
-                showStudioToast('PDF "' + file.name + '" importato!');
-                await openPdfInWorkspace(pdfId);
+                openPdfInWorkspace(id);
             } catch (err) {
                 console.error(err);
-                showStudioToast('Errore durante il caricamento del PDF.');
+                showStudioToast('Impossibile importare il file PDF.');
             }
             event.target.value = '';
         }
 
-        async function removePdfFromLibrary(pdfId) {
+        async function deletePdfDocument(pdfId) {
             state.pdfLibrary = state.pdfLibrary.filter(p => p.id !== pdfId);
             await deletePdfBinaryFromDB(pdfId);
             saveState();
             renderActiveSection();
-            showStudioToast('PDF rimosso.');
+            showStudioToast('Documento PDF rimosso.');
         }
-
-        function renderPdfSessionStripHtml(sectionId) {
-            const pdfs = state.pdfLibrary.filter(p => p.section === sectionId);
-            return `
-                <div class="card-box rounded-2xl p-2.5 flex flex-wrap items-center justify-between gap-2 bg-white">
-                    <div class="flex items-center gap-2 min-w-0">
-                        <div class="w-8 h-8 rounded-xl bg-plum-100 border border-plum-200 text-black flex items-center justify-center shrink-0">
-                            <i data-lucide="file-text" class="w-4 h-4"></i>
-                        </div>
-                        <div class="min-w-0">
-                            <span class="font-serif font-bold text-base text-black block leading-tight">Documenti PDF della sessione</span>
-                            <span class="text-xs text-black block">Sfoglia come un libro, evidenzia, collega note alle pagine e aggiungi foto</span>
-                        </div>
-                    </div>
-
-                    <div class="flex flex-wrap items-center gap-1.5">
-                        ${pdfs.map(p => `
-                            <div class="flex items-center bg-plum-50 border border-plum-300 rounded-xl overflow-hidden">
-                                <button type="button" onclick="openPdfInWorkspace('${p.id}')" class="px-2.5 py-1 text-xs font-bold text-black hover:bg-plum-100 flex items-center gap-1">
-                                    <i data-lucide="book-open" class="w-3.5 h-3.5 text-burgundy-700"></i>
-                                    <span class="max-w-[140px] truncate">${escapeHtml(p.name)}</span>
-                                    <span class="text-[10px] text-burgundy-700">(p.${p.lastPage || 1}/${p.numPages})</span>
-                                </button>
-                                ${!state.meetingMode ? `
-                                    <button type="button" onclick="removePdfFromLibrary('${p.id}')" class="px-2 py-1 text-red-700 hover:bg-red-50 border-l border-plum-200" title="Elimina PDF">
-                                        <i data-lucide="trash-2" class="w-3 h-3"></i>
-                                    </button>
-                                ` : ''}
-                            </div>
-                        `).join('')}
-
-                        ${!state.meetingMode ? `
-                            <label class="px-3 py-1.5 rounded-xl bg-plum-200 hover:bg-plum-300 border border-plum-400 text-black text-xs font-bold cursor-pointer flex items-center gap-1">
-                                <i data-lucide="file-plus" class="w-3.5 h-3.5"></i>
-                                <span>Importa PDF</span>
-                                <input type="file" accept="application/pdf" onchange="handlePdfUpload(event, '${sectionId}')" class="hidden">
-                            </label>
-                        ` : ''}
-                    </div>
-                </div>
-            `;
-        }
-
-        let activePdfInstance = null;
-        let activePdfMeta = null;
-        let pdfZoomScale = 1.0;
-        let pdfAnnotTool = 'scroll';
-        let pdfAnnotColor = '#4B2140';
-        let pdfPenWidth = 3.5;
-        let pdfHighlightWidth = 17;
-        let pdfIsDrawing = false;
-        let pdfCurrentStroke = null;
-        let pdfNotesHidden = false;
-        let pdfScrollLocked = false;
-        let pdfAutoFitEnabled = true;
-        let pdfSwipeBound = false;
-        let pdfThumbsOpen = false;
-        let lastSelectedPdfText = '';
-        let currentPdfRenderTask = null;
-        let pdfRenderSeq = 0;
 
         async function openPdfInWorkspace(pdfId) {
             const meta = state.pdfLibrary.find(p => p.id === pdfId);
             if (!meta) return;
             const buffer = await getPdfBinaryFromDB(pdfId);
             if (!buffer) {
-                showStudioToast('File PDF non presente su questo dispositivo (usa Ripristina da iCloud).');
+                showStudioToast('File PDF non trovato in memoria: reimportalo o ripristina da iCloud.');
                 return;
             }
-            try {
-                activePdfMeta = meta;
-                if (typeof activePdfMeta.rotation !== 'number') activePdfMeta.rotation = state.defaultPdfRotation || 0;
-                if (!activePdfMeta.overlays) activePdfMeta.overlays = {};
-                if (!activePdfMeta.annotations) activePdfMeta.annotations = {};
 
-                activePdfInstance = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
-                activePdfMeta.numPages = activePdfInstance.numPages;
+            activePdfMeta = meta;
+            if (!activePdfMeta.annotations) activePdfMeta.annotations = {};
+            if (!activePdfMeta.overlays) activePdfMeta.overlays = {};
+            if (typeof activePdfMeta.rotation !== 'number') activePdfMeta.rotation = state.defaultPdfRotation || 0;
 
-                const firstPg = await activePdfInstance.getPage(Math.max(1, meta.lastPage || 1));
-                if ((firstPg.rotate === 180 || firstPg.rotate === -180) && activePdfMeta.rotation === 0) {
-                    activePdfMeta.rotation = 180;
-                    saveState();
-                }
+            activePdfInstance = await pdfjsLib.getDocument({ data: buffer }).promise;
+            activePdfMeta.numPages = activePdfInstance.numPages;
 
-                pdfAutoFitEnabled = true;
+            document.getElementById('pdf-workspace-title').textContent = meta.name;
+            document.getElementById('pdf-total-pages').textContent = meta.numPages;
+            document.getElementById('pdf-page-input').max = meta.numPages;
 
-                document.getElementById('pdf-workspace-title').textContent = meta.name;
-                document.getElementById('pdf-total-pages').textContent = activePdfInstance.numPages;
-                document.getElementById('pdf-page-input').max = activePdfInstance.numPages;
-                document.getElementById('pdf-page-input').value = meta.lastPage || 1;
+            const ws = document.getElementById('pdf-studio-workspace');
+            ws.classList.remove('hidden');
+            ws.classList.add('flex');
 
-                const ws = document.getElementById('pdf-studio-workspace');
-                ws.classList.remove('hidden');
-                ws.classList.add('flex');
-
-                setPdfSplitRatio(state.pdfSplitPercent || 70);
-                setPdfAnnotTool('scroll');
-                renderPdfSideNotes();
-                await renderCurrentPdfPage(true);
-                renderPdfSideNotes();
-            } catch (err) {
-                console.error(err);
-                showStudioToast('Errore nell\'apertura del PDF.');
-            }
+            pdfAutoFitEnabled = true;
+            setPdfSplitRatio(state.pdfSplitPercent || 70);
+            setPdfAnnotTool('scroll');
+            await renderCurrentPdfPage(true);
         }
 
         function closePdfWorkspace() {
             const ws = document.getElementById('pdf-studio-workspace');
             ws.classList.add('hidden');
             ws.classList.remove('flex');
-            hidePdfSelectionPopover();
             activePdfInstance = null;
             activePdfMeta = null;
+            hidePdfSelectionPopover();
             renderActiveSection();
+        }
+
+        function rotateActivePdf(deg) {
+            if (!activePdfMeta) return;
+            activePdfMeta.rotation = ((activePdfMeta.rotation || 0) + deg + 360) % 360;
+            state.defaultPdfRotation = activePdfMeta.rotation;
+            saveState();
+            renderCurrentPdfPage(pdfAutoFitEnabled);
+        }
+
+        function fitPdfToPaneWidth() {
+            pdfAutoFitEnabled = true;
+            renderCurrentPdfPage(true);
+        }
+
+        function setPdfSplitRatio(leftPercent) {
+            state.pdfSplitPercent = Math.min(82, Math.max(25, leftPercent));
+            const left = document.getElementById('pdf-left-pane');
+            const right = document.getElementById('pdf-right-pane');
+            const lbl = document.getElementById('btn-pdf-ratio-label');
+            if (left && right && !pdfNotesHidden && !state.pdfSingleCol) {
+                left.style.width = state.pdfSplitPercent + '%';
+                right.style.width = (100 - state.pdfSplitPercent) + '%';
+            }
+            if (lbl) lbl.textContent = `${state.pdfSplitPercent}/${100 - state.pdfSplitPercent}`;
+            saveState();
+            if (activePdfInstance && pdfAutoFitEnabled) renderCurrentPdfPage(true);
+        }
+
+        function adjustPdfSplit(deltaRight) {
+            setPdfSplitRatio((state.pdfSplitPercent || 70) - deltaRight);
+        }
+
+        function togglePdfSingleColumnLayout() {
+            state.pdfSingleCol = !state.pdfSingleCol;
+            const container = document.getElementById('pdf-split-container');
+            const lbl = document.getElementById('label-pdf-col-layout');
+            if (container) container.classList.toggle('single-col-layout', state.pdfSingleCol);
+            if (lbl) lbl.textContent = state.pdfSingleCol ? '1 Col' : '2 Col';
+            if (!state.pdfSingleCol) {
+                setPdfSplitRatio(state.pdfSplitPercent || 70);
+            }
+            saveState();
+            if (activePdfInstance && pdfAutoFitEnabled) renderCurrentPdfPage(true);
         }
 
         function togglePdfToolbarsVisibility() {
@@ -2879,66 +2846,9 @@
             const restoreBtn = document.getElementById('btn-restore-pdf-bars');
             const hiding = !b1.classList.contains('hidden');
             b1.classList.toggle('hidden', hiding);
-            if (!state.meetingMode) {
-                b2.classList.toggle('hidden', hiding);
-            }
+            if (b2) b2.classList.toggle('hidden', hiding);
             restoreBtn.classList.toggle('hidden', !hiding);
-            if (activePdfInstance && pdfAutoFitEnabled) {
-                renderCurrentPdfPage(true);
-            }
-        }
-
-        function rotateActivePdf(deltaDeg) {
-            if (!activePdfMeta) return;
-            activePdfMeta.rotation = ((activePdfMeta.rotation || 0) + deltaDeg + 360) % 360;
-            state.defaultPdfRotation = activePdfMeta.rotation;
-            saveState();
-            renderCurrentPdfPage(true);
-        }
-
-        function fitPdfToPaneWidth() {
-            pdfAutoFitEnabled = true;
-            renderCurrentPdfPage(true);
-        }
-
-        function setPdfSplitRatio(percent) {
-            const p = Math.max(25, Math.min(85, Math.round(percent)));
-            state.pdfSplitPercent = p;
-            const left = document.getElementById('pdf-left-pane');
-            const right = document.getElementById('pdf-right-pane');
-            const lbl = document.getElementById('btn-pdf-ratio-label');
-            if (left && right && !pdfNotesHidden && !state.pdfSingleCol) {
-                left.style.width = p + '%';
-                right.style.width = (100 - p) + '%';
-            }
-            if (lbl) lbl.textContent = `${p}/${100 - p}`;
-            saveState();
-            if (activePdfInstance && pdfAutoFitEnabled) {
-                renderCurrentPdfPage(true);
-            }
-        }
-
-        function adjustPdfSplit(deltaRight) {
-            const currentLeft = state.pdfSplitPercent || 70;
-            setPdfSplitRatio(currentLeft - deltaRight);
-        }
-
-        function togglePdfSingleColumnLayout() {
-            state.pdfSingleCol = !state.pdfSingleCol;
-            const container = document.getElementById('pdf-split-container');
-            const lbl = document.getElementById('label-pdf-col-layout');
-            if (container) {
-                container.classList.toggle('single-col-layout', state.pdfSingleCol);
-            }
-            if (lbl) {
-                lbl.textContent = state.pdfSingleCol ? '1 Col' : '2 Col';
-            }
-            if (!state.pdfSingleCol) {
-                setPdfSplitRatio(state.pdfSplitPercent || 70);
-            } else if (activePdfInstance && pdfAutoFitEnabled) {
-                renderCurrentPdfPage(true);
-            }
-            saveState();
+            if (activePdfInstance && pdfAutoFitEnabled) renderCurrentPdfPage(true);
         }
 
         function togglePdfNotesDrawer() {
@@ -3543,9 +3453,9 @@
                                 <div class="flex items-center gap-0.5" onpointerdown="event.stopPropagation()">
                                     <button type="button" onclick="togglePdfOverlayCollapse(${idx})" class="px-1 rounded bg-plum-50 border border-plum-200 font-bold" title="${isClosed ? 'Apri' : 'Chiudi'}">${isClosed ? '+' : '−'}</button>
                                     ${!isClosed && !state.meetingMode ? `
-                                        <button type="button" onclick="changePdfOverlayFont(${idx}, -2)" class="px-1 rounded bg-white border border-plum-200 font-bold">A−</button>
-                                        <button type="button" onclick="changePdfOverlayFont(${idx}, 2)" class="px-1 rounded bg-white border border-plum-200 font-bold">A+</button>
-                                        <button type="button" onclick="togglePdfOverlayBold(${idx})" class="px-1 rounded ${ov.bold ? 'bg-plum-200' : 'bg-white'} border border-plum-200 font-bold">B</button>
+                                        <button type="button" onclick="changePdfOverlayFont(${idx}, -2)" class="px-1 rounded bg-white border border-plum-200 font-bold" title="Riduci testo">A−</button>
+                                        <button type="button" onclick="changePdfOverlayFont(${idx}, 2)" class="px-1 rounded bg-white border border-plum-200 font-bold" title="Ingrandisci testo">A+</button>
+                                        <button type="button" onclick="togglePdfOverlayBold(${idx})" class="px-1 rounded border border-plum-200 font-bold ${ov.bold ? 'bg-plum-200' : 'bg-white'}" title="Grassetto">B</button>
                                     ` : ''}
                                     ${!state.meetingMode ? `<button type="button" onclick="removePdfOverlay(${idx})" class="text-red-700 font-bold px-1">✕</button>` : ''}
                                 </div>
@@ -3966,47 +3876,38 @@
                             <div class="w-8 h-8 rounded-xl bg-plum-100 border border-plum-200 text-black flex items-center justify-center"><i data-lucide="archive" class="w-4 h-4"></i></div>
                             <span class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-plum-100 text-black">${Object.keys(state.weeks).length} settimane</span>
                         </div>
-                        <h3 class="font-serif font-bold text-lg text-black">Archivio e Ricerca</h3>
-                        <p class="text-xs text-black line-clamp-1">Cerca in note, paragrafi e settimane precedenti</p>
+                        <h3 class="font-serif font-bold text-lg text-black">Archivio e Ricerca Globale</h3>
+                        <p class="text-xs text-black line-clamp-1">Cerca note, scritture, sessioni e settimane</p>
                     </button>
                 </div>
             `;
 
             main.innerHTML = `
-                ${renderIllustratedHeaderBanner()}
+                <div class="space-y-3">
+                    ${renderIllustratedHeaderBanner()}
 
-                <div class="flex flex-wrap items-center justify-between gap-2 px-1">
-                    <div>
-                        <span class="text-xs font-bold uppercase tracking-wider text-burgundy-700">Settimana ${formatWeekRangeLabel(state.currentWeekKey)}</span>
-                        <h2 class="font-serif font-bold text-xl text-black">Le tue sessioni di studio</h2>
-                    </div>
-                    <div class="flex flex-wrap items-center gap-1.5">
-                        <button type="button" onclick="openScripturesQuickModal()" class="px-3 py-1.5 rounded-xl bg-white hover:bg-plum-100 border border-plum-300 text-black text-xs font-bold flex items-center gap-1">
-                            <i data-lucide="book-open" class="w-3.5 h-3.5 text-burgundy-700"></i>
-                            <span>Scritture da leggere</span>
-                        </button>
-                        ${state.meetingMode ? `
-                            <button type="button" onclick="createQuickMeetingNote('studio_personale')" class="px-3 py-1.5 rounded-xl bg-burgundy-600 hover:bg-burgundy-700 text-white text-xs font-bold flex items-center gap-1">
-                                <i data-lucide="plus-circle" class="w-3.5 h-3.5"></i>
-                                <span>+ Appunto rapido</span>
-                            </button>
-                        ` : `
+                    <div class="flex flex-wrap items-center justify-between gap-2 px-1">
+                        <div>
+                            <h2 class="font-serif font-bold text-xl text-black">Le tue sessioni di studio</h2>
+                            <p class="text-xs text-black">Settimana: <strong>${formatWeekRangeLabel(state.currentWeekKey)}</strong></p>
+                        </div>
+                        ${!state.meetingMode ? `
                             <button type="button" onclick="openNewSessionModal()" class="px-3 py-1.5 rounded-xl bg-plum-200 hover:bg-plum-300 border border-plum-400 text-black text-xs font-bold flex items-center gap-1">
                                 <i data-lucide="folder-plus" class="w-3.5 h-3.5"></i>
                                 <span>+ Aggiungi sessione</span>
                             </button>
-                        `}
+                        ` : ''}
                     </div>
-                </div>
 
-                <!-- Barra di ricerca rapida globale in Homepage -->
-                <div class="card-box rounded-2xl p-2 bg-white flex items-center gap-2">
-                    <i data-lucide="search" class="w-4 h-4 text-plum-700 ml-1 shrink-0"></i>
-                    <input type="text" placeholder="Cerca subito in tutte le note, commenti e PDF..." onkeydown="if(event.key==='Enter'){ window._globalSearchPreset = this.value; navigateTo('archivio'); }" class="flex-1 bg-transparent text-xs sm:text-sm text-black outline-none">
-                    <button type="button" onclick="const inp=this.previousElementSibling; window._globalSearchPreset=inp.value; navigateTo('archivio');" class="px-3 py-1 rounded-xl bg-plum-100 hover:bg-plum-200 border border-plum-300 text-xs font-bold text-black">Cerca</button>
-                </div>
+                    <!-- Barra di ricerca rapida globale in Homepage -->
+                    <div class="card-box rounded-2xl p-2 bg-white flex items-center gap-2">
+                        <i data-lucide="search" class="w-4 h-4 text-plum-700 ml-1 shrink-0"></i>
+                        <input type="text" placeholder="Cerca subito in tutte le note, commenti e PDF..." onkeydown="if(event.key==='Enter'){ window._globalSearchPreset = this.value; navigateTo('archivio'); }" class="flex-1 bg-transparent text-xs sm:text-sm text-black outline-none">
+                        <button type="button" onclick="const inp=this.previousElementSibling; window._globalSearchPreset=inp.value; navigateTo('archivio');" class="px-3 py-1 rounded-xl bg-plum-100 hover:bg-plum-200 border border-plum-300 text-xs font-bold text-black">Cerca</button>
+                    </div>
 
-                ${customSectionsHtml}
+                    ${customSectionsHtml}
+                </div>
             `;
         }
 
