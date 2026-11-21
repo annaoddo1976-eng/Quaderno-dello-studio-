@@ -2271,17 +2271,19 @@
 
             return `
                 <div class="card-box bg-white border ${isCollapsed ? 'border-emerald-400 bg-emerald-50/30' : 'border-plum-200'} rounded-2xl p-2 sm:p-2.5 shadow-2xs space-y-2">
-                    <div class="flex items-center justify-between gap-1.5">
-                        <div class="flex items-center gap-1.5 flex-1 min-w-0">
-                            <button type="button" onclick="toggleCustomNoteCollapse('${note.id}')" class="p-1 rounded-lg border ${isCollapsed ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-plum-50 border-plum-300 text-black'} shrink-0" title="${isCollapsed ? 'Apri nota' : 'Chiudi nota completata'}">
+                    <div class="flex items-start justify-between gap-1.5">
+                        <div class="flex items-start gap-1.5 flex-1 min-w-0">
+                            <button type="button" onclick="toggleCustomNoteCollapse('${note.id}')" class="mt-0.5 p-1 rounded-lg border ${isCollapsed ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-plum-50 border-plum-300 text-black'} shrink-0" title="${isCollapsed ? 'Apri nota' : 'Chiudi nota completata'}">
                                 <i data-lucide="${isCollapsed ? 'chevron-right' : 'chevron-down'}" class="w-4 h-4"></i>
                             </button>
-                            <input type="text" value="${escapeAttr(note.title)}" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" oninput="updateCustomNoteTitle('${note.id}', this.value)"
-                                style="user-select:text;-webkit-user-select:text;pointer-events:auto;"
-                                class="font-serif font-bold ${compact ? 'text-sm' : 'text-base sm:text-lg'} ${isCollapsed ? 'line-through text-gray-500' : 'text-black'} bg-white/80 rounded-lg px-1.5 py-0.5 border border-plum-200 focus:border-plum-600 outline-none w-full" title="Tocca per rinominare">
+                            <div contenteditable="true" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"
+                                onblur="updateCustomNoteTitle('${note.id}', this.innerText)"
+                                onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}"
+                                style="user-select:text;-webkit-user-select:text;pointer-events:auto;word-break:break-word;"
+                                class="font-serif font-bold ${compact ? 'text-sm' : 'text-base sm:text-lg'} leading-snug ${isCollapsed ? 'line-through text-gray-500' : 'text-black'} bg-white/80 rounded-lg px-2 py-1 border border-plum-200 focus:border-plum-600 outline-none w-full whitespace-pre-wrap" title="Tocca per rinominare">${escapeHtml(note.title)}</div>
                         </div>
 
-                        <div class="no-print flex items-center gap-1 shrink-0">
+                        <div class="no-print flex items-center gap-1 shrink-0 mt-0.5">
                             <button type="button" onclick="toggleCustomNoteCollapse('${note.id}')" class="px-2 py-0.5 rounded-lg border text-[11px] font-bold ${isCollapsed ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-white border-plum-300 text-black hover:bg-plum-50'}">
                                 ${isCollapsed ? 'Apri' : 'Chiudi'}
                             </button>
