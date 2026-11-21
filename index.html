@@ -2085,73 +2085,76 @@
                     ondrop="handleNoteDrop(event, '${note.id}')"
                     ondragend="handleNoteDragEnd(event)"
                     class="card-box ${isQuickNote ? 'quick-meeting-note-card border-2 border-burgundy-400 bg-burgundy-50/20' : 'prepared-note-card border border-plum-200 bg-white'} ${isCollapsed ? 'border-emerald-400 bg-emerald-50/30' : ''} rounded-2xl p-2 sm:p-2.5 shadow-2xs space-y-2 transition">
-                    <div class="flex items-start justify-between gap-1.5">
-                        <div class="flex items-start gap-1.5 flex-1 min-w-0">
-                            ${canReorder ? `
-                                <span class="mt-1 cursor-grab active:cursor-grabbing text-plum-600 hover:text-black select-none shrink-0" title="Tieni premuto e trascina per riordinare">
-                                    <i data-lucide="grip-vertical" class="w-4 h-4"></i>
-                                </span>
-                            ` : ''}
-                            <button type="button" onclick="toggleCustomNoteCollapse('${note.id}')" class="mt-0.5 p-1 rounded-lg border ${isCollapsed ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-plum-50 border-plum-300 text-black'} shrink-0" title="${isCollapsed ? 'Apri nota' : 'Chiudi nota completata'}">
-                                <i data-lucide="${isCollapsed ? 'chevron-right' : 'chevron-down'}" class="w-4 h-4"></i>
-                            </button>
-                            <div class="flex-1 min-w-0 space-y-1">
-                                <div contenteditable="${isLockedInMeeting ? 'false' : 'true'}" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"
-                                    onblur="updateCustomNoteTitle('${note.id}', this.innerText)"
-                                    onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}"
-                                    style="user-select:text;-webkit-user-select:text;pointer-events:auto;word-break:break-word;"
-                                    class="font-serif font-bold ${compact ? 'text-sm' : 'text-base sm:text-lg'} leading-snug ${isCollapsed ? 'line-through text-gray-500' : 'text-black'} bg-white/80 rounded-lg px-2 py-1 border border-plum-200 focus:border-plum-600 outline-none w-full whitespace-pre-wrap" title="${isLockedInMeeting ? 'Nota preparata protetta in Adunanza' : 'Tocca per rinominare'}">${escapeHtml(note.title)}</div>
-
-                                <!-- Indicatore Pagina PDF collegata + comando "Vai alla pagina" -->
-                                <div class="flex flex-wrap items-center gap-1 text-[11px]">
-                                    ${isQuickNote ? `<span class="px-1.5 py-0.5 rounded-md bg-burgundy-100 border border-burgundy-300 text-burgundy-800 font-bold">Appunto rapido</span>` : ''}
-                                    <span class="px-2 py-0.5 rounded-md bg-plum-100 border border-plum-300 text-black font-bold flex items-center gap-1">
-                                        <i data-lucide="bookmark" class="w-3 h-3 text-burgundy-700"></i> ${formatPdfPagesLabel(pagesArr)}
+                    <div class="flex flex-col gap-1.5">
+                        <!-- Riga 1: Maniglia, Apri/Chiudi e comandi compatti -->
+                        <div class="flex flex-wrap items-center justify-between gap-1">
+                            <div class="flex items-center gap-1">
+                                ${canReorder ? `
+                                    <span class="cursor-grab active:cursor-grabbing text-plum-600 hover:text-black select-none shrink-0" title="Tieni premuto e trascina per riordinare">
+                                        <i data-lucide="grip-vertical" class="w-4 h-4"></i>
                                     </span>
-                                    ${pagesArr.map(pg => `
-                                        <button type="button" onclick="goToPdfPageFromNote('${note.id}', ${pg})" class="px-2 py-0.5 rounded-md bg-plum-200 hover:bg-plum-300 border border-plum-400 text-black font-bold flex items-center gap-0.5" title="Apri PDF a pagina ${pg}">
-                                            Vai alla pagina ${pg}
-                                        </button>
-                                    `).join('')}
-                                    ${!isLockedInMeeting ? `
-                                        <button type="button" onclick="promptEditNotePdfPages('${note.id}')" class="px-1.5 py-0.5 rounded-md bg-white hover:bg-plum-50 border border-plum-300 text-plum-900 font-semibold" title="Modifica pagine PDF collegate">
-                                            Cambia pag.
-                                        </button>
-                                    ` : ''}
-                                </div>
+                                ` : ''}
+                                <button type="button" onclick="toggleCustomNoteCollapse('${note.id}')" class="p-1 rounded-lg border ${isCollapsed ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-plum-50 border-plum-300 text-black'} shrink-0" title="${isCollapsed ? 'Apri nota' : 'Chiudi nota completata'}">
+                                    <i data-lucide="${isCollapsed ? 'chevron-right' : 'chevron-down'}" class="w-4 h-4"></i>
+                                </button>
+                                <button type="button" onclick="toggleCustomNoteCollapse('${note.id}')" class="px-2 py-0.5 rounded-lg border text-[11px] font-bold ${isCollapsed ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-white border-plum-300 text-black hover:bg-plum-50'}">
+                                    ${isCollapsed ? 'Apri' : 'Chiudi'}
+                                </button>
+                            </div>
 
-                                <div id="page-edit-box-${note.id}" class="hidden pt-1 flex items-center gap-1">
-                                    <input type="text" value="${escapeAttr(pagesArr.join(', '))}" placeholder="Es. 5 oppure 4, 5 (vuoto = nessuna)" class="w-44 rounded-lg border border-plum-300 bg-white px-2 py-0.5 text-xs text-black">
-                                    <button type="button" onclick="updateCustomNotePdfPages('${note.id}', this.previousElementSibling.value)" class="px-2 py-0.5 rounded-lg bg-plum-200 border border-plum-400 text-xs font-bold text-black">Salva</button>
-                                </div>
+                            <div class="no-print flex flex-wrap items-center gap-1">
+                                ${canReorder ? `
+                                    <button type="button" onclick="moveCustomNoteOrder('${note.id}', -1)" class="p-1 rounded-lg bg-white hover:bg-plum-100 border border-plum-300 text-black" title="Sposta su">
+                                        <i data-lucide="arrow-up" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                    <button type="button" onclick="moveCustomNoteOrder('${note.id}', 1)" class="p-1 rounded-lg bg-white hover:bg-plum-100 border border-plum-300 text-black" title="Sposta giù">
+                                        <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                ` : ''}
+                                ${!isCollapsed && !isLockedInMeeting && (note.type === 'keyboard' || note.type === 'both') ? `
+                                    <button type="button" onmousedown="event.preventDefault(); changeSingleNoteFontSize('${note.id}', -2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Riduci testo">A−</button>
+                                    <button type="button" onmousedown="event.preventDefault(); changeSingleNoteFontSize('${note.id}', 2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Ingrandisci testo">A+</button>
+                                    <button type="button" onmousedown="event.preventDefault(); execRichCmd('ed_cnote_${note.id}', 'bold')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Grassetto">B</button>
+                                ` : ''}
+                                ${!isLockedInMeeting ? (isDeleting ? `
+                                    <button type="button" onclick="confirmDeleteCustomNote('${note.id}')" class="px-2 py-0.5 rounded-lg bg-red-600 text-white text-[11px] font-bold">Conferma</button>
+                                    <button type="button" onclick="cancelDeleteCustomNote()" class="px-2 py-0.5 rounded-lg bg-plum-100 text-black text-[11px] font-bold">Annulla</button>
+                                ` : `
+                                    <button type="button" onclick="requestDeleteCustomNote('${note.id}')" class="p-1 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 text-red-700" title="Elimina nota">
+                                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                                    </button>
+                                `) : ''}
                             </div>
                         </div>
 
-                        <div class="no-print flex items-center gap-1 shrink-0 mt-0.5">
-                            ${canReorder ? `
-                                <button type="button" onclick="moveCustomNoteOrder('${note.id}', -1)" class="p-1 rounded-lg bg-white hover:bg-plum-100 border border-plum-300 text-black" title="Sposta su">
-                                    <i data-lucide="arrow-up" class="w-3.5 h-3.5"></i>
+                        <!-- Riga 2: Titolo a tutta larghezza (mai spezzato per lettera) -->
+                        <div contenteditable="${isLockedInMeeting ? 'false' : 'true'}" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"
+                            onblur="updateCustomNoteTitle('${note.id}', this.innerText)"
+                            onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}"
+                            style="user-select:text;-webkit-user-select:text;pointer-events:auto;overflow-wrap:break-word;word-break:normal;"
+                            class="font-serif font-bold ${compact ? 'text-base' : 'text-base sm:text-lg'} leading-snug ${isCollapsed ? 'line-through text-gray-500' : 'text-black'} bg-white/80 rounded-lg px-2 py-1 border border-plum-200 focus:border-plum-600 outline-none w-full whitespace-pre-wrap" title="${isLockedInMeeting ? 'Nota preparata protetta in Adunanza' : 'Tocca per rinominare'}">${escapeHtml(note.title)}</div>
+
+                        <!-- Riga 3: Badge Pagina PDF e comandi rapidi su una riga pulita -->
+                        <div class="flex flex-wrap items-center gap-1 text-[11px]">
+                            ${isQuickNote ? `<span class="px-1.5 py-0.5 rounded-md bg-burgundy-100 border border-burgundy-300 text-burgundy-800 font-bold">Appunto rapido</span>` : ''}
+                            <span class="px-2 py-0.5 rounded-md bg-plum-100 border border-plum-300 text-black font-bold inline-flex items-center gap-1 whitespace-nowrap">
+                                <i data-lucide="bookmark" class="w-3 h-3 text-burgundy-700 shrink-0"></i> ${formatPdfPagesLabel(pagesArr)}
+                            </span>
+                            ${pagesArr.map(pg => `
+                                <button type="button" onclick="goToPdfPageFromNote('${note.id}', ${pg})" class="px-2 py-0.5 rounded-md bg-plum-200 hover:bg-plum-300 border border-plum-400 text-black font-bold whitespace-nowrap" title="Apri PDF a pagina ${pg}">
+                                    Vai a pag. ${pg}
                                 </button>
-                                <button type="button" onclick="moveCustomNoteOrder('${note.id}', 1)" class="p-1 rounded-lg bg-white hover:bg-plum-100 border border-plum-300 text-black" title="Sposta giù">
-                                    <i data-lucide="arrow-down" class="w-3.5 h-3.5"></i>
+                            `).join('')}
+                            ${!isLockedInMeeting ? `
+                                <button type="button" onclick="promptEditNotePdfPages('${note.id}')" class="px-1.5 py-0.5 rounded-md bg-white hover:bg-plum-50 border border-plum-300 text-plum-900 font-semibold whitespace-nowrap" title="Modifica pagine PDF collegate">
+                                    Cambia pag.
                                 </button>
                             ` : ''}
-                            <button type="button" onclick="toggleCustomNoteCollapse('${note.id}')" class="px-2 py-0.5 rounded-lg border text-[11px] font-bold ${isCollapsed ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-white border-plum-300 text-black hover:bg-plum-50'}">
-                                ${isCollapsed ? 'Apri' : 'Chiudi'}
-                            </button>
-                            ${!isCollapsed && !isLockedInMeeting && (note.type === 'keyboard' || note.type === 'both') ? `
-                                <button type="button" onmousedown="event.preventDefault(); changeSingleNoteFontSize('${note.id}', -2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Riduci testo">A−</button>
-                                <button type="button" onmousedown="event.preventDefault(); changeSingleNoteFontSize('${note.id}', 2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Ingrandisci testo">A+</button>
-                                <button type="button" onmousedown="event.preventDefault(); execRichCmd('ed_cnote_${note.id}', 'bold')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Grassetto">B</button>
-                            ` : ''}
-                            ${!isLockedInMeeting ? (isDeleting ? `
-                                <button type="button" onclick="confirmDeleteCustomNote('${note.id}')" class="px-2 py-0.5 rounded-lg bg-red-600 text-white text-[11px] font-bold">Conferma</button>
-                                <button type="button" onclick="cancelDeleteCustomNote()" class="px-2 py-0.5 rounded-lg bg-plum-100 text-black text-[11px] font-bold">Annulla</button>
-                            ` : `
-                                <button type="button" onclick="requestDeleteCustomNote('${note.id}')" class="p-1 rounded-lg bg-red-50 hover:bg-red-100 border border-red-200 text-red-700" title="Elimina nota">
-                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                </button>
-                            `) : ''}
+                        </div>
+
+                        <div id="page-edit-box-${note.id}" class="hidden pt-1 flex items-center gap-1">
+                            <input type="text" value="${escapeAttr(pagesArr.join(', '))}" placeholder="Es. 5 oppure 4, 5" class="flex-1 min-w-0 rounded-lg border border-plum-300 bg-white px-2 py-0.5 text-xs text-black">
+                            <button type="button" onclick="updateCustomNotePdfPages('${note.id}', this.previousElementSibling.value)" class="px-2 py-0.5 rounded-lg bg-plum-200 border border-plum-400 text-xs font-bold text-black shrink-0">Salva</button>
                         </div>
                     </div>
 
