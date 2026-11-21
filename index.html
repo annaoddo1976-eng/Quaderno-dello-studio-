@@ -917,6 +917,21 @@
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
 
+        async function loadPdfDocumentSafe(arrayBuffer) {
+            if (!window.pdfjsLib) {
+                throw new Error('Libreria PDF.js non caricata');
+            }
+            // Clona il buffer per evitare che worker o trasferimenti lo svuotino/stacchino
+            const bytesCopy = new Uint8Array(arrayBuffer.slice(0));
+            try {
+                return await pdfjsLib.getDocument({ data: bytesCopy }).promise;
+            } catch (workerErr) {
+                console.warn('Caricamento PDF con worker fallito, riprovo senza worker:', workerErr);
+                const fallbackCopy = new Uint8Array(arrayBuffer.slice(0));
+                return await pdfjsLib.getDocument({ data: fallbackCopy, disableWorker: true }).promise;
+            }
+        }
+
         const BASE_SECTIONS = [
             { id: 'dashboard', label: 'Homepage', icon: 'home' },
             { id: 'torre', label: 'Torre di Guardia', icon: 'book-open' },
@@ -2722,7 +2737,7 @@
 
                 let numPages = 1;
                 if (window.pdfjsLib) {
-                    const doc = await pdfjsLib.getDocument({ data: buffer.slice(0) }).promise;
+                    const doc = await loadPdfDocumentSafe(buffer);
                     numPages = doc.numPages || 1;
                 }
 
@@ -2758,32 +2773,38 @@
         async function openPdfInWorkspace(pdfId) {
             const meta = state.pdfLibrary.find(p => p.id === pdfId);
             if (!meta) return;
-            const buffer = await getPdfBinaryFromDB(pdfId);
-            if (!buffer) {
-                showStudioToast('File PDF non trovato in memoria: reimportalo o ripristina da iCloud.');
-                return;
+            showStudioToast('Apertura PDF...');
+            try {
+                const buffer = await getPdfBinaryFromDB(pdfId);
+                if (!buffer) {
+                    showStudioToast('File PDF non trovato in memoria: reimportalo o ripristina da iCloud.');
+                    return;
+                }
+
+                activePdfMeta = meta;
+                if (!activePdfMeta.annotations) activePdfMeta.annotations = {};
+                if (!activePdfMeta.overlays) activePdfMeta.overlays = {};
+                if (typeof activePdfMeta.rotation !== 'number') activePdfMeta.rotation = state.defaultPdfRotation || 0;
+
+                activePdfInstance = await loadPdfDocumentSafe(buffer);
+                activePdfMeta.numPages = activePdfInstance.numPages;
+
+                document.getElementById('pdf-workspace-title').textContent = meta.name;
+                document.getElementById('pdf-total-pages').textContent = activePdfMeta.numPages;
+                document.getElementById('pdf-page-input').max = activePdfMeta.numPages;
+
+                const ws = document.getElementById('pdf-studio-workspace');
+                ws.classList.remove('hidden');
+                ws.classList.add('flex');
+
+                pdfAutoFitEnabled = true;
+                setPdfSplitRatio(state.pdfSplitPercent || 70);
+                setPdfAnnotTool('scroll');
+                await renderCurrentPdfPage(true);
+            } catch (err) {
+                console.error('Errore apertura PDF:', err);
+                showStudioToast('Errore durante l\'apertura del PDF. Prova a reimportarlo.');
             }
-
-            activePdfMeta = meta;
-            if (!activePdfMeta.annotations) activePdfMeta.annotations = {};
-            if (!activePdfMeta.overlays) activePdfMeta.overlays = {};
-            if (typeof activePdfMeta.rotation !== 'number') activePdfMeta.rotation = state.defaultPdfRotation || 0;
-
-            activePdfInstance = await pdfjsLib.getDocument({ data: buffer }).promise;
-            activePdfMeta.numPages = activePdfInstance.numPages;
-
-            document.getElementById('pdf-workspace-title').textContent = meta.name;
-            document.getElementById('pdf-total-pages').textContent = meta.numPages;
-            document.getElementById('pdf-page-input').max = meta.numPages;
-
-            const ws = document.getElementById('pdf-studio-workspace');
-            ws.classList.remove('hidden');
-            ws.classList.add('flex');
-
-            pdfAutoFitEnabled = true;
-            setPdfSplitRatio(state.pdfSplitPercent || 70);
-            setPdfAnnotTool('scroll');
-            await renderCurrentPdfPage(true);
         }
 
         function closePdfWorkspace() {
