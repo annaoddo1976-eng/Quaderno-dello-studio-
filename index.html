@@ -113,12 +113,17 @@
             word-wrap: break-word;
             color: #111827;
             background-color: #FFFFFF;
+            user-select: text !important;
+            -webkit-user-select: text !important;
+            touch-action: manipulation;
+            cursor: text;
         }
         .rich-editor:empty:before {
-            content: attr(data-placeholder);
-            color: #9A7C8E;
-            pointer-events: none;
-            display: block;
+        /* Modalità Solo Apple Pencil: blocca solo i fogli da disegno se necessario, lasciando sempre libera la scrittura con tastiera */
+        body.pencil-lock-active .rich-editor:focus {
+            pointer-events: auto !important;
+            user-select: text !important;
+            -webkit-user-select: text !important;
         }
         .rich-editor ul { list-style-type: disc; padding-left: 1.5rem; margin: 0.35rem 0; }
         .rich-editor ol { list-style-type: decimal; padding-left: 1.5rem; margin: 0.35rem 0; }
@@ -2271,8 +2276,9 @@
                             <button type="button" onclick="toggleCustomNoteCollapse('${note.id}')" class="p-1 rounded-lg border ${isCollapsed ? 'bg-emerald-100 border-emerald-400 text-emerald-900' : 'bg-plum-50 border-plum-300 text-black'} shrink-0" title="${isCollapsed ? 'Apri nota' : 'Chiudi nota completata'}">
                                 <i data-lucide="${isCollapsed ? 'chevron-right' : 'chevron-down'}" class="w-4 h-4"></i>
                             </button>
-                            <input type="text" value="${escapeAttr(note.title)}" oninput="updateCustomNoteTitle('${note.id}', this.value)"
-                                class="font-serif font-bold ${compact ? 'text-sm' : 'text-base sm:text-lg'} ${isCollapsed ? 'line-through text-gray-500' : 'text-black'} bg-transparent border-b border-transparent focus:border-plum-500 outline-none w-full truncate" title="Tocca per rinominare">
+                            <input type="text" value="${escapeAttr(note.title)}" onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()" oninput="updateCustomNoteTitle('${note.id}', this.value)"
+                                style="user-select:text;-webkit-user-select:text;pointer-events:auto;"
+                                class="font-serif font-bold ${compact ? 'text-sm' : 'text-base sm:text-lg'} ${isCollapsed ? 'line-through text-gray-500' : 'text-black'} bg-white/80 rounded-lg px-1.5 py-0.5 border border-plum-200 focus:border-plum-600 outline-none w-full" title="Tocca per rinominare">
                         </div>
 
                         <div class="no-print flex items-center gap-1 shrink-0">
@@ -2299,9 +2305,12 @@
                         ${note.type === 'keyboard' ? `
                             <div>
                                 ${renderRichTextToolbarHtml('ed_cnote_' + note.id, note.id)}
-                                <div id="ed_cnote_${note.id}" contenteditable="true" style="font-size:${noteFont}px;" oninput="updateCustomNoteHtml('${note.id}', this.innerHTML)"
-                                    data-placeholder="Scrivi qui i tuoi appunti..."
-                                    class="rich-editor rounded-xl border border-plum-200 bg-white p-2.5 text-black">${note.htmlContent || ''}</div>
+                                <div id="ed_cnote_${note.id}" contenteditable="true" style="font-size:${noteFont}px;user-select:text;-webkit-user-select:text;pointer-events:auto;"
+                                    onmousedown="event.stopPropagation()" ontouchstart="event.stopPropagation()"
+                                    onpaste="handleCleanEditorPaste(event, '${note.id}')"
+                                    oninput="updateCustomNoteHtml('${note.id}', this.innerHTML)"
+                                    data-placeholder="Tocca qui per scrivere o incollare i tuoi appunti..."
+                                    class="rich-editor rounded-xl border border-plum-300 bg-white p-2.5 text-black">${note.htmlContent || ''}</div>
                             </div>
                         ` : `
                             ${renderHandwritingPadHtml('cnote_' + note.id, note.paperType, compact ? 200 : note.padHeight, 'Foglio Penna / Apple Pencil')}
@@ -2445,33 +2454,48 @@
                 meta.numPages = activePdfInstance.numPages;
                 pdfAutoFitEnabled = true;
 
-                try {
-                    const p1 = await activePdfInstance.getPage(1);
-                    const nativeRot = ((p1.rotate || 0) % 360 + 360) % 360;
-                    if (nativeRot === 180 && meta.rotation === 0) {
-                        meta.rotation = 180;
-                        saveState();
-                    }
-                } catch (_) {}
-
                 document.getElementById('pdf-workspace-title').textContent = meta.name;
                 document.getElementById('pdf-total-pages').textContent = meta.numPages;
-                document.getElementById('pdf-page-input').value = meta.lastPage || 1;
-                document.getElementById('pdf-page-input').max = meta.numPages;
-
                 const ws = document.getElementById('pdf-studio-workspace');
                 ws.classList.remove('hidden');
                 ws.classList.add('flex');
 
-                pdfThumbsOpen = false;
-                const thumbsDrawer = document.getElementById('pdf-thumbs-drawer');
-                if (thumbsDrawer) thumbsDrawer.classList.add('hidden');
-
                 setPdfSplitRatio(state.pdfSplitPercent || 70);
+                setPdfAnnotTool('scroll');
                 renderPdfSideNotes();
                 await renderCurrentPdfPage(true);
             } catch (err) {
-                showStudioToast('Impossibile aprire questo documento PDF.');
+                console.error(err);
+                showStudioToast('Errore nell\'apertura del PDF.');
+            }
+        }
+
+        function updateCustomNoteHtml(noteId, html) {
+            const n = state.customNotes.find(x => x.id === noteId);
+            if (!n) return;
+            n.htmlContent = html;
+            saveState();
+        }
+
+        function handleCleanEditorPaste(event, noteId) {
+            event.stopPropagation();
+            const clipboard = event.clipboardData || window.clipboardData;
+            if (!clipboard) return;
+            const text = clipboard.getData('text/plain');
+            if (text !== undefined && text !== null) {
+                event.preventDefault();
+                if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
+                    document.execCommand('insertText', false, text);
+                } else {
+                    const sel = window.getSelection();
+                    if (sel && sel.rangeCount) {
+                        sel.deleteFromDocument();
+                        sel.getRangeAt(0).insertNode(document.createTextNode(text));
+                        sel.collapseToEnd();
+                    }
+                }
+                const ed = document.getElementById('ed_cnote_' + noteId);
+                if (ed) updateCustomNoteHtml(noteId, ed.innerHTML);
             }
         }
 
@@ -4678,6 +4702,9 @@
 
         window.addEventListener('DOMContentLoaded', () => {
             loadState();
+            // All'avvio assicurati che la scrittura con tastiera non resti mai bloccata
+            state.pencilLock = false;
+            document.body.classList.remove('pencil-lock-active');
             document.documentElement.style.setProperty('--app-font-size', state.fontSize + 'px');
             if (state.pencilLock) {
                 document.body.classList.add('pencil-lock-active');
