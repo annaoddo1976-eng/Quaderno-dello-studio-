@@ -4443,36 +4443,34 @@
                 }));
             }
 
-            // 2. Crea anche singole note già suddivise per paragrafo (visibili sia nella sessione sia accanto al PDF)
-            if (isInPdfWorkspace || targetSec !== 'torre') {
-                const existingNotes = getNotesForSection(targetSec);
-                let baseOrder = existingNotes.length > 0 ? Math.max(...existingNotes.map(n => n.sortOrder ?? 0)) + 10 : 0;
+            // 2. Crea sempre anche le singole note suddivise per paragrafo (visibili sia nella sezione sia accanto al PDF)
+            const existingNotes = getNotesForSection(targetSec);
+            let baseOrder = existingNotes.length > 0 ? Math.max(...existingNotes.map(n => n.sortOrder ?? 0)) + 10 : 0;
 
-                parsedItems.forEach((item, idx) => {
-                    const qHtml = item.question ? `<p><strong>Domanda:</strong> <em>${escapeHtml(item.question)}</em></p>` : '';
-                    const cHtml = item.commentLines.map(c => `<p>${escapeHtml(c)}</p>`).join('');
-                    state.customNotes.push({
-                        id: 'note_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5),
-                        section: targetSec,
-                        weekKey: state.currentWeekKey,
-                        pdfId: targetPdfId || null,
-                        pdfPages: currentPage ? [currentPage] : [],
-                        title: `Paragrafo ${item.num}${item.question ? ' – ' + item.question.slice(0, 48) : ''}`,
-                        type: 'keyboard',
-                        isQuickMeetingNote: false,
-                        sortOrder: baseOrder + (idx * 10),
-                        createdAt: new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' }),
-                        htmlContent: qHtml + cHtml,
-                        fontSize: 16,
-                        collapsed: false,
-                        images: [],
-                        paperType: 'lined',
-                        padHeight: 220,
-                        strokes: [],
-                        drawing: null
-                    });
+            parsedItems.forEach((item, idx) => {
+                const qHtml = item.question ? `<p><strong>Domanda:</strong> <em>${escapeHtml(item.question)}</em></p>` : '';
+                const cHtml = item.commentLines.map(c => `<p>${escapeHtml(c)}</p>`).join('');
+                state.customNotes.push({
+                    id: 'note_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5),
+                    section: targetSec,
+                    weekKey: state.currentWeekKey,
+                    pdfId: targetPdfId || null,
+                    pdfPages: currentPage ? [currentPage] : [],
+                    title: `Paragrafo ${item.num}${item.question ? ' – ' + item.question.slice(0, 48) : ''}`,
+                    type: 'keyboard',
+                    isQuickMeetingNote: false,
+                    sortOrder: baseOrder + (idx * 10),
+                    createdAt: new Date().toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' }),
+                    htmlContent: qHtml + cHtml,
+                    fontSize: 16,
+                    collapsed: false,
+                    images: [],
+                    paperType: 'lined',
+                    padHeight: 220,
+                    strokes: [],
+                    drawing: null
                 });
-            }
+            });
 
             saveState();
             closePastePrepModal();
@@ -4482,61 +4480,6 @@
                 renderPdfSideNotes();
             }
             showStudioToast(`Creati ${parsedItems.length} paragrafi/note pronti!`);
-        }
-
-        function closePastePrepModal() {
-            const m = document.getElementById('paste-prep-modal');
-            m.classList.add('hidden');
-            m.classList.remove('flex');
-        }
-
-        function processPastedPreparation() {
-            const raw = document.getElementById('paste-prep-textarea').value.trim();
-            if (!raw) return;
-            const wk = ensureWeekExists(state.currentWeekKey);
-            const blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
-            const parsed = [];
-
-            blocks.forEach((blk, i) => {
-                const lines = blk.split('\n').map(l => l.trim()).filter(Boolean);
-                let num = String(i + 1);
-                let question = '';
-                let commentLines = [];
-
-                lines.forEach(line => {
-                    const mNum = line.match(/^(?:par\.?|paragrafo)?\s*(\d+(?:\s*[-–]\s*\d+)?)\s*[:.)-]?\s*(.*)$/i);
-                    if (mNum && !question && commentLines.length === 0) {
-                        num = mNum[1];
-                        if (mNum[2]) question = mNum[2];
-                    } else if (/^(?:domanda|d)\s*[:.-]/i.test(line)) {
-                        question = line.replace(/^(?:domanda|d)\s*[:.-]\s*/i, '');
-                    } else if (/^(?:commento|risposta|r|c)\s*[:.-]/i.test(line)) {
-                        commentLines.push(line.replace(/^(?:commento|risposta|r|c)\s*[:.-]\s*/i, ''));
-                    } else if (!question && line.endsWith('?')) {
-                        question = line;
-                    } else {
-                        commentLines.push(line);
-                    }
-                });
-
-                parsed.push({
-                    id: 'p_' + Date.now() + '_' + i,
-                    num: num,
-                    question: question,
-                    commentHtml: commentLines.map(c => `<p>${escapeHtml(c)}</p>`).join(''),
-                    handRaised: false,
-                    collapsed: false,
-                    images: []
-                });
-            });
-
-            if (parsed.length > 0) {
-                wk.torre.paragraphs = parsed;
-                saveState();
-                closePastePrepModal();
-                renderActiveSection();
-                showStudioToast(`Creati ${parsed.length} paragrafi!`);
-            }
         }
 
         function renderStandardMeetingSection(main, wk, secKey) {
