@@ -2714,6 +2714,7 @@
         }
 
         async function deletePdfBinaryFromDB(id) {
+            delete inMemoryPdfBuffers[id];
             try {
                 const db = await openPdfDB();
                 return await new Promise((resolve) => {
@@ -2723,6 +2724,79 @@
                     tx.onerror = () => resolve();
                 });
             } catch (_) {}
+        }
+
+        async function deletePdfDocument(id) {
+            if (state.meetingMode) return;
+            state.pdfLibrary = state.pdfLibrary.filter(p => p.id !== id);
+            await deletePdfBinaryFromDB(id);
+            saveState();
+            renderActiveSection();
+            showStudioToast('PDF rimosso.');
+        }
+
+        async function openPdfInWorkspace(pdfId) {
+            const meta = state.pdfLibrary.find(p => p.id === pdfId);
+            if (!meta) {
+                showStudioToast('Documento PDF non trovato.');
+                return;
+            }
+            const buffer = await getPdfBinaryFromDB(pdfId);
+            if (!buffer) {
+                showStudioToast('Ricarica il file PDF usando "Importa PDF".');
+                return;
+            }
+
+            activePdfMeta = meta;
+            if (!activePdfMeta.annotations) activePdfMeta.annotations = {};
+            if (!activePdfMeta.overlays) activePdfMeta.overlays = {};
+
+            const ws = document.getElementById('pdf-studio-workspace');
+            const nativeFrame = document.getElementById('pdf-native-fallback-frame');
+            const pageWrapper = document.getElementById('pdf-page-wrapper');
+            document.getElementById('pdf-workspace-title').textContent = meta.name || 'Documento.pdf';
+
+            ws.classList.remove('hidden');
+            ws.classList.add('flex');
+
+            if (nativeFrame) {
+                nativeFrame.classList.add('hidden');
+                nativeFrame.src = 'about:blank';
+            }
+            if (pageWrapper) pageWrapper.classList.remove('hidden');
+
+            const leftPane = document.getElementById('pdf-left-pane');
+            const rightPane = document.getElementById('pdf-right-pane');
+            const resizer = document.getElementById('pdf-split-resizer');
+            if (!pdfNotesHidden && !state.pdfSingleCol && leftPane && rightPane) {
+                const p = state.pdfSplitPercent || 70;
+                leftPane.style.width = p + '%';
+                rightPane.style.width = (100 - p) + '%';
+                if (resizer) resizer.classList.remove('hidden');
+            }
+
+            try {
+                activePdfInstance = await loadPdfDocumentSafe(buffer);
+                meta.numPages = activePdfInstance.numPages || meta.numPages || 1;
+                document.getElementById('pdf-total-pages').textContent = meta.numPages;
+                pdfAutoFitEnabled = true;
+                setPdfAnnotTool(state.meetingMode ? 'scroll' : pdfAnnotTool);
+                await renderCurrentPdfPage(true);
+            } catch (err) {
+                console.warn('Apertura con fallback nativo browser:', err);
+                activePdfInstance = null;
+                document.getElementById('pdf-total-pages').textContent = meta.numPages || 1;
+                if (pageWrapper) pageWrapper.classList.add('hidden');
+                if (nativeFrame) {
+                    if (activeNativeBlobUrl) URL.revokeObjectURL(activeNativeBlobUrl);
+                    const blob = new Blob([buffer], { type: 'application/pdf' });
+                    activeNativeBlobUrl = URL.createObjectURL(blob);
+                    nativeFrame.src = activeNativeBlobUrl;
+                    nativeFrame.classList.remove('hidden');
+                }
+                renderPdfSideNotes();
+            }
+            if (window.lucide) lucide.createIcons();
         }
 
         function triggerPdfFilePicker(sectionId) {
