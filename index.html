@@ -2713,23 +2713,24 @@
             return null;
         }
 
-        async function getPdfBinaryFromDB(id) {
-            const db = await openPdfDB();
-            return new Promise((resolve, reject) => {
-                const tx = db.transaction(DB_STORE, 'readonly');
-                const req = tx.objectStore(DB_STORE).get(id);
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => reject(req.error);
-            });
+        async function deletePdfBinaryFromDB(id) {
+            try {
+                const db = await openPdfDB();
+                return await new Promise((resolve) => {
+                    const tx = db.transaction(DB_STORE, 'readwrite');
+                    tx.objectStore(DB_STORE).delete(id);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => resolve();
+                });
+            } catch (_) {}
         }
 
-        async function deletePdfBinaryFromDB(id) {
-            const db = await openPdfDB();
-            return new Promise((resolve) => {
-                const tx = db.transaction(DB_STORE, 'readwrite');
-                tx.objectStore(DB_STORE).delete(id);
-                tx.oncomplete = () => resolve();
-            });
+        function triggerPdfFilePicker(sectionId) {
+            const inp = document.getElementById('pdf-upload-input-' + sectionId);
+            if (inp) {
+                inp.value = '';
+                inp.click();
+            }
         }
 
         function renderPdfSessionStripHtml(sectionId) {
@@ -2762,11 +2763,13 @@
                             <span>Documenti PDF della sessione (${secPdfs.length})</span>
                         </span>
                         ${!state.meetingMode ? `
-                            <label class="px-3 py-1 rounded-xl bg-plum-200 hover:bg-plum-300 border border-plum-400 text-black text-xs font-bold cursor-pointer flex items-center gap-1">
-                                <i data-lucide="file-plus" class="w-3.5 h-3.5"></i>
-                                <span>Importa PDF</span>
-                                <input type="file" accept="application/pdf" onchange="handlePdfUpload(event, '${sectionId}')" class="hidden">
-                            </label>
+                            <div class="relative inline-flex items-center">
+                                <button type="button" onclick="triggerPdfFilePicker('${sectionId}')" class="px-3 py-1.5 rounded-xl bg-plum-200 hover:bg-plum-300 border border-plum-400 text-black text-xs font-bold cursor-pointer flex items-center gap-1">
+                                    <i data-lucide="file-plus" class="w-3.5 h-3.5"></i>
+                                    <span>Importa PDF</span>
+                                </button>
+                                <input id="pdf-upload-input-${sectionId}" type="file" accept="application/pdf,.pdf" onchange="handlePdfUpload(event, '${sectionId}')" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;">
+                            </div>
                         ` : ''}
                     </div>
                     ${secPdfs.length > 0 ? `<div class="grid grid-cols-1 md:grid-cols-2 gap-1.5">${listHtml}</div>` : ''}
@@ -2774,12 +2777,29 @@
             `;
         }
 
+        function readFileAsArrayBufferSafe(file) {
+            if (file && typeof file.arrayBuffer === 'function') {
+                return file.arrayBuffer();
+            }
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(reader.error || new Error('Errore lettura file'));
+                reader.readAsArrayBuffer(file);
+            });
+        }
+
         async function handlePdfUpload(event, sectionId) {
-            const file = event.target.files[0];
+            const input = event.target;
+            const file = input && input.files ? input.files[0] : null;
             if (!file) return;
             showStudioToast('Importazione PDF in corso...');
             try {
-                const buffer = await file.arrayBuffer();
+                const buffer = await readFileAsArrayBufferSafe(file);
+                if (!buffer || buffer.byteLength === 0) {
+                    showStudioToast('Il file PDF selezionato risulta vuoto.');
+                    return;
+                }
                 const id = 'pdf_' + Date.now();
                 await savePdfBinaryToDB(id, buffer);
 
@@ -2795,7 +2815,7 @@
                     id: id,
                     section: sectionId,
                     weekKey: state.currentWeekKey,
-                    name: file.name,
+                    name: file.name || 'Documento.pdf',
                     numPages: numPages,
                     lastPage: 1,
                     rotation: state.defaultPdfRotation || 0,
@@ -2807,74 +2827,9 @@
                 await openPdfInWorkspace(id);
             } catch (err) {
                 console.error(err);
-                showStudioToast('Impossibile leggere il file PDF selezionato.');
-            }
-            event.target.value = '';
-        }
-
-        async function deletePdfDocument(pdfId) {
-            delete inMemoryPdfBuffers[pdfId];
-            state.pdfLibrary = state.pdfLibrary.filter(p => p.id !== pdfId);
-            try { await deletePdfBinaryFromDB(pdfId); } catch (_) {}
-            saveState();
-            renderActiveSection();
-            showStudioToast('Documento PDF rimosso.');
-        }
-
-        async function openPdfInWorkspace(pdfId) {
-            const meta = state.pdfLibrary.find(p => p.id === pdfId);
-            if (!meta) return;
-            showStudioToast('Apertura PDF...');
-
-            const ws = document.getElementById('pdf-studio-workspace');
-            const wrapper = document.getElementById('pdf-page-wrapper');
-            const nativeFrame = document.getElementById('pdf-native-fallback-frame');
-
-            try {
-                const buffer = await getPdfBinaryFromDB(pdfId);
-                if (!buffer) {
-                    showStudioToast('Ricarica il file PDF dal pulsante "Importa PDF".');
-                    return;
-                }
-
-                activePdfMeta = meta;
-                if (!activePdfMeta.annotations) activePdfMeta.annotations = {};
-                if (!activePdfMeta.overlays) activePdfMeta.overlays = {};
-                if (typeof activePdfMeta.rotation !== 'number') activePdfMeta.rotation = state.defaultPdfRotation || 0;
-
-                document.getElementById('pdf-workspace-title').textContent = meta.name;
-                ws.classList.remove('hidden');
-                ws.classList.add('flex');
-                setPdfSplitRatio(state.pdfSplitPercent || 70);
-
-                try {
-                    activePdfInstance = await loadPdfDocumentSafe(buffer);
-                    activePdfMeta.numPages = activePdfInstance.numPages;
-                    document.getElementById('pdf-total-pages').textContent = activePdfMeta.numPages;
-                    document.getElementById('pdf-page-input').max = activePdfMeta.numPages;
-
-                    if (nativeFrame) nativeFrame.classList.add('hidden');
-                    if (wrapper) wrapper.classList.remove('hidden');
-
-                    pdfAutoFitEnabled = true;
-                    setPdfAnnotTool('scroll');
-                    await renderCurrentPdfPage(true);
-                } catch (pdfJsErr) {
-                    console.warn('Uso visualizzatore PDF nativo di riserva:', pdfJsErr);
-                    activePdfInstance = null;
-                    if (activeNativeBlobUrl) URL.revokeObjectURL(activeNativeBlobUrl);
-                    const blob = new Blob([buffer], { type: 'application/pdf' });
-                    activeNativeBlobUrl = URL.createObjectURL(blob);
-                    if (wrapper) wrapper.classList.add('hidden');
-                    if (nativeFrame) {
-                        nativeFrame.src = activeNativeBlobUrl;
-                        nativeFrame.classList.remove('hidden');
-                    }
-                    renderPdfSideNotes();
-                }
-            } catch (err) {
-                console.error('Errore apertura PDF:', err);
-                showStudioToast('Errore apertura PDF: ' + (err.message || 'riprova'));
+                showStudioToast('Errore caricamento PDF: ' + (err.message || 'riprova'));
+            } finally {
+                if (input) input.value = '';
             }
         }
 
