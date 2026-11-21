@@ -48,8 +48,17 @@
         }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        #pdf-workspace-overlay button,
+        #pdf-workspace-overlay label,
+        #pdf-workspace-overlay select,
+        #pdf-workspace-overlay input {
+            touch-action: manipulation;
+            -webkit-user-select: none;
+            user-select: none;
+            cursor: pointer;
+        }
         #pdf-resizer {
-            width: 14px;
+            width: 18px;
             cursor: col-resize;
             touch-action: none;
             user-select: none;
@@ -1095,17 +1104,39 @@
 
         function isStylusInput(e) {
             if (!pencilOnly) return true;
-            if (e.pointerType === 'mouse' || e.pointerType === 'pen') return true;
-            if (e.touchType === 'stylus') return true;
-            if (typeof e.pressure === 'number' && e.pressure > 0 && e.pressure !== 0.5 && e.pressure !== 1) return true;
-            if (e.touches && e.touches[0] && e.touches[0].touchType === 'stylus') return true;
-            return false;
+            if (e.pointerType === 'pen') return true;
+            if (e.pointerType === 'touch') {
+                return e.touchType === 'stylus' || (typeof e.pressure === 'number' && e.pressure > 0 && e.pressure !== 0.5 && e.pressure !== 1);
+            }
+            if (e.touches && e.touches.length > 0) {
+                const t = e.touches[0];
+                return t.touchType === 'stylus' || (typeof t.force === 'number' && t.force > 0 && t.force !== 1);
+            }
+            return e.pointerType === 'mouse';
         }
 
         function setupPdfAnnotCanvas() {
             const canvas = document.getElementById('pdf-annot-canvas');
             if (!canvas) return;
             canvas.style.pointerEvents = 'none';
+            canvas.style.touchAction = 'none';
+
+            // Su iPad/Safari impedisce alle dita di disegnare o far scorrere il canvas quando uno strumento penna è attivo
+            canvas.addEventListener('touchstart', (e) => {
+                if (pdfTool === 'none') return;
+                if (!isStylusInput(e)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', (e) => {
+                if (pdfTool === 'none') return;
+                if (!isStylusInput(e)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+            }, { passive: false });
 
             const getRelPos = (e) => {
                 const rect = canvas.getBoundingClientRect();
@@ -1118,8 +1149,16 @@
             };
 
             const startDraw = (e) => {
-                if (pdfTool === 'none' || !isStylusInput(e)) return;
+                if (pdfTool === 'none') return;
+                if (!isStylusInput(e)) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    return;
+                }
                 e.preventDefault();
+                if (e.pointerId !== undefined && canvas.setPointerCapture) {
+                    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+                }
                 isDrawingPdf = true;
                 const pos = getRelPos(e);
                 if (pdfTool === 'eraser') {
@@ -1136,6 +1175,10 @@
 
             const moveDraw = (e) => {
                 if (!isDrawingPdf || pdfTool === 'none') return;
+                if (!isStylusInput(e)) {
+                    e.preventDefault();
+                    return;
+                }
                 e.preventDefault();
                 const pos = getRelPos(e);
                 if (pdfTool === 'eraser') {
@@ -1148,9 +1191,12 @@
                 }
             };
 
-            const endDraw = () => {
+            const endDraw = (e) => {
                 if (!isDrawingPdf) return;
                 isDrawingPdf = false;
+                if (e && e.pointerId !== undefined && canvas.releasePointerCapture) {
+                    try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
+                }
                 if (currentStroke && currentStroke.points.length > 0) {
                     const s = getActiveSession();
                     if (!s.pdfAnnotations[activePdfPage]) s.pdfAnnotations[activePdfPage] = [];
@@ -1161,123 +1207,22 @@
                 redrawPdfAnnotations();
             };
 
-            canvas.addEventListener('pointerdown', startDraw);
-            canvas.addEventListener('pointermove', moveDraw);
-            window.addEventListener('pointerup', endDraw);
+            canvas.addEventListener('pointerdown', startDraw, { passive: false });
+            canvas.addEventListener('pointermove', moveDraw, { passive: false });
+            canvas.addEventListener('pointerup', endDraw);
+            canvas.addEventListener('pointercancel', endDraw);
         }
 
-        function eraseAtPoint(pos) {
-            const s = getActiveSession();
-            const list = s.pdfAnnotations[activePdfPage];
-            if (!list || list.length === 0) return;
-            const threshold = 0.03;
-            s.pdfAnnotations[activePdfPage] = list.filter(stroke =>
-                !stroke.points.some(pt => Math.hypot(pt.x - pos.x, pt.y - pos.y) < threshold)
-            );
-            saveState();
-            redrawPdfAnnotations();
-        }
-
-        function undoPdfStroke() {
-            const s = getActiveSession();
-            const list = s.pdfAnnotations[activePdfPage];
-            if (list && list.length > 0) {
-                list.pop();
-                saveState();
-                redrawPdfAnnotations();
-            }
-        }
-
-        function redrawPdfAnnotations(previewStroke = null) {
-            const canvas = document.getElementById('pdf-annot-canvas');
-            if (!canvas) return;
-            const dpr = Math.min(window.devicePixelRatio || 1, 3);
-            const cssW = canvas.width / dpr;
-            const cssH = canvas.height / dpr;
-            const ctx = canvas.getContext('2d');
-            ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            ctx.clearRect(0, 0, cssW, cssH);
-
-            const s = getActiveSession();
-            const strokes = [...(s.pdfAnnotations[activePdfPage] || [])];
-            if (previewStroke) strokes.push(previewStroke);
-
-            strokes.forEach(st => {
-                if (!st.points || st.points.length === 0) return;
-                ctx.save();
-                ctx.strokeStyle = st.color;
-                ctx.lineWidth = st.width;
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.beginPath();
-                ctx.moveTo(st.points[0].x * cssW, st.points[0].y * cssH);
-                for (let i = 1; i < st.points.length; i++) {
-                    ctx.lineTo(st.points[i].x * cssW, st.points[i].y * cssH);
-                }
-                ctx.stroke();
-                ctx.restore();
-            });
-        }
-
-        function addPdfOverlayImage(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            compressImageFile(file, 600, (dataUrl) => {
-                const s = getActiveSession();
-                if (!s.pdfImages[activePdfPage]) s.pdfImages[activePdfPage] = [];
-                s.pdfImages[activePdfPage].push({
-                    id: 'pimg_' + Date.now(),
-                    src: dataUrl,
-                    x: 15,
-                    y: 15,
-                    width: 30
-                });
-                saveState();
-                renderPdfOverlayImages();
-            });
-            event.target.value = '';
-        }
-
-        function renderPdfOverlayImages() {
-            const layer = document.getElementById('pdf-images-layer');
-            if (!layer) return;
-            const s = getActiveSession();
-            const imgs = s.pdfImages[activePdfPage] || [];
-            layer.innerHTML = imgs.map(im => `
-                <div class="overlay-img-box pointer-events-auto" style="left:${im.x}%; top:${im.y}%; width:${im.width}%;" data-pimg-id="${im.id}">
-                    <img src="${im.src}" class="w-full h-auto rounded-lg pointer-events-none">
-                    <button type="button" onclick="deletePdfOverlayImage('${im.id}')" class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-600 text-white text-xs font-bold">✕</button>
-                </div>
-            `).join('');
-
-            layer.querySelectorAll('.overlay-img-box').forEach(box => {
-                let dragging = false, startX = 0, startY = 0, origX = 0, origY = 0;
-                box.addEventListener('pointerdown', (e) => {
-                    if (e.target.tagName === 'BUTTON') return;
-                    dragging = true;
-                    startX = e.clientX;
-                    startY = e.clientY;
-                    origX = parseFloat(box.style.left);
-                    origY = parseFloat(box.style.top);
-                    box.setPointerCapture(e.pointerId);
-                });
-                box.addEventListener('pointermove', (e) => {
-                    if (!dragging) return;
-                    const parentRect = layer.getBoundingClientRect();
-                    const dx = ((e.clientX - startX) / parentRect.width) * 100;
-                    const dy = ((e.clientY - startY) / parentRect.height) * 100;
-                    box.style.left = Math.max(0, Math.min(80, origX + dx)) + '%';
-                    box.style.top = Math.max(0, Math.min(85, origY + dy)) + '%';
-                });
-                box.addEventListener('pointerup', () => {
-                    if (!dragging) return;
-                    dragging = false;
-                    const id = box.getAttribute('data-pimg-id');
-                    const item = imgs.find(x => x.id === id);
-                    if (item) {
-                        item.x = parseFloat(box.style.left);
-                        item.y = parseFloat(box.style.top);
-                        saveState();
+        function enablePencilClicksOnPdfToolbar() {
+            const overlay = document.getElementById('pdf-workspace-overlay');
+            if (!overlay) return;
+            overlay.querySelectorAll('button').forEach(btn => {
+                if (btn.dataset.pencilBound) return;
+                btn.dataset.pencilBound = '1';
+                btn.addEventListener('pointerdown', (e) => {
+                    if (e.pointerType === 'pen' || e.touchType === 'stylus') {
+                        e.preventDefault();
+                        btn.click();
                     }
                 });
             });
@@ -1363,9 +1308,14 @@
                 e.preventDefault();
                 isResizing = true;
                 resizer.classList.add('dragging');
+                if (e.pointerId !== undefined && resizer.setPointerCapture) {
+                    try { resizer.setPointerCapture(e.pointerId); } catch (_) {}
+                }
                 if (fallbackFrame) fallbackFrame.style.pointerEvents = 'none';
             });
 
+            resizer.addEventListener('pointermove', onMove);
+            resizer.addEventListener('pointerup', onUp);
             window.addEventListener('pointermove', onMove);
             window.addEventListener('pointerup', onUp);
         }
@@ -1773,6 +1723,7 @@
             loadState();
             setupPdfAnnotCanvas();
             setupPdfResizer();
+            enablePencilClicksOnPdfToolbar();
             renderApp();
         });
     </script>
