@@ -4,2303 +4,1544 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
     <title>Quaderno per lo studio</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: { sans: ['Inter', 'sans-serif'] },
-                    colors: {
-                        ivory: { 50: '#FDFBF7', 100: '#F8F4EC', 200: '#EFE8DA', 300: '#E2D6C1' },
-                        plum: { 50: '#FAF5F8', 100: '#F3E8EF', 200: '#E4CDDC', 300: '#CE9FC0', 500: '#9B4D82', 700: '#6D2E5B', 800: '#532045', 900: '#3B1531' }
-                    }
-                }
-            }
-        }
-    </script>
     <style>
-        :root { --study-font-size: 16px; }
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        * { box-sizing: border-box; }
         body {
-            background-color: #FDFBF7;
-            color: #18181B;
             font-family: 'Inter', sans-serif;
+            background-color: #fbf9fa;
+            color: #261822;
             margin: 0;
             padding: 0;
+            -webkit-tap-highlight-color: transparent;
         }
-        .note-editor-area {
-            width: 100%;
-            min-height: 110px;
-            background: #FFFFFF;
-            border: 1.5px solid #E4CDDC;
-            border-radius: 12px;
-            padding: 12px 14px;
-            line-height: 1.6;
+        .plum-primary {
+            background-color: #6b2d5c;
+            color: #ffffff;
+        }
+        .plum-primary:hover {
+            background-color: #58234b;
+        }
+        .plum-soft {
+            background-color: #f6eef4;
+            color: #6b2d5c;
+        }
+        .plum-border {
+            border-color: #eadbe6;
+        }
+        .note-editor {
+            min-height: 90px;
             outline: none;
+            line-height: 1.6;
+            word-wrap: break-word;
             white-space: pre-wrap;
-            word-break: break-word;
-            -webkit-user-select: text;
-            user-select: text;
         }
-        .note-editor-area:focus {
-            border-color: #6D2E5B;
-            box-shadow: 0 0 0 3px rgba(109, 46, 91, 0.12);
-        }
-        .note-editor-area:empty:before {
+        .note-editor:empty:before {
             content: attr(data-placeholder);
-            color: #9CA3AF;
+            color: #9e8a98;
             pointer-events: none;
-        }
-        .pencil-canvas {
             display: block;
-            width: 100%;
-            background-color: #FFFFFF;
-            background-image: linear-gradient(to bottom, transparent 27px, #F3E8EF 28px);
-            background-size: 100% 28px;
-            border: 1.5px solid #E4CDDC;
-            border-radius: 12px;
-            touch-action: none;
-            cursor: crosshair;
         }
-        .meeting-mode-active .prep-only {
-            display: none !important;
-        }
-        #pdf-workspace-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 60;
-            background: #FDFBF7;
-            display: none;
-            flex-direction: column;
-        }
-        #pdf-workspace-overlay.open {
-            display: flex;
-        }
-        #pdf-split-container.single-col-layout {
-            flex-direction: column !important;
-        }
-        #pdf-split-container.single-col-layout #pdf-left-pane {
-            width: 100% !important;
-            height: 55% !important;
-        }
-        #pdf-split-container.single-col-layout #pdf-right-pane {
-            width: 100% !important;
-            height: 45% !important;
-            border-left: none !important;
-            border-top: 2px solid #E4CDDC !important;
-        }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         #pdf-resizer {
+            width: 14px;
+            cursor: col-resize;
             touch-action: none;
             user-select: none;
-            -webkit-user-select: none;
+            background: #eadbe6;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background 0.15s;
         }
-        .pdf-scroll-locked {
-            overflow: hidden !important;
-            touch-action: none !important;
+        #pdf-resizer:hover, #pdf-resizer.dragging {
+            background: #6b2d5c;
+        }
+        .overlay-img-box {
+            position: absolute;
+            border: 2px dashed #6b2d5c;
+            border-radius: 10px;
+            touch-action: none;
+            user-select: none;
+            cursor: move;
+            background: rgba(255,255,255,0.1);
         }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
 
-    <!-- INTESTAZIONE PRINCIPALE PULITA -->
-    <header class="sticky top-0 z-40 bg-ivory-50/95 backdrop-blur border-b border-plum-200 px-3 sm:px-6 py-2.5">
-        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-2.5">
-                <div class="w-9 h-9 rounded-xl bg-plum-100 border border-plum-300 flex items-center justify-center text-plum-800">
-                    <i data-lucide="heart" class="w-5 h-5 fill-plum-700 text-plum-700"></i>
+    <!-- BARRA SUPERIORE IDENTICA AL DESIGN ORIGINALE -->
+    <header class="sticky top-0 z-30 bg-white border-b plum-border px-4 sm:px-6 py-3">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            <!-- Logo e Titolo -->
+            <div class="flex items-center gap-3 cursor-pointer" onclick="goHome()">
+                <div class="w-10 h-10 rounded-2xl plum-soft border plum-border flex items-center justify-center text-[#6b2d5c]">
+                    <i data-lucide="heart" class="w-5 h-5 fill-[#6b2d5c]"></i>
                 </div>
                 <div>
-                    <h1 class="text-base sm:text-lg font-extrabold text-plum-900 leading-tight">Quaderno per lo studio</h1>
-                    <p id="header-week-label" class="text-xs text-plum-700 font-medium"></p>
+                    <h1 class="text-base sm:text-lg font-extrabold text-[#261822] leading-tight">Quaderno per lo studio</h1>
+                    <p id="header-week-label" class="text-xs font-medium text-[#7c6575]">Settimana del 2026-11-16</p>
                 </div>
             </div>
 
-            <!-- Controlli essenziali -->
+            <!-- Controlli Destra: Selettore Settimana, Preparazione/Adunanza, Salvato, Esporta/Importa -->
             <div class="flex flex-wrap items-center gap-2">
-                <!-- Cambio Settimana -->
-                <div class="flex items-center bg-white border border-plum-300 rounded-xl px-1.5 py-1">
-                    <button type="button" onclick="changeWeek(-1)" class="p-1 hover:bg-plum-100 rounded-lg" title="Settimana precedente">
+                <!-- Selettore Settimana -->
+                <div class="flex items-center bg-white border plum-border rounded-full px-2 py-1 text-xs font-semibold text-[#3d2937]">
+                    <button type="button" onclick="changeWeekOffset(-1)" class="p-1.5 rounded-full hover:bg-[#f6eef4]" aria-label="Settimana precedente">
                         <i data-lucide="chevron-left" class="w-4 h-4"></i>
                     </button>
-                    <span id="week-short-label" class="px-2 text-xs font-bold text-plum-900">Questa settimana</span>
-                    <button type="button" onclick="changeWeek(1)" class="p-1 hover:bg-plum-100 rounded-lg" title="Settimana successiva">
+                    <span id="week-selector-text" class="px-2.5 select-none">Questa settimana</span>
+                    <button type="button" onclick="changeWeekOffset(1)" class="p-1.5 rounded-full hover:bg-[#f6eef4]" aria-label="Settimana successiva">
                         <i data-lucide="chevron-right" class="w-4 h-4"></i>
                     </button>
                 </div>
 
-                <!-- Modalità Preparazione / Adunanza -->
-                <button type="button" id="btn-meeting-mode" onclick="toggleMeetingMode()" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white border border-plum-300 text-xs font-bold text-plum-900 hover:bg-plum-100">
-                    <i data-lucide="book-open-check" class="w-4 h-4"></i>
-                    <span id="label-meeting-mode">Preparazione</span>
+                <!-- Pulsante Modalità Preparazione / Adunanza -->
+                <button type="button" id="btn-toggle-study-mode" onclick="toggleStudyMode()"
+                    class="flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border plum-border text-xs font-bold text-[#3d2937] hover:bg-[#f6eef4] transition">
+                    <i data-lucide="book-open" class="w-4 h-4 text-[#6b2d5c]"></i>
+                    <span id="study-mode-label">Preparazione</span>
                 </button>
 
-                <!-- Indicatore salvataggio -->
-                <span id="save-status-pill" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold">
-                    <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Salvato
+                <!-- Stato Salvato -->
+                <span id="save-status-badge" class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+                    <span>Salvato</span>
                 </span>
 
-                <!-- Backup / Esporta dati -->
-                <button type="button" onclick="exportBackupJson()" class="p-2 rounded-xl bg-white border border-plum-300 text-plum-900 hover:bg-plum-100" title="Esporta backup quaderno">
+                <!-- Icone Esporta e Importa -->
+                <button type="button" onclick="exportBackup()" title="Esporta Backup" class="w-9 h-9 rounded-full bg-white border plum-border flex items-center justify-center text-[#4a3343] hover:bg-[#f6eef4]">
                     <i data-lucide="download" class="w-4 h-4"></i>
                 </button>
-                <label class="p-2 rounded-xl bg-white border border-plum-300 text-plum-900 hover:bg-plum-100 cursor-pointer" title="Importa backup quaderno">
+                <label title="Importa Backup" class="w-9 h-9 rounded-full bg-white border plum-border flex items-center justify-center text-[#4a3343] hover:bg-[#f6eef4] cursor-pointer">
                     <i data-lucide="upload" class="w-4 h-4"></i>
-                    <input type="file" accept=".json" onchange="importBackupJson(event)" class="hidden">
+                    <input type="file" accept=".json" onchange="importBackup(event)" class="hidden">
                 </label>
             </div>
         </div>
 
-        <!-- Barra Navigazione Sezioni -->
-        <nav id="main-nav-bar" class="max-w-7xl mx-auto mt-2.5 flex items-center gap-1.5 overflow-x-auto pb-1"></nav>
+        <!-- Barra Pillole Sessioni -->
+        <div id="sessions-nav-bar" class="max-w-7xl mx-auto mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5"></div>
     </header>
 
     <!-- CONTENUTO PRINCIPALE -->
-    <main id="main-content" class="max-w-7xl w-full mx-auto flex-1 px-3 sm:px-6 py-5"></main>
+    <main id="main-content" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6"></main>
 
-    <!-- SPAZIO DI LAVORO PDF + NOTE AFFIANCATE -->
-    <div id="pdf-workspace-overlay">
-        <!-- Barra superiore lettore PDF -->
-        <div class="bg-ivory-100 border-b border-plum-200 px-3 py-2 flex flex-wrap items-center justify-between gap-2">
-            <div class="flex items-center gap-2 min-w-0">
-                <button type="button" onclick="closePdfWorkspace()" class="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white border border-plum-300 text-xs font-bold text-plum-900 hover:bg-plum-100">
-                    <i data-lucide="arrow-left" class="w-4 h-4"></i> Chiudi
-                </button>
-                <span id="pdf-active-title" class="text-xs sm:text-sm font-bold text-plum-900 truncate max-w-[180px] sm:max-w-xs">Documento PDF</span>
-            </div>
-
-            <!-- Controlli Pagina, Zoom e Layout -->
-            <div class="flex flex-wrap items-center gap-1.5">
-                <div class="flex items-center bg-white border border-plum-300 rounded-xl px-1.5 py-0.5 text-xs font-bold">
-                    <button type="button" onclick="pdfChangePage(-1)" class="p-1 hover:bg-plum-100 rounded-lg" title="Pagina precedente"><i data-lucide="chevron-left" class="w-4 h-4"></i></button>
-                    <span class="px-1.5 flex items-center gap-1">Pag. <input id="pdf-page-input" type="number" min="1" value="1" onchange="pdfGoToPage(this.value)" onkeydown="if(event.key==='Enter'){pdfGoToPage(this.value);this.blur();}" class="w-11 text-center border border-plum-200 rounded-md py-0.5 text-xs font-extrabold text-plum-900 bg-ivory-50 outline-none focus:border-plum-600"> / <span id="pdf-page-total">1</span></span>
-                    <button type="button" onclick="pdfChangePage(1)" class="p-1 hover:bg-plum-100 rounded-lg" title="Pagina successiva"><i data-lucide="chevron-right" class="w-4 h-4"></i></button>
-                </div>
-
-                <div class="flex items-center bg-white border border-plum-300 rounded-xl px-1.5 py-0.5 text-xs font-bold">
-                    <button type="button" onclick="pdfChangeZoom(-0.15)" class="px-1.5 py-0.5 hover:bg-plum-100 rounded">−</button>
-                    <span id="pdf-zoom-label" class="px-1.5">100%</span>
-                    <button type="button" onclick="pdfChangeZoom(0.15)" class="px-1.5 py-0.5 hover:bg-plum-100 rounded">+</button>
-                </div>
-
-                <button type="button" onclick="togglePdfSingleColumnLayout()" class="px-2.5 py-1.5 rounded-xl bg-white border border-plum-300 text-xs font-bold text-plum-900 hover:bg-plum-100">
-                    <span id="label-pdf-col-layout">2 Col</span>
-                </button>
-
-                <button type="button" id="btn-pdf-scriptures" onclick="togglePdfScripturesDrawer()" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-plum-100 border border-plum-300 text-xs font-bold text-plum-900 hover:bg-plum-200">
-                    <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
-                    <span>Scritture (<span id="pdf-scriptures-count">0</span>)</span>
-                </button>
-
-                <button type="button" id="btn-pdf-meeting-mode" onclick="toggleMeetingMode()" class="px-2.5 py-1.5 rounded-xl bg-white border border-plum-300 text-xs font-bold text-plum-900 hover:bg-plum-100">
-                    <span id="label-pdf-meeting-mode">Preparazione</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Pannello a comparsa rapida delle Scritture dentro il lettore PDF -->
-        <div id="pdf-scriptures-drawer" class="hidden bg-plum-50 border-b border-plum-300 px-3 py-3 max-h-[45vh] overflow-y-auto space-y-2.5">
-            <div class="flex flex-wrap items-center justify-between gap-2">
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-extrabold text-plum-900">Scritture della sessione</span>
-                    <button type="button" id="btn-scr-filter-toggle" onclick="togglePdfScripturesFilter()" class="px-2 py-1 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-plum-900 hover:bg-plum-100">
-                        Mostra tutte
-                    </button>
-                </div>
-                <div class="flex items-center gap-1.5">
-                    <button type="button" onclick="changeScriptureFontSize(-2)" class="px-2 py-1 rounded-lg bg-white border border-plum-300 text-xs font-extrabold">A−</button>
-                    <button type="button" onclick="changeScriptureFontSize(2)" class="px-2 py-1 rounded-lg bg-white border border-plum-300 text-xs font-extrabold">A+</button>
-                    <button type="button" onclick="openScriptureModal(true)" class="px-2.5 py-1 rounded-lg bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">+ Aggiungi Scrittura</button>
-                    <button type="button" onclick="togglePdfScripturesDrawer(false)" class="p-1 rounded-lg bg-white border border-plum-300 text-plum-900">
-                        <i data-lucide="x" class="w-4 h-4"></i>
-                    </button>
-                </div>
-            </div>
-            <div id="pdf-scriptures-list" class="grid grid-cols-1 md:grid-cols-2 gap-2"></div>
-        </div>
-
-        <!-- Barra strumenti Apple Pencil sul PDF (nascosta in Adunanza) -->
-        <div id="pdf-annot-toolbar" class="prep-only bg-white border-b border-plum-200 px-3 py-1.5 flex flex-wrap items-center gap-1.5 text-xs font-bold">
-            <button type="button" id="tool-pdf-scroll" onclick="setPdfAnnotTool('scroll')" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-plum-100 text-plum-900">Sfoglia</button>
-            <button type="button" id="tool-pdf-pen" onclick="setPdfAnnotTool('pen')" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Penna</button>
-            <button type="button" id="tool-pdf-highlight" onclick="setPdfAnnotTool('highlight')" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Evidenzia</button>
-
-            <!-- 3 colori evidenziatore -->
-            <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-xl bg-ivory-100 border border-plum-200" title="Colore evidenziatore">
-                <button type="button" id="hl-color-yellow" onclick="setPdfHighlightColor('yellow')" class="w-5 h-5 rounded-full bg-yellow-300 border-2 border-plum-900" title="Evidenziatore Giallo"></button>
-                <button type="button" id="hl-color-green" onclick="setPdfHighlightColor('green')" class="w-5 h-5 rounded-full bg-emerald-300 border border-plum-400" title="Evidenziatore Verde"></button>
-                <button type="button" id="hl-color-pink" onclick="setPdfHighlightColor('pink')" class="w-5 h-5 rounded-full bg-pink-300 border border-plum-400" title="Evidenziatore Rosa"></button>
-            </div>
-
-            <!-- Scelta spessore tratto -->
-            <div class="flex items-center gap-1 px-1.5 py-0.5 rounded-xl bg-ivory-100 border border-plum-200" title="Spessore penna ed evidenziatore">
-                <button type="button" id="stroke-size-thin" onclick="setPdfStrokeSize('thin')" class="px-1.5 py-0.5 rounded-lg bg-white text-plum-900 text-[11px]">Sottile</button>
-                <button type="button" id="stroke-size-medium" onclick="setPdfStrokeSize('medium')" class="px-1.5 py-0.5 rounded-lg bg-plum-700 text-white text-[11px]">Medio</button>
-                <button type="button" id="stroke-size-thick" onclick="setPdfStrokeSize('thick')" class="px-1.5 py-0.5 rounded-lg bg-white text-plum-900 text-[11px]">Largo</button>
-            </div>
-
-            <button type="button" id="tool-pdf-eraser" onclick="setPdfAnnotTool('eraser')" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Gomma</button>
-            <button type="button" onclick="pdfUndoStroke()" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-white text-plum-900">Annulla</button>
-            <button type="button" id="btn-pdf-pencil-only" onclick="togglePdfPencilOnly()" class="px-2.5 py-1 rounded-xl border border-plum-300 bg-plum-200 text-plum-900" title="Ignora le dita e scrive solo con Apple Pencil">Solo Apple Pencil ✓</button>
-            <label class="px-2.5 py-1 rounded-xl border border-plum-300 bg-plum-50 text-plum-900 hover:bg-plum-100 cursor-pointer">
-                + Foto PDF
-                <input type="file" accept="image/*" onchange="handlePdfOverlayImageUpload(event)" class="hidden">
-            </label>
-        </div>
-
-        <!-- Area divisa: PDF a sinistra (70%), Note a destra (30%) -->
-        <div id="pdf-split-container" class="flex-1 flex flex-row min-h-0 overflow-hidden">
-            <!-- Pannello Sinistro: PDF -->
-            <div id="pdf-left-pane" style="flex: 0 0 70%; width: 70%; min-width: 0;" class="h-full overflow-auto bg-ivory-200/70 flex justify-center items-start p-3">
-                <div id="pdf-canvas-wrapper" class="relative bg-white shadow-md rounded-lg overflow-hidden">
-                    <canvas id="pdf-render-canvas" class="block"></canvas>
-                    <canvas id="pdf-annot-canvas" class="absolute inset-0 w-full h-full"></canvas>
-                    <div id="pdf-images-overlay-layer" class="absolute inset-0 pointer-events-none"></div>
-                </div>
-                <div id="pdf-native-container" class="hidden w-full h-full"></div>
-            </div>
-
-            <!-- Barra divisoria trascinabile -->
-            <div id="pdf-resizer" class="w-4 bg-plum-200 hover:bg-plum-400 active:bg-plum-600 cursor-col-resize shrink-0 flex items-center justify-center z-10" title="Trascina per allargare o stringere le note">
-                <div class="w-1.5 h-12 rounded-full bg-plum-700/80 pointer-events-none"></div>
-            </div>
-
-            <!-- Pannello Destro: Note collegate -->
-            <div id="pdf-right-pane" style="flex: 1 1 30%; width: 30%; min-width: 0;" class="h-full overflow-y-auto bg-ivory-50 border-l border-plum-200 p-3 flex flex-col gap-3">
-                <div class="bg-white border border-plum-200 rounded-2xl p-3 space-y-2.5">
-                    <div class="flex items-center justify-between gap-2">
-                        <div>
-                            <h3 class="text-sm font-extrabold text-plum-900" id="pdf-notes-heading">Note della pagina 1</h3>
-                            <p class="text-[11px] text-plum-700">Collegate automaticamente alla pagina</p>
-                        </div>
-                    </div>
-
-                    <!-- Pulsanti aggiunta nota -->
-                    <div class="flex flex-wrap gap-1.5">
-                        <button type="button" onclick="addCustomNote(true, 'text')" class="prep-only flex-1 px-2.5 py-1.5 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">+ Nota</button>
-                        <button type="button" onclick="addCustomNote(true, 'pencil')" class="prep-only flex-1 px-2.5 py-1.5 rounded-xl bg-plum-100 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-200">+ Pencil</button>
-                        <button type="button" onclick="openPastePrepModal(true)" class="prep-only px-2.5 py-1.5 rounded-xl bg-white border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-100">Incolla Prep.</button>
-                        <button type="button" id="btn-pdf-quick-note" onclick="addQuickMeetingNote(true)" class="hidden w-full px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700">+ Appunto rapido</button>
-                    </div>
-
-                    <!-- Filtro Note della pagina / Tutte le note -->
-                    <div class="grid grid-cols-2 bg-ivory-100 p-1 rounded-xl border border-plum-200 text-xs font-bold">
-                        <button type="button" id="filter-page-notes" onclick="setPdfNotesFilterMode('page')" class="py-1.5 rounded-lg bg-plum-200 text-plum-900">Note della pagina</button>
-                        <button type="button" id="filter-all-notes" onclick="setPdfNotesFilterMode('all')" class="py-1.5 rounded-lg text-plum-700">Tutte le note</button>
-                    </div>
-                </div>
-
-                <!-- Elenco delle note nel pannello PDF -->
-                <div id="pdf-side-notes-list" class="space-y-3 pb-10"></div>
+    <!-- FINESTRA MODAL: NUOVA SESSIONE / RINOMINA SESSIONE -->
+    <div id="session-modal" class="fixed inset-0 z-[80] hidden bg-[#261822]/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl border plum-border max-w-md w-full p-6 shadow-2xl space-y-4">
+            <h3 id="session-modal-title" class="text-xl font-extrabold text-[#261822]">Nuova Sessione</h3>
+            <input type="text" id="session-modal-input" placeholder="Es. Assemblea, Pionieri..." class="w-full border plum-border rounded-2xl px-4 py-3 text-base focus:outline-none focus:border-[#6b2d5c]">
+            <div class="flex justify-end gap-2 pt-2">
+                <button type="button" onclick="closeSessionModal()" class="px-4 py-2.5 rounded-xl bg-[#f6eef4] text-[#6b2d5c] font-semibold">Annulla</button>
+                <button type="button" onclick="confirmSessionModal()" class="px-5 py-2.5 rounded-xl plum-primary font-bold">Salva</button>
             </div>
         </div>
     </div>
 
-    <!-- MODALE INCOLLA PREPARAZIONE (SUDDIVISIONE AUTOMATICA PARAGRAFI) -->
-    <div id="paste-prep-modal" class="fixed inset-0 z-[80] bg-black/50 hidden items-center justify-center p-4">
-        <div class="bg-white border border-plum-300 rounded-2xl max-w-2xl w-full p-5 space-y-4 shadow-xl">
+    <!-- FINESTRA MODAL: INCOLLA PREPARAZIONE -->
+    <div id="paste-prep-modal" class="fixed inset-0 z-[85] hidden bg-[#261822]/50 backdrop-blur-xs flex items-center justify-center p-4">
+        <div class="bg-white rounded-3xl border plum-border max-w-2xl w-full p-6 shadow-2xl space-y-4">
             <div class="flex items-center justify-between">
-                <h3 class="text-lg font-extrabold text-plum-900">Incolla Preparazione (Divide in paragrafi)</h3>
-                <button type="button" onclick="closePastePrepModal()" class="p-1.5 rounded-xl hover:bg-plum-100">
-                    <i data-lucide="x" class="w-5 h-5"></i>
+                <h3 class="text-xl font-extrabold text-[#261822]">📋 Incolla Preparazione</h3>
+                <button type="button" onclick="closePastePrepModal()" class="p-2 rounded-lg text-[#7c6575] hover:bg-[#f6eef4]">✕</button>
+            </div>
+            <p class="text-sm text-[#7c6575]">Incolla qui tutta la tua preparazione: verrà divisa automaticamente in singole note numerate per ogni paragrafo.</p>
+            <textarea id="paste-prep-textarea" rows="9" placeholder="Incolla qui i paragrafi della tua preparazione..." class="w-full border plum-border rounded-2xl p-4 text-base focus:outline-none focus:border-[#6b2d5c]"></textarea>
+            <p id="paste-prep-error" class="hidden text-sm font-semibold text-rose-600">Incolla o scrivi prima del testo nel riquadro qui sopra.</p>
+            <div class="flex flex-wrap justify-between items-center gap-2 pt-2">
+                <button type="button" onclick="pasteFromClipboardToPrep()" class="px-4 py-2.5 rounded-xl plum-soft font-semibold text-sm">
+                    Incolla dagli appunti
                 </button>
-            </div>
-            <div class="flex flex-wrap items-center justify-between gap-2">
-                <p class="text-xs text-plum-700">Tocca il riquadro qui sotto, tieni premuto e scegli <strong>Incolla</strong> (oppure usa il tasto accanto), poi premi <strong>Crea Paragrafi</strong>.</p>
-                <button type="button" onclick="pasteFromClipboardToPrep()" class="px-3 py-1.5 rounded-xl bg-plum-100 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-200">Incolla dagli appunti</button>
-            </div>
-            <textarea id="paste-prep-textarea" rows="8" placeholder="Tocca qui dentro e fai Incolla della tua preparazione..." class="w-full border-2 border-plum-300 rounded-xl p-3 text-sm outline-none focus:border-plum-700 bg-ivory-50"></textarea>
-            <div class="flex items-center justify-between gap-2">
-                <span id="paste-prep-feedback" class="text-xs font-bold text-rose-700"></span>
                 <div class="flex gap-2">
-                    <button type="button" onclick="closePastePrepModal()" class="px-4 py-2 rounded-xl border border-plum-300 text-xs font-bold">Annulla</button>
-                    <button type="button" onclick="processPastedPreparation()" class="px-4 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">Crea Paragrafi</button>
+                    <button type="button" onclick="closePastePrepModal()" class="px-4 py-2.5 rounded-xl bg-slate-100 text-slate-700 font-semibold">Annulla</button>
+                    <button type="button" onclick="processPastedPreparation()" class="px-5 py-2.5 rounded-xl plum-primary font-bold">Crea Paragrafi</button>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- MODALE AGGIUNGI / RINOMINA SESSIONE -->
-    <div id="session-modal" class="fixed inset-0 z-[80] bg-black/50 hidden items-center justify-center p-4">
-        <div class="bg-white border border-plum-300 rounded-2xl max-w-md w-full p-5 space-y-4 shadow-xl">
-            <div class="flex items-center justify-between">
-                <h3 id="session-modal-title" class="text-lg font-extrabold text-plum-900">Nuova Sessione</h3>
-                <button type="button" onclick="closeSessionModal()" class="p-1.5 rounded-xl hover:bg-plum-100">
-                    <i data-lucide="x" class="w-5 h-5"></i>
+    <!-- FINESTRA MODAL: LETTURA SCRITTURA GRANDE A SCHERMO INTERO -->
+    <div id="scripture-reader-modal" class="fixed inset-0 z-[90] hidden bg-[#1d121a]/95 text-white flex flex-col p-4 sm:p-8 overflow-y-auto">
+        <div class="max-w-4xl w-full mx-auto flex-1 flex flex-col justify-between gap-6">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[#4a3343] pb-4">
+                <div>
+                    <span class="text-xs font-bold uppercase tracking-wider text-[#e0b8d6]">Scrittura Biblica</span>
+                    <h2 id="scr-modal-ref" class="text-2xl sm:text-4xl font-extrabold text-amber-300 mt-1"></h2>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="changeScrModalSize(-3)" class="px-3.5 py-2 rounded-xl bg-[#34212e] border border-[#5c3d53] font-bold text-lg">A−</button>
+                    <button type="button" onclick="changeScrModalSize(3)" class="px-3.5 py-2 rounded-xl bg-amber-300 text-[#261822] font-bold text-lg">A+</button>
+                    <button type="button" id="scr-modal-goto-pdf" class="hidden px-4 py-2 rounded-xl plum-primary font-bold text-sm">Vai a pag. PDF</button>
+                </div>
+            </div>
+
+            <div id="scr-modal-text" style="font-size: 26px;" class="leading-relaxed bg-[#2a1a25] border border-[#5c3d53] rounded-2xl p-6 sm:p-8 whitespace-pre-wrap my-auto"></div>
+
+            <button type="button" onclick="closeScriptureModal()" class="w-full py-4 rounded-2xl bg-amber-300 text-[#261822] font-extrabold text-lg sm:text-xl shadow-lg">
+                ✕ Chiudi Scrittura e Torna allo Studio
+            </button>
+        </div>
+    </div>
+
+    <!-- FINESTRA MODAL: ANTEPRIMA IMMAGINE INGRANDITA -->
+    <div id="image-lightbox-modal" onclick="this.classList.add('hidden')" class="fixed inset-0 z-[95] hidden bg-black/90 flex items-center justify-center p-4">
+        <img id="lightbox-img" src="" alt="Immagine ingrandita" class="max-w-full max-h-[90vh] rounded-2xl shadow-2xl">
+    </div>
+
+    <!-- LETTORE PDF AFFIANCATO ALLE NOTE -->
+    <div id="pdf-workspace-overlay" class="fixed inset-0 z-[60] hidden bg-[#fbf9fa] flex flex-col">
+        <!-- Barra comandi PDF -->
+        <div class="bg-white border-b plum-border px-3 py-2 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+            <div class="flex items-center gap-2">
+                <button type="button" onclick="closePdfWorkspace()" class="px-3 py-2 rounded-xl plum-primary font-bold text-sm">
+                    ← Chiudi PDF
+                </button>
+                <span id="pdf-doc-title" class="font-bold text-sm text-[#261822] truncate max-w-[140px] sm:max-w-[220px]">Documento PDF</span>
+            </div>
+
+            <!-- Controllo Pagina e Zoom -->
+            <div class="flex items-center gap-1.5 bg-[#f6eef4] px-2 py-1 rounded-xl">
+                <button type="button" onclick="changePdfPage(-1)" class="px-2.5 py-1 rounded-lg bg-white font-bold shadow-2xs">◀</button>
+                <span class="text-xs font-semibold text-[#6b2d5c]">Pag.</span>
+                <input type="number" id="pdf-page-input" min="1" value="1" onchange="jumpToPdfPage(this.value)" class="w-12 text-center font-bold text-sm bg-white border plum-border rounded-lg py-0.5">
+                <span id="pdf-total-pages" class="text-xs font-semibold text-[#6b2d5c]">/ 1</span>
+                <button type="button" onclick="changePdfPage(1)" class="px-2.5 py-1 rounded-lg bg-white font-bold shadow-2xs">▶</button>
+                <span class="mx-1 text-[#d7bfd0]">|</span>
+                <button type="button" onclick="changePdfZoom(-0.15)" class="px-2 py-1 rounded-lg bg-white font-bold text-xs">−</button>
+                <button type="button" onclick="changePdfZoom(0.15)" class="px-2 py-1 rounded-lg bg-white font-bold text-xs">+</button>
+            </div>
+
+            <!-- Strumenti Apple Pencil, 3 Evidenziatori, Spessore, Foto e Scritture -->
+            <div class="flex flex-wrap items-center gap-1.5">
+                <button type="button" id="tool-none" onclick="setPdfTool('none')" class="px-2.5 py-1.5 rounded-lg text-xs font-bold plum-primary">Mano</button>
+                <button type="button" id="tool-pen" onclick="setPdfTool('pen')" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#4a3343]">✏️ Penna</button>
+                <button type="button" id="tool-highlighter" onclick="setPdfTool('highlighter')" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#4a3343]">🖍️ Evidenzia</button>
+
+                <!-- 3 Evidenziatori -->
+                <div class="flex items-center gap-1 bg-[#f6eef4] px-1.5 py-1 rounded-lg">
+                    <button type="button" onclick="setHighlighterColor('rgba(250, 204, 21, 0.42)', this)" title="Evidenziatore Giallo" class="hl-color-btn w-5 h-5 rounded-full bg-yellow-300 ring-2 ring-[#6b2d5c]"></button>
+                    <button type="button" onclick="setHighlighterColor('rgba(74, 222, 128, 0.42)', this)" title="Evidenziatore Verde" class="hl-color-btn w-5 h-5 rounded-full bg-green-400"></button>
+                    <button type="button" onclick="setHighlighterColor('rgba(244, 114, 182, 0.42)', this)" title="Evidenziatore Rosa" class="hl-color-btn w-5 h-5 rounded-full bg-pink-400"></button>
+                </div>
+
+                <!-- Spessore -->
+                <select id="pdf-stroke-width" onchange="pdfStrokeWidth = Number(this.value)" class="text-xs font-bold bg-[#f6eef4] border plum-border rounded-lg px-2 py-1.5">
+                    <option value="2">Sottile</option>
+                    <option value="4" selected>Medio</option>
+                    <option value="8">Largo</option>
+                </select>
+
+                <button type="button" id="tool-eraser" onclick="setPdfTool('eraser')" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#4a3343]">🧹 Gomma</button>
+                <button type="button" onclick="undoPdfStroke()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#4a3343]">↩️</button>
+
+                <button type="button" id="btn-pencil-only" onclick="togglePencilOnly()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800">
+                    Solo Apple Pencil ✓
+                </button>
+
+                <label class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-sky-100 text-sky-800 cursor-pointer">
+                    + Foto PDF
+                    <input type="file" accept="image/*" onchange="addPdfOverlayImage(event)" class="hidden">
+                </label>
+
+                <button type="button" onclick="togglePdfScripturesDrawer()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-900">
+                    📖 Scritture
+                </button>
+                <button type="button" onclick="openPastePrepModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold plum-soft">
+                    📋 Incolla Prep.
                 </button>
             </div>
-            <div>
-                <label class="block text-xs font-bold text-plum-800 mb-1">Nome della sessione</label>
-                <input type="text" id="session-modal-input" onkeydown="if(event.key==='Enter')saveSessionModal()" placeholder="Es. Studio Biblico di Congregazione..." class="w-full border-2 border-plum-300 rounded-xl px-3 py-2 text-sm font-bold text-plum-900 outline-none focus:border-plum-700 bg-ivory-50">
-            </div>
-            <div class="flex justify-end gap-2">
-                <button type="button" onclick="closeSessionModal()" class="px-4 py-2 rounded-xl border border-plum-300 text-xs font-bold">Annulla</button>
-                <button type="button" onclick="saveSessionModal()" class="px-4 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">Salva</button>
-            </div>
         </div>
-    </div>
 
-    <!-- LIGHTBOX ANTEPRIMA IMMAGINE A SCHERMO INTERO -->
-    <div id="image-lightbox" onclick="closeImageLightbox()" class="fixed inset-0 z-[70] bg-black/80 hidden items-center justify-center p-4">
-        <img id="image-lightbox-img" src="" alt="Anteprima immagine" class="max-w-full max-h-full rounded-2xl shadow-2xl border-2 border-white">
-    </div>
+        <!-- Pannello rapido Scritture nel PDF -->
+        <div id="pdf-scriptures-drawer" class="hidden bg-amber-50 border-b border-amber-200 px-4 py-3">
+            <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 mb-2">
+                <span class="font-bold text-sm text-amber-900">📖 Scritture della sessione (clicca per aprire grande)</span>
+                <button type="button" onclick="togglePdfScripturesDrawer()" class="text-xs font-bold text-amber-800 underline">Chiudi</button>
+            </div>
+            <div id="pdf-scriptures-chips" class="max-w-7xl mx-auto flex flex-wrap gap-2"></div>
+        </div>
 
-    <!-- FINESTRA GRANDE A SCHERMO INTERO PER LEGGERE LA SCRITTURA -->
-    <div id="scripture-reader-overlay" onclick="if(event.target===this)closeScriptureReaderOverlay()" class="fixed inset-0 z-[90] bg-black/75 hidden items-center justify-center p-3 sm:p-6">
-        <div class="bg-ivory-50 border-2 border-plum-400 rounded-3xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl overflow-hidden">
-            <div class="bg-plum-100 border-b border-plum-300 px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-2">
-                <div class="flex items-center gap-2.5 flex-wrap">
-                    <span class="px-2.5 py-1 rounded-xl bg-plum-700 text-white text-xs font-extrabold uppercase">Scrittura</span>
-                    <h3 id="reader-scr-ref" class="text-xl sm:text-2xl font-extrabold text-plum-900"></h3>
-                    <button type="button" id="reader-scr-page-btn" class="hidden px-3 py-1.5 rounded-xl bg-white border border-plum-400 text-xs sm:text-sm font-extrabold text-plum-900 hover:bg-plum-200"></button>
+        <!-- Contenitore Diviso: Sinistra PDF / Destra Note -->
+        <div id="pdf-split-container" class="flex-1 flex overflow-hidden relative">
+            <!-- Lato PDF -->
+            <div id="pdf-left-pane" style="flex: 0 0 54%;" class="overflow-auto bg-slate-300 flex justify-center items-start p-4 relative">
+                <div id="pdf-canvas-wrapper" class="relative bg-white shadow-xl">
+                    <canvas id="pdf-render-canvas" class="block"></canvas>
+                    <canvas id="pdf-annot-canvas" class="absolute inset-0 touch-none"></canvas>
+                    <div id="pdf-images-layer" class="absolute inset-0 pointer-events-none"></div>
                 </div>
-                <div class="flex items-center gap-1.5">
-                    <button type="button" onclick="changeReaderScriptureFontSize(-2)" class="px-3 py-1.5 rounded-xl bg-white border border-plum-300 text-sm font-extrabold text-plum-900 hover:bg-plum-100" title="Riduci carattere">A−</button>
-                    <button type="button" onclick="changeReaderScriptureFontSize(2)" class="px-3 py-1.5 rounded-xl bg-white border border-plum-300 text-sm font-extrabold text-plum-900 hover:bg-plum-100" title="Ingrandisci carattere">A+</button>
-                    <button type="button" onclick="closeScriptureReaderOverlay()" class="flex items-center gap-1 px-3.5 py-1.5 rounded-xl bg-plum-700 text-white text-sm font-extrabold hover:bg-plum-800">
-                        <i data-lucide="x" class="w-4 h-4"></i> Chiudi
+                <iframe id="pdf-fallback-frame" class="hidden w-full h-full border-0 bg-white rounded-xl"></iframe>
+            </div>
+
+            <!-- Barra Divisoria Trascinabile -->
+            <div id="pdf-resizer" title="Trascina per allargare o stringere le note">
+                <div class="w-1 h-10 bg-[#6b2d5c] rounded-full"></div>
+            </div>
+
+            <!-- Lato Note -->
+            <div id="pdf-right-pane" class="flex-1 bg-[#fbf9fa] flex flex-col overflow-hidden min-w-[200px]">
+                <div class="bg-white border-b plum-border px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+                    <div class="flex items-center gap-1 bg-[#f6eef4] p-1 rounded-lg">
+                        <button type="button" id="filter-page-notes" onclick="setPdfNotesFilter('page')" class="px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#6b2d5c] shadow-2xs">
+                            Note della pagina
+                        </button>
+                        <button type="button" id="filter-all-notes" onclick="setPdfNotesFilter('all')" class="px-2.5 py-1 rounded-md text-xs font-bold text-[#7c6575]">
+                            Tutte le note
+                        </button>
+                    </div>
+                    <button type="button" onclick="addNoteInCurrentSession(activePdfPage)" class="px-3 py-1.5 rounded-xl plum-primary font-bold text-xs">
+                        + Nota (Pag. <span id="btn-add-note-page-num">1</span>)
                     </button>
                 </div>
-            </div>
-            <div class="p-5 sm:p-8 overflow-y-auto flex-1 bg-white">
-                <p id="reader-scr-text" style="font-size: 24px;" class="text-zinc-900 leading-relaxed whitespace-pre-wrap font-medium"></p>
-            </div>
-        </div>
-    </div>
-
-    <!-- MODALE AGGIUNGI / MODIFICA SCRITTURA COLLEGATA AL PDF -->
-    <div id="scripture-modal" class="fixed inset-0 z-[65] bg-black/50 hidden items-center justify-center p-4">
-        <div class="bg-white border border-plum-300 rounded-2xl max-w-xl w-full p-5 space-y-3.5 shadow-xl">
-            <div class="flex items-center justify-between">
-                <h3 id="scripture-modal-title" class="text-lg font-extrabold text-plum-900">Aggiungi Scrittura</h3>
-                <button type="button" onclick="closeScriptureModal()" class="p-1.5 rounded-xl hover:bg-plum-100">
-                    <i data-lucide="x" class="w-5 h-5"></i>
-                </button>
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <div class="sm:col-span-2">
-                    <label class="block text-xs font-bold text-plum-800 mb-1">Riferimento (es. Salmo 23:1)</label>
-                    <input type="text" id="scr-input-ref" placeholder="Scrivi il versetto..." class="w-full border border-plum-300 rounded-xl px-3 py-2 text-sm font-bold text-plum-900 outline-none focus:border-plum-700">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-plum-800 mb-1">Pagina PDF</label>
-                    <input type="number" min="1" id="scr-input-page" placeholder="Es. 4" class="w-full border border-plum-300 rounded-xl px-3 py-2 text-sm font-bold text-plum-900 outline-none focus:border-plum-700">
-                </div>
-            </div>
-            <div>
-                <label class="block text-xs font-bold text-plum-800 mb-1">Testo della scrittura (per leggerlo al volo in sala)</label>
-                <textarea id="scr-input-text" rows="5" placeholder="Incolla o scrivi qui il testo del versetto..." class="w-full border border-plum-300 rounded-xl p-3 text-sm outline-none focus:border-plum-700"></textarea>
-            </div>
-            <div class="flex justify-end gap-2">
-                <button type="button" onclick="closeScriptureModal()" class="px-4 py-2 rounded-xl border border-plum-300 text-xs font-bold">Annulla</button>
-                <button type="button" onclick="saveScriptureEntry()" class="px-4 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">Salva Scrittura</button>
+                <div id="pdf-side-notes-list" class="flex-1 overflow-y-auto p-3 space-y-3"></div>
             </div>
         </div>
     </div>
 
     <script>
-        const STORAGE_KEY = 'quaderno_studio_anna_essenziale_v1';
-        const DB_NAME = 'QuadernoStudioPdfsDB';
-        const DB_STORE = 'pdfs';
+        const STORAGE_KEY = 'quaderno_studio_anna_v5';
+        if (window.pdfjsLib) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
 
-        const DEFAULT_SECTIONS = [
-            { id: 'torre', label: 'Torre di Guardia', icon: 'book-open', isDefault: true },
-            { id: 'tesori', label: 'Tesori della Parola', icon: 'gem', isDefault: true },
-            { id: 'ministero', label: 'Efficaci nel Ministero', icon: 'message-circle', isDefault: true },
-            { id: 'vita', label: 'Vita Cristiana', icon: 'heart', isDefault: true },
-            { id: 'personale', label: 'Studio Personale', icon: 'sparkles', isDefault: true }
+        const DEFAULT_SESSIONS = [
+            { id: 'torre', name: 'Torre di Guardia', lucideIcon: 'book-open', isBase: true, notes: [], scriptures: [], pdfMeta: null, pdfAnnotations: {}, pdfImages: {} },
+            { id: 'tesori', name: 'Tesori della Parola', lucideIcon: 'gem', isBase: true, notes: [], scriptures: [], pdfMeta: null, pdfAnnotations: {}, pdfImages: {} },
+            { id: 'ministero', name: 'Efficaci nel Ministero', lucideIcon: 'message-circle', isBase: true, notes: [], scriptures: [], pdfMeta: null, pdfAnnotations: {}, pdfImages: {} },
+            { id: 'vita', name: 'Vita Cristiana', lucideIcon: 'heart', isBase: true, notes: [], scriptures: [], pdfMeta: null, pdfAnnotations: {}, pdfImages: {} },
+            { id: 'personale', name: 'Studio Personale', lucideIcon: 'sparkles', isBase: true, notes: [], scriptures: [], pdfMeta: null, pdfAnnotations: {}, pdfImages: {} }
         ];
 
         let state = {
-            currentWeekOffset: 0,
-            activeSection: 'home',
-            meetingMode: false,
-            pdfSingleCol: false,
-            pdfSplitLeftPct: 70,
-            pdfNotesFilter: 'page',
-            scriptureFontSize: 16,
-            sections: JSON.parse(JSON.stringify(DEFAULT_SECTIONS)),
-            weeks: {},
-            pdfs: [], // { id, name, section, lastPage, annotations: { [page]: strokes[] } }
-            notes: [], // { id, weekKey, section, title, htmlContent, fontSize, isBold, collapsed, sortOrder, pdfId, pdfPages: [], isQuickMeetingNote, type, strokes: [] }
-            scriptures: [] // { id, weekKey, section, ref, text, pdfId, pdfPage }
+            view: 'home',
+            weekOffset: 0,
+            studyMode: 'preparazione',
+            activeSessionId: 'torre',
+            pdfSplitPercent: 54,
+            scrModalFontSize: 26,
+            sessions: JSON.parse(JSON.stringify(DEFAULT_SESSIONS))
         };
 
         let activePdfDoc = null;
-        let activePdfMeta = null;
+        let activePdfBytes = null;
         let activePdfPage = 1;
-        let activePdfZoom = 1.1;
-        let activePdfBlobUrl = null;
-        let pdfAnnotTool = 'scroll';
-        let pdfHighlightColor = 'yellow';
-        let pdfStrokeSize = 'medium';
-        let pdfPencilOnly = true;
-        let pdfScrollLocked = false;
-        let inMemoryPdfBuffers = {};
-        let pasteFromPdfContext = false;
-        let scriptureFromPdfContext = false;
-        let editingScriptureId = null;
-        let pdfScripturesOnlyCurrentPage = false;
-        let editingSessionId = null;
-        let readerScriptureFontSize = 24;
+        let activePdfTotalPages = 1;
+        let activePdfZoom = 1.25;
+        let pdfNotesFilter = 'page';
+        let pdfTool = 'none';
+        let pdfHighlighterColor = 'rgba(250, 204, 21, 0.42)';
+        let pdfStrokeWidth = 4;
+        let pencilOnly = true;
+        let isDrawingPdf = false;
+        let currentStroke = null;
+        let sessionModalMode = 'create';
+        let sessionModalTargetId = null;
 
         function getWeekKey(offset = 0) {
             const now = new Date();
+            now.setDate(now.getDate() + offset * 7);
             const day = now.getDay();
-            const diffToMonday = (day === 0 ? -6 : 1 - day) + offset * 7;
-            const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
-            const y = monday.getFullYear();
-            const m = String(monday.getMonth() + 1).padStart(2, '0');
-            const d = String(monday.getDate()).padStart(2, '0');
-            return `${y}-${m}-${d}`;
+            const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+            const monday = new Date(now.setDate(diff));
+            return monday.toISOString().slice(0, 10);
         }
 
-        function getAllSections() {
-            if (!Array.isArray(state.sections) || state.sections.length === 0) {
-                state.sections = JSON.parse(JSON.stringify(DEFAULT_SECTIONS));
-            }
-            return state.sections;
-        }
-
-        function ensureWeekData(weekKey) {
-            if (!state.weeks[weekKey]) {
-                state.weeks[weekKey] = {
-                    torreTitle: '',
-                    torreScripture: ''
-                };
-            }
-            return state.weeks[weekKey];
+        function changeWeekOffset(delta) {
+            state.weekOffset = (state.weekOffset || 0) + delta;
+            saveState();
+            renderApp();
         }
 
         function loadState() {
             try {
-                // Migrazione automatica da eventuali versioni precedenti se la chiave nuova è vuota
-                let raw = localStorage.getItem(STORAGE_KEY);
-                if (!raw) {
-                    const legacyKeys = ['quaderno_studio_anna_v5', 'quaderno_studio_anna_v4', 'quaderno_studio_anna_v3'];
-                    for (const k of legacyKeys) {
-                        const old = localStorage.getItem(k);
-                        if (old) { raw = old; break; }
-                    }
-                }
+                // Migrazione eventuale da versioni precedenti se v5 non esiste ancora
+                let raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('quaderno_studio_anna_v4');
                 if (raw) {
                     const parsed = JSON.parse(raw);
-                    state = { ...state, ...parsed };
-                    if (!Array.isArray(state.sections) || state.sections.length === 0) {
-                        state.sections = JSON.parse(JSON.stringify(DEFAULT_SECTIONS));
+                    if (parsed && Array.isArray(parsed.sessions) && parsed.sessions.length > 0) {
+                        // Mantieni eventuali note/scritture già salvate nelle sessioni corrispondenti
+                        const oldMap = {};
+                        parsed.sessions.forEach(s => { oldMap[s.id] = s; });
+
+                        const mergedSessions = DEFAULT_SESSIONS.map(def => {
+                            const prev = oldMap[def.id];
+                            return prev ? { ...def, ...prev, name: prev.name || def.name, lucideIcon: def.lucideIcon, isBase: true } : JSON.parse(JSON.stringify(def));
+                        });
+
+                        // Aggiungi eventuali sessioni personalizzate create dall'utente
+                        parsed.sessions.forEach(s => {
+                            if (!DEFAULT_SESSIONS.some(d => d.id === s.id) && s.id !== 'adunanza' && s.id !== 'assemblea' && s.id !== 'pionieri') {
+                                mergedSessions.push({ ...s, lucideIcon: s.lucideIcon || 'notebook-pen', isBase: false });
+                            }
+                        });
+
+                        state = {
+                            ...state,
+                            ...parsed,
+                            sessions: mergedSessions
+                        };
+                        if (!state.sessions.some(s => s.id === state.activeSessionId)) {
+                            state.activeSessionId = state.sessions[0].id;
+                        }
                     }
-                    if (!state.activeSection) state.activeSection = 'home';
-                    if (!Array.isArray(state.notes)) state.notes = [];
-                    if (!Array.isArray(state.pdfs)) state.pdfs = [];
-                    if (!Array.isArray(state.scriptures)) state.scriptures = [];
-                    if (!state.weeks) state.weeks = {};
                 }
             } catch (e) {
                 console.error('Errore caricamento stato:', e);
             }
-            ensureWeekData(getWeekKey(state.currentWeekOffset));
-        }
-
-        function syncVisibleEditorsToState() {
-            document.querySelectorAll('[data-note-editor]').forEach(el => {
-                const nid = el.getAttribute('data-note-editor');
-                const note = state.notes.find(n => n.id === nid);
-                if (note) note.htmlContent = el.innerHTML;
-            });
-            document.querySelectorAll('[data-note-title]').forEach(el => {
-                const nid = el.getAttribute('data-note-title');
-                const note = state.notes.find(n => n.id === nid);
-                if (note) note.title = el.value;
-            });
         }
 
         function saveState() {
-            syncVisibleEditorsToState();
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-                const pill = document.getElementById('save-status-pill');
-                if (pill) {
-                    pill.innerHTML = `<i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Salvato`;
-                    if (window.lucide) lucide.createIcons();
+                const badge = document.getElementById('save-status-badge');
+                if (badge) {
+                    badge.classList.remove('opacity-60');
                 }
             } catch (e) {
-                console.error('Errore salvataggio:', e);
+                console.error('Errore salvataggio stato:', e);
             }
         }
 
-        function updateWeekHeader() {
-            const wk = getWeekKey(state.currentWeekOffset);
-            ensureWeekData(wk);
-            const lbl = document.getElementById('header-week-label');
-            const shortLbl = document.getElementById('week-short-label');
-            if (lbl) lbl.textContent = 'Settimana del ' + wk;
-            if (shortLbl) {
-                shortLbl.textContent = state.currentWeekOffset === 0
-                    ? 'Questa settimana'
-                    : (state.currentWeekOffset > 0 ? `+${state.currentWeekOffset} sett.` : `${state.currentWeekOffset} sett.`);
+        function getActiveSession() {
+            let s = state.sessions.find(x => x.id === state.activeSessionId);
+            if (!s) {
+                s = state.sessions[0];
+                state.activeSessionId = s.id;
             }
+            if (!Array.isArray(s.notes)) s.notes = [];
+            if (!Array.isArray(s.scriptures)) s.scriptures = [];
+            if (!s.pdfAnnotations) s.pdfAnnotations = {};
+            if (!s.pdfImages) s.pdfImages = {};
+            return s;
         }
 
-        function changeWeek(delta) {
-            saveState();
-            state.currentWeekOffset += delta;
-            updateWeekHeader();
-            renderActiveSection();
-            saveState();
+        function escapeHtml(str) {
+            return String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
         }
 
-        function navigateToSection(secId) {
+        /* NAVIGAZIONE HOME E SESSIONI */
+        function goHome() {
+            state.view = 'home';
             saveState();
-            state.activeSection = secId;
-            renderNavigation();
-            renderActiveSection();
-            saveState();
+            renderApp();
         }
 
-        function renderNavigation() {
-            const nav = document.getElementById('main-nav-bar');
-            if (!nav) return;
-            const homeActive = state.activeSection === 'home';
-            const homeTab = `
-                <button type="button" onclick="navigateToSection('home')"
-                    class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border transition ${homeActive ? 'bg-plum-700 text-white border-plum-700' : 'bg-white text-plum-900 border-plum-200 hover:bg-plum-100'}">
-                    <i data-lucide="home" class="w-3.5 h-3.5"></i>
-                    <span>Home Page</span>
-                </button>
-            `;
-            const secTabs = getAllSections().map(sec => {
-                const active = sec.id === state.activeSection;
-                return `
-                    <button type="button" onclick="navigateToSection('${sec.id}')"
-                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap border transition ${active ? 'bg-plum-700 text-white border-plum-700' : 'bg-white text-plum-900 border-plum-200 hover:bg-plum-100'}">
-                        <i data-lucide="${sec.icon || 'folder'}" class="w-3.5 h-3.5"></i>
-                        <span>${escapeAttr(sec.label)}</span>
-                    </button>
-                `;
-            }).join('');
-            nav.innerHTML = homeTab + secTabs;
-            if (window.lucide) lucide.createIcons();
+        function openSession(id) {
+            state.activeSessionId = id;
+            state.view = 'session';
+            saveState();
+            renderApp();
         }
 
-        function openSessionModal(secId = null) {
-            editingSessionId = secId;
-            const modal = document.getElementById('session-modal');
-            const titleEl = document.getElementById('session-modal-title');
-            const inputEl = document.getElementById('session-modal-input');
-            if (secId) {
-                const sec = getAllSections().find(s => s.id === secId);
-                titleEl.textContent = 'Rinomina Sessione';
-                inputEl.value = sec ? sec.label : '';
-            } else {
-                titleEl.textContent = 'Nuova Sessione';
-                inputEl.value = '';
-            }
-            modal.classList.remove('hidden');
-            modal.classList.add('flex');
-            setTimeout(() => { inputEl.focus(); inputEl.select(); }, 50);
+        function toggleStudyMode() {
+            state.studyMode = state.studyMode === 'preparazione' ? 'adunanza' : 'preparazione';
+            saveState();
+            renderApp();
+        }
+
+        function openCreateSessionModal() {
+            sessionModalMode = 'create';
+            sessionModalTargetId = null;
+            document.getElementById('session-modal-title').textContent = 'Nuova Sessione';
+            document.getElementById('session-modal-input').value = '';
+            document.getElementById('session-modal').classList.remove('hidden');
+            document.getElementById('session-modal-input').focus();
+        }
+
+        function openRenameSessionModal(id, event) {
+            if (event) event.stopPropagation();
+            const s = state.sessions.find(x => x.id === id);
+            if (!s) return;
+            sessionModalMode = 'rename';
+            sessionModalTargetId = id;
+            document.getElementById('session-modal-title').textContent = 'Rinomina Sessione';
+            document.getElementById('session-modal-input').value = s.name;
+            document.getElementById('session-modal').classList.remove('hidden');
+            document.getElementById('session-modal-input').focus();
         }
 
         function closeSessionModal() {
-            const modal = document.getElementById('session-modal');
-            modal.classList.add('hidden');
-            modal.classList.remove('flex');
-            editingSessionId = null;
+            document.getElementById('session-modal').classList.add('hidden');
         }
 
-        function saveSessionModal() {
-            const inputEl = document.getElementById('session-modal-input');
-            const label = inputEl.value.trim();
-            if (!label) return;
-            const list = getAllSections();
-            if (editingSessionId) {
-                const target = list.find(s => s.id === editingSessionId);
-                if (target) target.label = label;
-            } else {
-                const newId = 'sec_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
-                list.push({
+        function confirmSessionModal() {
+            const val = document.getElementById('session-modal-input').value.trim();
+            if (!val) return;
+            if (sessionModalMode === 'create') {
+                const newId = 'sess_' + Date.now();
+                state.sessions.push({
                     id: newId,
-                    label: label,
-                    icon: 'folder-heart',
-                    isDefault: false
+                    name: val,
+                    lucideIcon: 'notebook-pen',
+                    isBase: false,
+                    notes: [],
+                    scriptures: [],
+                    pdfMeta: null,
+                    pdfAnnotations: {},
+                    pdfImages: {}
                 });
+                state.activeSessionId = newId;
+                state.view = 'session';
+            } else if (sessionModalMode === 'rename' && sessionModalTargetId) {
+                const s = state.sessions.find(x => x.id === sessionModalTargetId);
+                if (s) s.name = val;
             }
-            saveState();
             closeSessionModal();
-            renderNavigation();
-            renderActiveSection();
-        }
-
-        function deleteCustomSession(secId) {
-            const list = getAllSections();
-            const target = list.find(s => s.id === secId);
-            if (!target || target.isDefault) return;
-            state.sections = list.filter(s => s.id !== secId);
-            if (state.activeSection === secId) state.activeSection = 'home';
             saveState();
-            renderNavigation();
-            renderActiveSection();
+            renderApp();
         }
 
-        function renderHomePage() {
-            const main = document.getElementById('main-content');
-            if (!main) return;
-            const wk = getWeekKey(state.currentWeekOffset);
-            const sectionsList = getAllSections();
-
-            main.innerHTML = `
-                <div class="space-y-5">
-                    <div class="bg-white border border-plum-200 rounded-2xl p-5 shadow-sm flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                            <h2 class="text-xl font-extrabold text-plum-900">Home Page — Le tue Sessioni di Studio</h2>
-                            <p class="text-xs sm:text-sm text-plum-700 mt-0.5">Scegli una sessione per aprire note, scritture e PDF, oppure aggiungi e rinomina le sessioni.</p>
-                        </div>
-                        ${!state.meetingMode ? `
-                            <button type="button" onclick="openSessionModal(null)" class="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-plum-700 text-white text-xs sm:text-sm font-bold hover:bg-plum-800 shadow-sm">
-                                <i data-lucide="plus" class="w-4 h-4"></i>
-                                <span>Nuova Sessione</span>
-                            </button>
-                        ` : ''}
-                    </div>
-
-                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                        ${sectionsList.map(sec => {
-                            const notesCount = getSectionNotes(sec.id, wk).length;
-                            const scrCount = getSectionScriptures(sec.id, wk).length;
-                            const pdfCount = state.pdfs.filter(p => p.section === sec.id).length;
-                            return `
-                                <div class="bg-white border border-plum-200 hover:border-plum-400 rounded-2xl p-4 shadow-sm flex flex-col justify-between gap-4 transition">
-                                    <div onclick="navigateToSection('${sec.id}')" class="cursor-pointer space-y-2.5">
-                                        <div class="flex items-center justify-between gap-2">
-                                            <div class="w-10 h-10 rounded-xl bg-plum-100 text-plum-800 flex items-center justify-center shrink-0">
-                                                <i data-lucide="${sec.icon || 'folder'}" class="w-5 h-5"></i>
-                                            </div>
-                                            <span class="px-2.5 py-1 rounded-lg bg-plum-50 text-plum-800 text-xs font-bold">Apri →</span>
-                                        </div>
-                                        <h3 class="text-base font-extrabold text-plum-900">${escapeAttr(sec.label)}</h3>
-                                        <div class="flex flex-wrap gap-1.5 text-[11px] font-bold text-plum-700">
-                                            <span class="px-2 py-0.5 rounded-md bg-ivory-100 border border-plum-200">${notesCount} note</span>
-                                            <span class="px-2 py-0.5 rounded-md bg-ivory-100 border border-plum-200">${scrCount} scritture</span>
-                                            <span class="px-2 py-0.5 rounded-md bg-ivory-100 border border-plum-200">${pdfCount} PDF</span>
-                                        </div>
-                                    </div>
-
-                                    ${!state.meetingMode ? `
-                                        <div class="pt-2.5 border-t border-plum-100 flex items-center justify-between gap-2">
-                                            <button type="button" onclick="openSessionModal('${sec.id}')" class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-ivory-100 hover:bg-plum-100 text-xs font-bold text-plum-900">
-                                                <i data-lucide="pencil" class="w-3.5 h-3.5"></i>
-                                                <span>Rinomina</span>
-                                            </button>
-                                            ${!sec.isDefault ? `
-                                                <button type="button" onclick="deleteCustomSession('${sec.id}')" class="p-1.5 rounded-xl text-rose-700 hover:bg-rose-50" title="Elimina sessione">
-                                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                                </button>
-                                            ` : `<span class="text-[11px] text-plum-500 font-medium">Sessione base</span>`}
-                                        </div>
-                                    ` : ''}
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                </div>
-            `;
-            if (window.lucide) lucide.createIcons();
-        }
-
-        function toggleMeetingMode() {
-            saveState();
-            state.meetingMode = !state.meetingMode;
-            document.body.classList.toggle('meeting-mode-active', state.meetingMode);
-
-            const labelText = state.meetingMode ? 'Adunanza' : 'Preparazione';
-            const lbl1 = document.getElementById('label-meeting-mode');
-            const lbl2 = document.getElementById('label-pdf-meeting-mode');
-            const btn1 = document.getElementById('btn-meeting-mode');
-            const btn2 = document.getElementById('btn-pdf-meeting-mode');
-            const quickBtn = document.getElementById('btn-pdf-quick-note');
-
-            if (lbl1) lbl1.textContent = labelText;
-            if (lbl2) lbl2.textContent = labelText;
-            [btn1, btn2].forEach(b => {
-                if (!b) return;
-                b.classList.toggle('bg-emerald-100', state.meetingMode);
-                b.classList.toggle('border-emerald-500', state.meetingMode);
-            });
-            if (quickBtn) {
-                quickBtn.classList.toggle('hidden', !state.meetingMode);
+        function deleteCustomSession(id, event) {
+            if (event) event.stopPropagation();
+            if (state.sessions.length <= 1) return;
+            state.sessions = state.sessions.filter(x => x.id !== id);
+            if (state.activeSessionId === id) {
+                state.activeSessionId = state.sessions[0].id;
+                state.view = 'home';
             }
+            saveState();
+            renderApp();
+        }
 
-            if (state.meetingMode && activePdfMeta) {
-                setPdfAnnotTool('scroll');
+        /* NOTE: CREAZIONE, FORMATTAZIONE ESSENZIALE (A-, A+, GRASSETTO), FOTO E COLLEGAMENTO PDF */
+        function addNoteInCurrentSession(pdfPageLink = null) {
+            const s = getActiveSession();
+            const isQuick = state.studyMode === 'adunanza';
+            const note = {
+                id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+                title: isQuick ? '⚡ Appunto rapido (Adunanza)' : 'Nota #' + (s.notes.length + 1),
+                html: '',
+                fontSize: 17,
+                pdfPage: pdfPageLink,
+                collapsed: false,
+                image: null,
+                isQuickNote: isQuick
+            };
+            s.notes.push(note);
+            saveState();
+            renderApp();
+            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                renderPdfSideNotes();
             }
-            renderActiveSection();
-            if (activePdfMeta) renderPdfSideNotes();
-            saveState();
-        }
-
-        /* GESTIONE NOTE ESSENZIALI (AGGIUNGI, A-, A+, GRASSETTO, COLLEGAMENTO PAGINA, RIORDINA) */
-        function getSectionNotes(sectionId, weekKey) {
-            return state.notes
-                .filter(n => n.section === sectionId && n.weekKey === weekKey)
-                .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
-        }
-
-        function addCustomNote(fromPdf = false, noteType = 'text', customTitle = '', customHtml = '') {
-            saveState();
-            const wk = getWeekKey(state.currentWeekOffset);
-            const existing = getSectionNotes(state.activeSection, wk);
-            const maxOrder = existing.reduce((m, n) => Math.max(m, n.sortOrder ?? 0), 0);
-
-            const newNote = {
-                id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-                weekKey: wk,
-                section: state.activeSection,
-                title: customTitle || (noteType === 'pencil' ? 'Nota Apple Pencil' : 'Nuova nota'),
-                htmlContent: customHtml || '',
-                fontSize: 16,
-                isBold: false,
-                collapsed: false,
-                sortOrder: maxOrder + 10,
-                pdfId: fromPdf && activePdfMeta ? activePdfMeta.id : null,
-                pdfPages: fromPdf && activePdfMeta ? [activePdfPage] : [],
-                isQuickMeetingNote: false,
-                type: noteType,
-                strokes: [],
-                images: []
-            };
-            state.notes.push(newNote);
-            saveState();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfSideNotes();
-        }
-
-        function addQuickMeetingNote(fromPdf = false) {
-            saveState();
-            const wk = getWeekKey(state.currentWeekOffset);
-            const newNote = {
-                id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-                weekKey: wk,
-                section: state.activeSection,
-                title: 'Appunto rapido adunanza',
-                htmlContent: '',
-                fontSize: 16,
-                isBold: false,
-                collapsed: false,
-                sortOrder: -Date.now(),
-                pdfId: fromPdf && activePdfMeta ? activePdfMeta.id : null,
-                pdfPages: fromPdf && activePdfMeta ? [activePdfPage] : [],
-                isQuickMeetingNote: true,
-                type: 'both',
-                strokes: [],
-                images: []
-            };
-            state.notes.push(newNote);
-            saveState();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfSideNotes();
-        }
-
-        function addQuickMeetingNote(fromPdf = false) {
-            saveState();
-            const wk = getWeekKey(state.currentWeekOffset);
-            const newNote = {
-                id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-                weekKey: wk,
-                section: state.activeSection,
-                title: 'Appunto rapido adunanza',
-                htmlContent: '',
-                fontSize: 16,
-                isBold: false,
-                collapsed: false,
-                sortOrder: -Date.now(),
-                pdfId: fromPdf && activePdfMeta ? activePdfMeta.id : null,
-                pdfPages: fromPdf && activePdfMeta ? [activePdfPage] : [],
-                isQuickMeetingNote: true,
-                type: 'both',
-                strokes: []
-            };
-            state.notes.push(newNote);
-            saveState();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfSideNotes();
-        }
-
-        function isNoteEditable(note) {
-            if (!state.meetingMode) return true;
-            return !!note.isQuickMeetingNote;
         }
 
         function updateNoteTitle(noteId, value) {
-            const note = state.notes.find(n => n.id === noteId);
-            if (!note || !isNoteEditable(note)) return;
-            note.title = value;
-            saveState();
+            const s = getActiveSession();
+            const n = s.notes.find(x => x.id === noteId);
+            if (n) {
+                n.title = value;
+                saveState();
+            }
         }
 
-        function updateNoteContent(noteId, html) {
-            const note = state.notes.find(n => n.id === noteId);
-            if (!note || !isNoteEditable(note)) return;
-            note.htmlContent = html;
-            saveState();
+        function updateNoteHtml(noteId, el) {
+            const s = getActiveSession();
+            const n = s.notes.find(x => x.id === noteId);
+            if (n && el) {
+                n.html = el.innerHTML;
+                saveState();
+            }
         }
 
         function changeNoteFontSize(noteId, delta) {
-            const note = state.notes.find(n => n.id === noteId);
-            if (!note || !isNoteEditable(note)) return;
-            note.fontSize = Math.max(12, Math.min(34, (note.fontSize || 16) + delta));
-            document.querySelectorAll(`[data-note-editor="${noteId}"]`).forEach(el => {
-                el.style.fontSize = note.fontSize + 'px';
-            });
+            const s = getActiveSession();
+            const n = s.notes.find(x => x.id === noteId);
+            if (!n) return;
+            n.fontSize = Math.max(13, Math.min(34, (n.fontSize || 17) + delta));
             saveState();
+            document.querySelectorAll(`[data-note-editor="${noteId}"]`).forEach(el => {
+                el.style.fontSize = n.fontSize + 'px';
+            });
         }
 
         function toggleNoteBold(noteId) {
-            const note = state.notes.find(n => n.id === noteId);
-            if (!note || !isNoteEditable(note)) return;
-
-            // Se c'è del testo selezionato dentro l'editor della nota, applica il grassetto alla selezione;
-            // altrimenti attiva/disattiva il grassetto su tutta la nota in modo immediato.
-            const sel = window.getSelection();
-            let appliedToSelection = false;
-            if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-                const range = sel.getRangeAt(0);
-                const container = range.commonAncestorContainer.nodeType === 1
-                    ? range.commonAncestorContainer
-                    : range.commonAncestorContainer.parentElement;
-                const editorEl = container ? container.closest(`[data-note-editor="${noteId}"]`) : null;
-                if (editorEl) {
-                    document.execCommand('bold', false, null);
-                    note.htmlContent = editorEl.innerHTML;
-                    appliedToSelection = true;
-                }
-            }
-
-            if (!appliedToSelection) {
-                note.isBold = !note.isBold;
-                document.querySelectorAll(`[data-note-editor="${noteId}"]`).forEach(el => {
-                    el.style.fontWeight = note.isBold ? '700' : '400';
-                });
-            }
-            saveState();
+            const ed = document.querySelector(`[data-note-editor="${noteId}"]`);
+            if (!ed) return;
+            ed.focus();
+            document.execCommand('bold', false, null);
+            updateNoteHtml(noteId, ed);
         }
 
-        function toggleNoteCollapsed(noteId) {
-            const note = state.notes.find(n => n.id === noteId);
-            if (!note) return;
-            note.collapsed = !note.collapsed;
+        function toggleNoteCollapse(noteId) {
+            const s = getActiveSession();
+            const n = s.notes.find(x => x.id === noteId);
+            if (!n) return;
+            n.collapsed = !n.collapsed;
             saveState();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfSideNotes();
+            renderApp();
+            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                renderPdfSideNotes();
+            }
+        }
+
+        function moveNote(noteId, dir) {
+            const s = getActiveSession();
+            const idx = s.notes.findIndex(x => x.id === noteId);
+            const target = idx + dir;
+            if (idx < 0 || target < 0 || target >= s.notes.length) return;
+            const temp = s.notes[idx];
+            s.notes[idx] = s.notes[target];
+            s.notes[target] = temp;
+            saveState();
+            renderApp();
+            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                renderPdfSideNotes();
+            }
         }
 
         function deleteNote(noteId) {
-            const note = state.notes.find(n => n.id === noteId);
-            if (!note || !isNoteEditable(note)) return;
-            state.notes = state.notes.filter(n => n.id !== noteId);
+            const s = getActiveSession();
+            s.notes = s.notes.filter(x => x.id !== noteId);
             saveState();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfSideNotes();
-        }
-
-        function moveNoteOrder(noteId, direction) {
-            if (state.meetingMode) return;
-            saveState();
-            const wk = getWeekKey(state.currentWeekOffset);
-            const list = getSectionNotes(state.activeSection, wk);
-            const idx = list.findIndex(n => n.id === noteId);
-            const targetIdx = idx + direction;
-            if (idx < 0 || targetIdx < 0 || targetIdx >= list.length) return;
-
-            const tempOrder = list[idx].sortOrder;
-            list[idx].sortOrder = list[targetIdx].sortOrder;
-            list[targetIdx].sortOrder = tempOrder;
-            if (list[idx].sortOrder === list[targetIdx].sortOrder) {
-                list[targetIdx].sortOrder += direction;
+            renderApp();
+            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                renderPdfSideNotes();
             }
-            saveState();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfSideNotes();
         }
 
-        function editNoteLinkedPages(noteId) {
-            const note = state.notes.find(n => n.id === noteId);
-            if (!note || !isNoteEditable(note)) return;
-            const currentStr = Array.isArray(note.pdfPages) && note.pdfPages.length ? note.pdfPages.join(', ') : '';
-            const input = window.prompt('Inserisci i numeri di pagina del PDF separati da virgola (lascia vuoto per nessuna pagina):', currentStr);
-            if (input === null) return;
-            const pages = input
-                .split(',')
-                .map(s => parseInt(s.trim(), 10))
-                .filter(n => !isNaN(n) && n > 0);
-            note.pdfPages = [...new Set(pages)];
-            if (activePdfMeta && note.pdfPages.length > 0) {
-                note.pdfId = activePdfMeta.id;
+        function setNotePdfPage(noteId, pageVal) {
+            const s = getActiveSession();
+            const n = s.notes.find(x => x.id === noteId);
+            if (!n) return;
+            const num = parseInt(pageVal, 10);
+            n.pdfPage = isNaN(num) || num < 1 ? null : num;
+            saveState();
+            renderApp();
+            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                renderPdfSideNotes();
             }
-            saveState();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfSideNotes();
         }
 
-        function renderSingleNoteCardHtml(note, inPdfSidebar = false) {
-            const editable = isNoteEditable(note);
-            const pages = Array.isArray(note.pdfPages) ? note.pdfPages : [];
-            const pageLabel = pages.length ? `Pag. ${pages.join(', ')}` : 'Nessuna pagina';
-            const showPencil = note.type === 'pencil' || note.type === 'both';
-            const showText = note.type !== 'pencil';
-
-            return `
-                <article class="bg-white border ${note.isQuickMeetingNote ? 'border-emerald-400' : 'border-plum-200'} rounded-2xl p-3 shadow-sm space-y-2.5">
-                    <!-- Barra comandi essenziali della nota -->
-                    <div class="flex flex-wrap items-center justify-between gap-1.5">
-                        <div class="flex items-center gap-1">
-                            <button type="button" onclick="toggleNoteCollapsed('${note.id}')" class="p-1.5 rounded-lg bg-ivory-100 hover:bg-plum-100 text-plum-900" title="Apri/Chiudi nota">
-                                <i data-lucide="${note.collapsed ? 'chevron-right' : 'chevron-down'}" class="w-4 h-4"></i>
-                            </button>
-                            ${!state.meetingMode ? `
-                                <button type="button" onclick="moveNoteOrder('${note.id}', -1)" class="px-2 py-1 rounded-lg bg-ivory-100 hover:bg-plum-100 text-xs font-bold text-plum-900" title="Sposta su">↑</button>
-                                <button type="button" onclick="moveNoteOrder('${note.id}', 1)" class="px-2 py-1 rounded-lg bg-ivory-100 hover:bg-plum-100 text-xs font-bold text-plum-900" title="Sposta giù">↓</button>
-                            ` : ''}
-                            ${note.isQuickMeetingNote ? `<span class="px-2 py-0.5 rounded-lg bg-emerald-100 text-emerald-900 text-[11px] font-bold">Appunto rapido</span>` : ''}
-                        </div>
-
-                        ${editable ? `
-                            <div class="flex items-center gap-1">
-                                <button type="button" onmousedown="event.preventDefault()" onclick="changeNoteFontSize('${note.id}', -2)" class="px-2 py-1 rounded-lg bg-ivory-100 hover:bg-plum-100 text-xs font-extrabold text-plum-900" title="Diminuisci carattere">A−</button>
-                                <button type="button" onmousedown="event.preventDefault()" onclick="changeNoteFontSize('${note.id}', 2)" class="px-2 py-1 rounded-lg bg-ivory-100 hover:bg-plum-100 text-xs font-extrabold text-plum-900" title="Ingrandisci carattere">A+</button>
-                                <button type="button" onmousedown="event.preventDefault()" onclick="toggleNoteBold('${note.id}')" class="px-2.5 py-1 rounded-lg ${note.isBold ? 'bg-plum-700 text-white' : 'bg-ivory-100 text-plum-900'} hover:bg-plum-200 text-xs font-extrabold" title="Grassetto">B</button>
-                                <label class="px-2 py-1 rounded-lg bg-ivory-100 hover:bg-plum-100 text-xs font-bold text-plum-900 cursor-pointer" title="Aggiungi immagine o infografica">
-                                    + Foto
-                                    <input type="file" accept="image/*" onchange="handleNoteImageUpload(event, '${note.id}')" class="hidden">
-                                </label>
-                                <button type="button" onclick="deleteNote('${note.id}')" class="p-1.5 rounded-lg text-rose-700 hover:bg-rose-50" title="Elimina nota">
-                                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                                </button>
-                            </div>
-                        ` : ''}
-                    </div>
-
-                    <!-- Titolo modificabile -->
-                    <div>
-                        <input type="text" data-note-title="${note.id}" value="${escapeAttr(note.title || '')}"
-                            ${editable ? `oninput="updateNoteTitle('${note.id}', this.value)"` : 'readonly'}
-                            placeholder="Titolo della nota..."
-                            class="w-full bg-ivory-50/80 border border-plum-200 rounded-xl px-3 py-1.5 text-sm font-bold text-plum-900 outline-none focus:border-plum-600">
-                    </div>
-
-                    <!-- Collegamento alla pagina del PDF -->
-                    <div class="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
-                        <span class="px-2 py-1 rounded-lg bg-plum-50 border border-plum-200 text-plum-800">${pageLabel}</span>
-                        ${pages.map(p => `
-                            <button type="button" onclick="jumpToPdfPageFromNote('${note.id}', ${p})" class="px-2 py-1 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900">
-                                Vai a pag. ${p}
-                            </button>
-                        `).join('')}
-                        ${editable ? `
-                            <button type="button" onclick="editNoteLinkedPages('${note.id}')" class="px-2 py-1 rounded-lg bg-white border border-plum-300 hover:bg-plum-50 text-plum-800">
-                                Cambia pag.
-                            </button>
-                        ` : ''}
-                    </div>
-
-                    <!-- Corpo della nota (apribile e chiudibile) -->
-                    ${!note.collapsed ? `
-                        <div class="space-y-2 pt-1">
-                            ${showText ? `
-                                <div data-note-editor="${note.id}"
-                                    contenteditable="${editable ? 'true' : 'false'}"
-                                    oninput="updateNoteContent('${note.id}', this.innerHTML)"
-                                    data-placeholder="Scrivi o incolla qui il tuo commento..."
-                                    style="font-size: ${note.fontSize || 16}px; font-weight: ${note.isBold ? '700' : '400'};"
-                                    class="note-editor-area">${note.htmlContent || ''}</div>
-                            ` : ''}
-                            ${showPencil ? `
-                                <div class="space-y-1.5">
-                                    <div class="flex items-center justify-between text-[11px] font-bold text-plum-700">
-                                        <span>Foglio Apple Pencil</span>
-                                        ${editable ? `<button type="button" onclick="clearNotePencil('${note.id}')" class="px-2 py-0.5 rounded bg-ivory-100 border border-plum-200 hover:bg-plum-100">Cancella tratto</button>` : ''}
-                                    </div>
-                                    <canvas id="pad_${inPdfSidebar ? 'side_' : ''}${note.id}" data-pad-note="${note.id}" data-pad-editable="${editable}" height="170" class="pencil-canvas"></canvas>
-                                </div>
-                            ` : ''}
-                            ${Array.isArray(note.images) && note.images.length > 0 ? `
-                                <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                                    ${note.images.map((imgSrc, imgIdx) => `
-                                        <div class="relative group rounded-xl overflow-hidden border border-plum-200 bg-ivory-50">
-                                            <img src="${imgSrc}" onclick="openImageLightbox('${imgSrc}')" alt="Immagine nota" class="w-full h-28 object-cover cursor-zoom-in">
-                                            ${editable ? `
-                                                <button type="button" onclick="removeNoteImage('${note.id}', ${imgIdx})" class="absolute top-1 right-1 p-1 rounded-lg bg-rose-600 text-white shadow text-[10px] font-bold" title="Rimuovi immagine">✕</button>
-                                            ` : ''}
-                                        </div>
-                                    `).join('')}
-                                </div>
-                            ` : ''}
-                        </div>
-                    ` : ''}
-                </article>
-            `;
-        }
-
-        function compressImageFileToDataUrl(file, maxWidth = 1000) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    const img = new Image();
-                    img.onload = () => {
-                        const scale = Math.min(1, maxWidth / Math.max(img.width, img.height));
-                        const canvas = document.createElement('canvas');
-                        canvas.width = Math.round(img.width * scale);
-                        canvas.height = Math.round(img.height * scale);
-                        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-                        resolve(canvas.toDataURL('image/jpeg', 0.82));
-                    };
-                    img.onerror = reject;
-                    img.src = e.target.result;
-                };
-                reader.onerror = reject;
-                reader.readAsDataURL(file);
-            });
-        }
-
-        async function handleNoteImageUpload(event, noteId) {
-            const file = event.target.files?.[0];
+        function attachImageToNote(noteId, event) {
+            const file = event.target.files[0];
             if (!file) return;
-            const note = state.notes.find(n => n.id === noteId);
-            if (!note || !isNoteEditable(note)) return;
-            try {
-                const dataUrl = await compressImageFileToDataUrl(file, 960);
-                if (!Array.isArray(note.images)) note.images = [];
-                note.images.push(dataUrl);
-                note.collapsed = false;
-                saveState();
-                renderActiveSection();
-                if (activePdfMeta) renderPdfSideNotes();
-            } catch (_) {}
+            compressImageFile(file, 900, (dataUrl) => {
+                const s = getActiveSession();
+                const n = s.notes.find(x => x.id === noteId);
+                if (n) {
+                    n.image = dataUrl;
+                    saveState();
+                    renderApp();
+                    if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                        renderPdfSideNotes();
+                    }
+                }
+            });
             event.target.value = '';
         }
 
-        function removeNoteImage(noteId, imgIdx) {
-            const note = state.notes.find(n => n.id === noteId);
-            if (!note || !isNoteEditable(note) || !Array.isArray(note.images)) return;
-            note.images.splice(imgIdx, 1);
-            saveState();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfSideNotes();
-        }
-
-        function openImageLightbox(src) {
-            const lb = document.getElementById('image-lightbox');
-            const img = document.getElementById('image-lightbox-img');
-            if (lb && img) {
-                img.src = src;
-                lb.classList.remove('hidden');
-                lb.classList.add('flex');
-            }
-        }
-
-        function closeImageLightbox() {
-            const lb = document.getElementById('image-lightbox');
-            if (lb) {
-                lb.classList.add('hidden');
-                lb.classList.remove('flex');
-            }
-        }
-        /* INCOLLA PREPARAZIONE E DIVIDI IN PARAGRAFI */
-        function openPastePrepModal(fromPdf = false) {
-            pasteFromPdfContext = Boolean(fromPdf);
-            const modal = document.getElementById('paste-prep-modal');
-            const ta = document.getElementById('paste-prep-textarea');
-            const fb = document.getElementById('paste-prep-feedback');
-            if (ta) ta.value = '';
-            if (fb) fb.textContent = '';
-            if (modal) {
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-                setTimeout(() => { if (ta) ta.focus(); }, 60);
-            }
-        }
-
-        async function pasteFromClipboardToPrep() {
-            const ta = document.getElementById('paste-prep-textarea');
-            const fb = document.getElementById('paste-prep-feedback');
-            if (!ta) return;
-            ta.focus();
-            try {
-                if (navigator.clipboard && navigator.clipboard.readText) {
-                    const clip = await navigator.clipboard.readText();
-                    if (clip) {
-                        ta.value = clip;
-                        if (fb) fb.textContent = '';
-                        return;
-                    }
+        function removeNoteImage(noteId) {
+            const s = getActiveSession();
+            const n = s.notes.find(x => x.id === noteId);
+            if (n) {
+                n.image = null;
+                saveState();
+                renderApp();
+                if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                    renderPdfSideNotes();
                 }
-            } catch (_) {}
-            try {
-                document.execCommand('paste');
-            } catch (_) {}
-            if (!ta.value && fb) {
-                fb.textContent = 'Tocca dentro il riquadro bianco qui sotto e seleziona "Incolla".';
             }
+        }
+
+        function compressImageFile(file, maxWidth, callback) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    const canvas = document.createElement('canvas');
+                    let w = img.width;
+                    let h = img.height;
+                    if (w > maxWidth) {
+                        h = Math.round((h * maxWidth) / w);
+                        w = maxWidth;
+                    }
+                    canvas.width = w;
+                    canvas.height = h;
+                    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+                    callback(canvas.toDataURL('image/jpeg', 0.82));
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function openLightbox(src) {
+            document.getElementById('lightbox-img').src = src;
+            document.getElementById('image-lightbox-modal').classList.remove('hidden');
+        }
+
+        function renderNoteCardHtml(note, idx, total) {
+            const locked = state.studyMode === 'adunanza' && !note.isQuickNote;
+            const fontSize = note.fontSize || 17;
+            return `
+                <div class="bg-white rounded-2xl border ${note.isQuickNote ? 'border-amber-300 ring-1 ring-amber-200' : 'plum-border'} shadow-2xs p-4 space-y-2.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <input type="text" value="${escapeHtml(note.title)}" ${locked ? 'readonly' : ''}
+                            oninput="updateNoteTitle('${note.id}', this.value)"
+                            class="font-bold text-[#261822] text-base bg-transparent border-b border-transparent focus:border-[#6b2d5c] outline-none flex-1 min-w-[140px]">
+
+                        <div class="flex flex-wrap items-center gap-1">
+                            <button type="button" onpointerdown="event.preventDefault(); changeNoteFontSize('${note.id}', -2)" class="px-2.5 py-1 rounded-lg bg-[#f6eef4] hover:bg-[#eadbe6] text-[#6b2d5c] font-bold text-xs">A−</button>
+                            <button type="button" onpointerdown="event.preventDefault(); changeNoteFontSize('${note.id}', 2)" class="px-2.5 py-1 rounded-lg bg-[#f6eef4] hover:bg-[#eadbe6] text-[#6b2d5c] font-bold text-xs">A+</button>
+                            ${!locked ? `<button type="button" onpointerdown="event.preventDefault(); toggleNoteBold('${note.id}')" class="px-2.5 py-1 rounded-lg bg-[#f6eef4] hover:bg-[#eadbe6] text-[#6b2d5c] font-extrabold text-xs">B</button>` : ''}
+
+                            ${!locked ? `
+                                <label class="px-2.5 py-1 rounded-lg bg-sky-50 text-sky-700 font-bold text-xs cursor-pointer">
+                                    + Foto
+                                    <input type="file" accept="image/*" onchange="attachImageToNote('${note.id}', event)" class="hidden">
+                                </label>
+                            ` : ''}
+
+                            <button type="button" onclick="moveNote('${note.id}', -1)" ${idx === 0 ? 'disabled' : ''} class="px-2 py-1 rounded-lg bg-[#f6eef4] text-[#6b2d5c] text-xs font-bold disabled:opacity-30">↑</button>
+                            <button type="button" onclick="moveNote('${note.id}', 1)" ${idx === total - 1 ? 'disabled' : ''} class="px-2 py-1 rounded-lg bg-[#f6eef4] text-[#6b2d5c] text-xs font-bold disabled:opacity-30">↓</button>
+                            <button type="button" onclick="toggleNoteCollapse('${note.id}')" class="px-2.5 py-1 rounded-lg bg-[#f6eef4] text-[#6b2d5c] text-xs font-bold">${note.collapsed ? 'Apri' : 'Chiudi'}</button>
+                            ${!locked ? `<button type="button" onclick="deleteNote('${note.id}')" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold">✕</button>` : ''}
+                        </div>
+                    </div>
+
+                    <!-- Collegamento pagina PDF -->
+                    <div class="flex flex-wrap items-center gap-2 text-xs">
+                        <span class="text-[#7c6575] font-semibold">Pagina PDF:</span>
+                        <input type="number" min="1" value="${note.pdfPage || ''}" placeholder="—" ${locked ? 'readonly' : ''}
+                            onchange="setNotePdfPage('${note.id}', this.value)"
+                            class="w-14 px-2 py-0.5 border plum-border rounded-lg font-bold text-center">
+                        ${note.pdfPage ? `<button type="button" onclick="goToLinkedPdfPage(${note.pdfPage})" class="px-2.5 py-1 rounded-lg plum-soft font-bold">Vai a pag. ${note.pdfPage} →</button>` : ''}
+                    </div>
+
+                    ${!note.collapsed ? `
+                        <div data-note-editor="${note.id}" contenteditable="${locked ? 'false' : 'true'}"
+                            oninput="updateNoteHtml('${note.id}', this)"
+                            onblur="updateNoteHtml('${note.id}', this)"
+                            data-placeholder="Scrivi qui la tua nota..."
+                            style="font-size: ${fontSize}px;"
+                            class="note-editor bg-[#fbf9fa] rounded-xl p-3 border plum-border text-[#261822]">${note.html || ''}</div>
+
+                        ${note.image ? `
+                            <div class="relative inline-block mt-2">
+                                <img src="${note.image}" onclick="openLightbox('${note.image}')" alt="Immagine nota" class="max-h-56 rounded-xl border plum-border cursor-zoom-in">
+                                ${!locked ? `<button type="button" onclick="removeNoteImage('${note.id}')" class="absolute top-2 right-2 bg-rose-600 text-white rounded-full w-6 h-6 text-xs font-bold shadow">✕</button>` : ''}
+                            </div>
+                        ` : ''}
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        /* INCOLLA PREPARAZIONE */
+        function openPastePrepModal() {
+            document.getElementById('paste-prep-error').classList.add('hidden');
+            document.getElementById('paste-prep-textarea').value = '';
+            document.getElementById('paste-prep-modal').classList.remove('hidden');
+            document.getElementById('paste-prep-textarea').focus();
         }
 
         function closePastePrepModal() {
-            const modal = document.getElementById('paste-prep-modal');
-            if (modal) {
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-            }
+            document.getElementById('paste-prep-modal').classList.add('hidden');
         }
 
-        function splitTextIntoSmartParagraphs(raw) {
-            const normalized = raw.replace(/\r\n/g, '\n').trim();
-            if (!normalized) return [];
-
-            // 1. Se ci sono paragrafi numerati (es. "1. ...", "2) ...", "Paragrafo 1 ...", "Par. 1 ...") su più righe
-            const numberedLineBlocks = normalized.split(/\n(?=\s*(?:Paragrafo\s+\d+|Par\.\s*\d+|Domanda\s+\d+|\d{1,2}[\.\)\:\-]\s+))/i)
-                .map(b => b.trim())
-                .filter(Boolean);
-            if (numberedLineBlocks.length > 1) return numberedLineBlocks;
-
-            // 2. Doppio "a capo" (riga vuota tra un paragrafo e l'altro)
-            const doubleBreakBlocks = normalized.split(/\n\s*\n+/).map(b => b.trim()).filter(Boolean);
-            if (doubleBreakBlocks.length > 1) return doubleBreakBlocks;
-
-            // 3. Singoli "a capo" (ogni riga non vuota diventa una nota/paragrafo)
-            const lines = normalized.split('\n').map(l => l.trim()).filter(Boolean);
-            if (lines.length > 1) return lines;
-
-            // 4. Testo incollato tutto su una riga continua con numeri di paragrafo
-            const inlineSplit = normalized.split(/(?=(?:^|\s)(?:Paragrafo\s+\d+|Par\.\s*\d+|\d{1,2}[\.\)\-]\s+[A-ZÀ-Ú]))/g)
-                .map(s => s.trim())
-                .filter(Boolean);
-            if (inlineSplit.length > 1) return inlineSplit;
-
-            return [normalized];
+        async function pasteFromClipboardToPrep() {
+            try {
+                const txt = await navigator.clipboard.readText();
+                if (txt) document.getElementById('paste-prep-textarea').value = txt;
+            } catch (e) {
+                document.getElementById('paste-prep-textarea').focus();
+            }
         }
 
         function processPastedPreparation() {
-            const ta = document.getElementById('paste-prep-textarea');
-            const fb = document.getElementById('paste-prep-feedback');
-            const raw = ta ? ta.value.trim() : '';
+            const raw = document.getElementById('paste-prep-textarea').value.trim();
             if (!raw) {
-                if (fb) fb.textContent = 'Incolla prima il testo nel riquadro qui sopra.';
-                if (ta) ta.focus();
+                document.getElementById('paste-prep-error').classList.remove('hidden');
                 return;
             }
-
-            const blocks = splitTextIntoSmartParagraphs(raw);
-            const wk = getWeekKey(state.currentWeekOffset);
-            let orderBase = getSectionNotes(state.activeSection, wk).reduce((m, n) => Math.max(m, n.sortOrder ?? 0), 0);
-
-            blocks.forEach((block, idx) => {
-                orderBase += 10;
-                const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
-                const firstLine = lines[0] || '';
-                const hasSeparateBody = lines.length > 1 && firstLine.length <= 75;
-                const title = hasSeparateBody
-                    ? firstLine
-                    : (firstLine.length <= 60 ? firstLine : `Paragrafo ${idx + 1}`);
-                const bodyText = hasSeparateBody ? lines.slice(1).join('\n') : block;
-                const html = escapeAttr(bodyText).replace(/\n/g, '<br>');
-
-                state.notes.push({
+            const s = getActiveSession();
+            let blocks = raw.split(/\n\s*\n/).map(b => b.trim()).filter(Boolean);
+            if (blocks.length <= 1) {
+                blocks = raw.split(/\n+/).map(b => b.trim()).filter(Boolean);
+            }
+            const startNum = s.notes.length + 1;
+            blocks.forEach((text, idx) => {
+                s.notes.push({
                     id: 'note_' + Date.now() + '_' + idx + '_' + Math.random().toString(36).slice(2, 5),
-                    weekKey: wk,
-                    section: state.activeSection,
-                    title: title,
-                    htmlContent: html,
-                    fontSize: 16,
-                    isBold: false,
+                    title: 'Paragrafo ' + (startNum + idx),
+                    html: escapeHtml(text).replace(/\n/g, '<br>'),
+                    fontSize: 17,
+                    pdfPage: activePdfDoc ? activePdfPage : null,
                     collapsed: false,
-                    sortOrder: orderBase,
-                    pdfId: pasteFromPdfContext && activePdfMeta ? activePdfMeta.id : null,
-                    pdfPages: pasteFromPdfContext && activePdfMeta ? [activePdfPage] : [],
-                    isQuickMeetingNote: false,
-                    type: 'text',
-                    strokes: [],
-                    images: []
+                    image: null,
+                    isQuickNote: false
                 });
             });
-
-            if (pasteFromPdfContext && activePdfMeta && state.pdfNotesFilter === 'page') {
-                setPdfNotesFilterMode('all');
-            }
-
             saveState();
             closePastePrepModal();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfSideNotes();
-        }
-
-        /* FOGLIO DI SCRITTURA APPLE PENCIL NELLE NOTE */
-        function initAllPencilPads() {
-            document.querySelectorAll('canvas[data-pad-note]').forEach(canvas => {
-                const noteId = canvas.getAttribute('data-pad-note');
-                const editable = canvas.getAttribute('data-pad-editable') === 'true';
-                const note = state.notes.find(n => n.id === noteId);
-                if (!note) return;
-
-                const rect = canvas.getBoundingClientRect();
-                canvas.width = Math.max(260, Math.floor(rect.width || 300));
-                const ctx = canvas.getContext('2d');
-                redrawNoteStrokes(ctx, canvas, note.strokes || []);
-
-                if (!editable) return;
-                let drawing = false;
-                let currentStroke = null;
-
-                canvas.onpointerdown = (e) => {
-                    if (pdfPencilOnly && e.pointerType === 'touch') return;
-                    e.preventDefault();
-                    canvas.setPointerCapture(e.pointerId);
-                    drawing = true;
-                    const r = canvas.getBoundingClientRect();
-                    currentStroke = [{ x: e.clientX - r.left, y: e.clientY - r.top }];
-                    if (!Array.isArray(note.strokes)) note.strokes = [];
-                    note.strokes.push(currentStroke);
-                };
-                canvas.onpointermove = (e) => {
-                    if (!drawing || !currentStroke) return;
-                    if (pdfPencilOnly && e.pointerType === 'touch') return;
-                    const r = canvas.getBoundingClientRect();
-                    currentStroke.push({ x: e.clientX - r.left, y: e.clientY - r.top });
-                    redrawNoteStrokes(ctx, canvas, note.strokes);
-                };
-                canvas.onpointerup = () => {
-                    if (!drawing) return;
-                    drawing = false;
-                    saveState();
-                };
-            });
-        }
-
-        function redrawNoteStrokes(ctx, canvas, strokes) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = '#3B1531';
-            ctx.lineWidth = 2.4;
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            strokes.forEach(pts => {
-                if (!pts || pts.length < 2) return;
-                ctx.beginPath();
-                ctx.moveTo(pts[0].x, pts[0].y);
-                for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
-                ctx.stroke();
-            });
-        }
-
-        function clearNotePencil(noteId) {
-            const note = state.notes.find(n => n.id === noteId);
-            if (!note || !isNoteEditable(note)) return;
-            note.strokes = [];
-            saveState();
-            initAllPencilPads();
-        }
-
-        /* GESTIONE PDF + INDEXEDDB + ANNOTAZIONI APPLE PENCIL */
-        function openPdfDB() {
-            return new Promise((resolve, reject) => {
-                const req = indexedDB.open(DB_NAME, 1);
-                req.onupgradeneeded = () => {
-                    if (!req.result.objectStoreNames.contains(DB_STORE)) {
-                        req.result.createObjectStore(DB_STORE);
-                    }
-                };
-                req.onsuccess = () => resolve(req.result);
-                req.onerror = () => reject(req.error);
-            });
-        }
-
-        async function savePdfBinary(id, arrayBuffer) {
-            const copy = arrayBuffer.slice(0);
-            inMemoryPdfBuffers[id] = copy;
-            try {
-                const db = await openPdfDB();
-                await new Promise((resolve) => {
-                    const tx = db.transaction(DB_STORE, 'readwrite');
-                    tx.objectStore(DB_STORE).put(copy.slice(0), id);
-                    tx.oncomplete = () => resolve();
-                    tx.onerror = () => resolve();
-                });
-            } catch (_) {}
-        }
-
-        async function loadPdfBinary(id) {
-            if (inMemoryPdfBuffers[id]) return inMemoryPdfBuffers[id].slice(0);
-            try {
-                const db = await openPdfDB();
-                return await new Promise((resolve) => {
-                    const tx = db.transaction(DB_STORE, 'readonly');
-                    const req = tx.objectStore(DB_STORE).get(id);
-                    req.onsuccess = () => {
-                        if (req.result) {
-                            inMemoryPdfBuffers[id] = req.result.slice(0);
-                            resolve(req.result.slice(0));
-                        } else {
-                            resolve(null);
-                        }
-                    };
-                    req.onerror = () => resolve(null);
-                });
-            } catch (_) {
-                return null;
-            }
-        }
-
-        function readFileAsArrayBuffer(file) {
-            if (file.arrayBuffer) return file.arrayBuffer();
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = () => reject(reader.error);
-                reader.readAsArrayBuffer(file);
-            });
-        }
-
-        async function handlePdfUpload(event) {
-            const file = event.target.files && event.target.files[0];
-            if (!file) return;
-            try {
-                const buffer = await readFileAsArrayBuffer(file);
-                const pdfId = 'pdf_' + Date.now();
-                await savePdfBinary(pdfId, buffer);
-                state.pdfs.push({
-                    id: pdfId,
-                    name: file.name,
-                    section: state.activeSection,
-                    lastPage: 1,
-                    annotations: {}
-                });
-                saveState();
-                renderActiveSection();
-                await openPdfInWorkspace(pdfId);
-            } catch (err) {
-                console.error('Errore importazione PDF:', err);
-            } finally {
-                event.target.value = '';
-            }
-        }
-
-        function deletePdfDocument(pdfId) {
-            state.pdfs = state.pdfs.filter(p => p.id !== pdfId);
-            delete inMemoryPdfBuffers[pdfId];
-            saveState();
-            renderActiveSection();
-        }
-
-        async function openPdfInWorkspace(pdfId) {
-            const meta = state.pdfs.find(p => p.id === pdfId);
-            if (!meta) return;
-            const buffer = await loadPdfBinary(pdfId);
-            if (!buffer) {
-                const msg = document.getElementById('save-status-pill');
-                if (msg) msg.textContent = 'Reimporta il PDF (+ Importa PDF)';
-                return;
-            }
-
-            activePdfMeta = meta;
-            activePdfPage = meta.lastPage || 1;
-            if (activePdfBlobUrl) {
-                try { URL.revokeObjectURL(activePdfBlobUrl); } catch (_) {}
-            }
-            activePdfBlobUrl = URL.createObjectURL(new Blob([buffer.slice(0)], { type: 'application/pdf' }));
-
-            document.getElementById('pdf-active-title').textContent = meta.name;
-            document.getElementById('pdf-workspace-overlay').classList.add('open');
-
-            const canvasWrapper = document.getElementById('pdf-canvas-wrapper');
-            const nativeContainer = document.getElementById('pdf-native-container');
-            if (canvasWrapper) canvasWrapper.classList.remove('hidden');
-            if (nativeContainer) {
-                nativeContainer.classList.add('hidden');
-                nativeContainer.innerHTML = '';
-            }
-
-            try {
-                if (!window.pdfjsLib) throw new Error('pdf.js non caricato');
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-                const loadingTask = pdfjsLib.getDocument({
-                    data: new Uint8Array(buffer.slice(0)),
-                    disableWorker: true,
-                    isEvalSupported: false
-                });
-                activePdfDoc = await loadingTask.promise;
-                const total = activePdfDoc.numPages || 1;
-                document.getElementById('pdf-page-total').textContent = total;
-                const pageInp = document.getElementById('pdf-page-input');
-                if (pageInp) pageInp.max = total;
-                await renderCurrentPdfPage();
-            } catch (err) {
-                console.warn('Fallback visualizzatore nativo PDF:', err);
-                activePdfDoc = null;
-                document.getElementById('pdf-page-total').textContent = '—';
-                if (canvasWrapper) canvasWrapper.classList.add('hidden');
-                renderNativePdfPage();
-            }
-
-            renderPdfSideNotes();
-            renderPdfScripturesDrawer();
-            if (window.lucide) lucide.createIcons();
-        }
-
-        function renderNativePdfPage() {
-            const nativeContainer = document.getElementById('pdf-native-container');
-            if (!nativeContainer || !activePdfBlobUrl) return;
-            nativeContainer.classList.remove('hidden');
-            nativeContainer.innerHTML = `<embed src="${activePdfBlobUrl}#page=${activePdfPage}" type="application/pdf" class="w-full h-full rounded-lg border border-plum-200 bg-white">`;
-        }
-
-        function closePdfWorkspace() {
-            saveState();
-            const nativeContainer = document.getElementById('pdf-native-container');
-            if (nativeContainer) nativeContainer.innerHTML = '';
-            document.getElementById('pdf-workspace-overlay').classList.remove('open');
-            activePdfMeta = null;
-            activePdfDoc = null;
-            renderActiveSection();
-        }
-
-        async function renderCurrentPdfPage() {
-            if (!activePdfMeta) return;
-            const maxPages = activePdfDoc ? activePdfDoc.numPages : 9999;
-            activePdfPage = Math.max(1, Math.min(maxPages, parseInt(activePdfPage, 10) || 1));
-            activePdfMeta.lastPage = activePdfPage;
-
-            const pageInp = document.getElementById('pdf-page-input');
-            if (pageInp) pageInp.value = activePdfPage;
-            document.getElementById('pdf-zoom-label').textContent = Math.round(activePdfZoom * 100) + '%';
-
-            if (!activePdfDoc) {
-                renderNativePdfPage();
+            renderApp();
+            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
                 renderPdfSideNotes();
-                renderPdfScripturesDrawer();
-                saveState();
-                return;
             }
+        }
 
-            const page = await activePdfDoc.getPage(activePdfPage);
-            const viewport = page.getViewport({ scale: activePdfZoom });
-            const canvas = document.getElementById('pdf-render-canvas');
-            const annotCanvas = document.getElementById('pdf-annot-canvas');
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            annotCanvas.width = viewport.width;
-            annotCanvas.height = viewport.height;
+        /* SCRITTURE BIBLICHE (CLICCABILI PER LEGGERE A SCHERMO INTERO) */
+        function addScripture() {
+            const ref = document.getElementById('new-scr-ref').value.trim();
+            const text = document.getElementById('new-scr-text').value.trim();
+            const pageVal = parseInt(document.getElementById('new-scr-page').value, 10);
+            if (!ref) return;
 
-            await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-            setupPdfAnnotCanvas(annotCanvas);
-            renderPdfOverlayImages();
-            renderPdfSideNotes();
-            renderPdfScripturesDrawer();
+            const s = getActiveSession();
+            s.scriptures.push({
+                id: 'scr_' + Date.now(),
+                ref: ref,
+                text: text || '(Nessun testo inserito per questa scrittura)',
+                pdfPage: isNaN(pageVal) || pageVal < 1 ? null : pageVal
+            });
+            document.getElementById('new-scr-ref').value = '';
+            document.getElementById('new-scr-text').value = '';
+            document.getElementById('new-scr-page').value = '';
             saveState();
+            renderApp();
         }
 
-        function pdfChangePage(delta) {
-            if (!activePdfMeta) return;
-            activePdfPage += delta;
-            renderCurrentPdfPage();
+        function deleteScripture(scrId, event) {
+            if (event) event.stopPropagation();
+            const s = getActiveSession();
+            s.scriptures = s.scriptures.filter(x => x.id !== scrId);
+            saveState();
+            renderApp();
+            renderPdfScripturesDrawer();
         }
 
-        function pdfGoToPage(pageNum) {
-            if (!activePdfMeta) return;
-            const parsed = parseInt(pageNum, 10);
-            if (!isNaN(parsed) && parsed >= 1) {
-                activePdfPage = parsed;
-                renderCurrentPdfPage();
-            }
-        }
+        function openScriptureModal(scrId) {
+            const s = getActiveSession();
+            const scr = s.scriptures.find(x => x.id === scrId);
+            if (!scr) return;
+            document.getElementById('scr-modal-ref').textContent = scr.ref;
+            const textEl = document.getElementById('scr-modal-text');
+            textEl.textContent = scr.text;
+            textEl.style.fontSize = (state.scrModalFontSize || 26) + 'px';
 
-        function pdfChangeZoom(delta) {
-            if (!activePdfMeta) return;
-            activePdfZoom = Math.max(0.5, Math.min(2.6, +(activePdfZoom + delta).toFixed(2)));
-            renderCurrentPdfPage();
-        }
-
-        function jumpToPdfPageFromNote(noteId, targetPage) {
-            const note = state.notes.find(n => n.id === noteId);
-            if (!activePdfMeta && note && note.pdfId) {
-                openPdfInWorkspace(note.pdfId).then(() => {
-                    activePdfPage = targetPage;
-                    renderCurrentPdfPage();
-                });
-                return;
-            }
-            if (activePdfDoc) {
-                activePdfPage = targetPage;
-                renderCurrentPdfPage();
-            }
-        }
-
-        /* GESTIONE SCRITTURE COLLEGATE ALLE PAGINE DEL PDF */
-        function getSectionScriptures(sectionId, weekKey) {
-            if (!Array.isArray(state.scriptures)) state.scriptures = [];
-            return state.scriptures.filter(s => s.section === sectionId && s.weekKey === weekKey);
-        }
-
-        function openScriptureModal(fromPdf = false, scrId = null) {
-            scriptureFromPdfContext = fromPdf;
-            editingScriptureId = scrId;
-            const modal = document.getElementById('scripture-modal');
-            const titleEl = document.getElementById('scripture-modal-title');
-            const refInput = document.getElementById('scr-input-ref');
-            const pageInput = document.getElementById('scr-input-page');
-            const textInput = document.getElementById('scr-input-text');
-
-            if (scrId) {
-                const existing = state.scriptures.find(s => s.id === scrId);
-                if (existing) {
-                    titleEl.textContent = 'Modifica Scrittura';
-                    refInput.value = existing.ref || '';
-                    pageInput.value = existing.pdfPage || '';
-                    textInput.value = existing.text || '';
-                }
+            const gotoBtn = document.getElementById('scr-modal-goto-pdf');
+            if (scr.pdfPage) {
+                gotoBtn.classList.remove('hidden');
+                gotoBtn.textContent = 'Vai a pag. ' + scr.pdfPage + ' del PDF →';
+                gotoBtn.onclick = () => {
+                    closeScriptureModal();
+                    goToLinkedPdfPage(scr.pdfPage);
+                };
             } else {
-                titleEl.textContent = 'Aggiungi Scrittura';
-                refInput.value = '';
-                pageInput.value = (fromPdf && activePdfMeta) ? activePdfPage : '';
-                textInput.value = '';
+                gotoBtn.classList.add('hidden');
             }
-
-            if (modal) {
-                modal.classList.remove('hidden');
-                modal.classList.add('flex');
-                setTimeout(() => refInput && refInput.focus(), 60);
-            }
+            document.getElementById('scripture-reader-modal').classList.remove('hidden');
         }
 
         function closeScriptureModal() {
-            const modal = document.getElementById('scripture-modal');
-            if (modal) {
-                modal.classList.add('hidden');
-                modal.classList.remove('flex');
-            }
-            editingScriptureId = null;
+            document.getElementById('scripture-reader-modal').classList.add('hidden');
         }
 
-        function saveScriptureEntry() {
-            const ref = document.getElementById('scr-input-ref').value.trim();
-            const text = document.getElementById('scr-input-text').value.trim();
-            const rawPage = parseInt(document.getElementById('scr-input-page').value, 10);
-            const pdfPage = (!isNaN(rawPage) && rawPage > 0) ? rawPage : null;
-            if (!ref) return;
-
-            const wk = getWeekKey(state.currentWeekOffset);
-            const secPdfs = state.pdfs.filter(p => p.section === state.activeSection);
-            const linkedPdfId = activePdfMeta ? activePdfMeta.id : (secPdfs[0] ? secPdfs[0].id : null);
-
-            if (editingScriptureId) {
-                const existing = state.scriptures.find(s => s.id === editingScriptureId);
-                if (existing) {
-                    existing.ref = ref;
-                    existing.text = text;
-                    existing.pdfPage = pdfPage;
-                    if (linkedPdfId) existing.pdfId = linkedPdfId;
-                }
-            } else {
-                state.scriptures.push({
-                    id: 'scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
-                    weekKey: wk,
-                    section: state.activeSection,
-                    ref: ref,
-                    text: text,
-                    pdfId: linkedPdfId,
-                    pdfPage: pdfPage
-                });
-            }
-
-            saveState();
-            closeScriptureModal();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfScripturesDrawer();
-        }
-
-        function deleteScriptureEntry(scrId) {
-            state.scriptures = state.scriptures.filter(s => s.id !== scrId);
-            saveState();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfScripturesDrawer();
-        }
-
-        function jumpToPdfPageFromScripture(scrId) {
-            const scr = state.scriptures.find(s => s.id === scrId);
-            if (!scr || !scr.pdfPage) return;
-            const targetPdfId = scr.pdfId || (state.pdfs.find(p => p.section === scr.section)?.id);
-            if (!activePdfMeta && targetPdfId) {
-                openPdfInWorkspace(targetPdfId).then(() => {
-                    activePdfPage = scr.pdfPage;
-                    renderCurrentPdfPage();
-                });
-                return;
-            }
-            if (activePdfDoc) {
-                activePdfPage = scr.pdfPage;
-                renderCurrentPdfPage();
-            }
-        }
-
-        function changeScriptureFontSize(delta) {
-            state.scriptureFontSize = Math.max(13, Math.min(28, (state.scriptureFontSize || 16) + delta));
-            saveState();
-            renderActiveSection();
-            if (activePdfMeta) renderPdfScripturesDrawer();
-        }
-
-        function togglePdfScripturesDrawer(forceState = null) {
-            const drawer = document.getElementById('pdf-scriptures-drawer');
-            if (!drawer) return;
-            const shouldOpen = forceState !== null ? forceState : drawer.classList.contains('hidden');
-            drawer.classList.toggle('hidden', !shouldOpen);
-            if (shouldOpen) renderPdfScripturesDrawer();
-        }
-
-        function togglePdfScripturesFilter() {
-            pdfScripturesOnlyCurrentPage = !pdfScripturesOnlyCurrentPage;
-            renderPdfScripturesDrawer();
-        }
-
-        function openScriptureReaderOverlay(scrId) {
-            const scr = state.scriptures.find(s => s.id === scrId);
-            if (!scr) return;
-            const overlay = document.getElementById('scripture-reader-overlay');
-            const refEl = document.getElementById('reader-scr-ref');
-            const textEl = document.getElementById('reader-scr-text');
-            const pageBtn = document.getElementById('reader-scr-page-btn');
-            if (!overlay || !refEl || !textEl) return;
-
-            refEl.textContent = scr.ref || 'Scrittura';
-            textEl.textContent = scr.text && scr.text.trim() ? scr.text : '(Nessun testo inserito per questa scrittura)';
-            textEl.style.fontSize = readerScriptureFontSize + 'px';
-
-            if (pageBtn) {
-                if (typeof scr.pdfPage === 'number' && scr.pdfPage > 0) {
-                    pageBtn.classList.remove('hidden');
-                    pageBtn.textContent = `Vai a pag. ${scr.pdfPage}`;
-                    pageBtn.onclick = () => {
-                        closeScriptureReaderOverlay();
-                        jumpToPdfPageFromScripture(scr.id);
-                    };
-                } else {
-                    pageBtn.classList.add('hidden');
-                }
-            }
-
-            overlay.classList.remove('hidden');
-            overlay.classList.add('flex');
-            if (window.lucide) lucide.createIcons();
-        }
-
-        function closeScriptureReaderOverlay() {
-            const overlay = document.getElementById('scripture-reader-overlay');
-            if (overlay) {
-                overlay.classList.add('hidden');
-                overlay.classList.remove('flex');
-            }
-        }
-
-        function changeReaderScriptureFontSize(delta) {
-            readerScriptureFontSize = Math.max(16, Math.min(44, readerScriptureFontSize + delta));
-            const textEl = document.getElementById('reader-scr-text');
-            if (textEl) textEl.style.fontSize = readerScriptureFontSize + 'px';
-        }
-
-        function renderSingleScriptureCardHtml(scr, compact = false) {
-            const hasPage = typeof scr.pdfPage === 'number' && scr.pdfPage > 0;
-            return `
-                <div class="bg-white border border-plum-200 hover:border-plum-400 rounded-xl p-3 shadow-sm space-y-1.5 transition">
-                    <div class="flex flex-wrap items-center justify-between gap-1.5">
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <button type="button" onclick="openScriptureReaderOverlay('${scr.id}')" class="text-left text-xs sm:text-sm font-extrabold text-plum-900 hover:text-plum-700 underline decoration-plum-300 underline-offset-2">
-                                ${escapeAttr(scr.ref)}
-                            </button>
-                            ${hasPage ? `
-                                <button type="button" onclick="jumpToPdfPageFromScripture('${scr.id}')" class="px-2 py-0.5 rounded-lg bg-plum-100 hover:bg-plum-200 text-plum-900 text-[11px] font-bold">
-                                    Vai a pag. ${scr.pdfPage}
-                                </button>
-                            ` : `<span class="px-2 py-0.5 rounded-lg bg-ivory-100 text-plum-700 text-[11px] font-semibold">Nessuna pag.</span>`}
-                        </div>
-                        <div class="flex items-center gap-1">
-                            <button type="button" onclick="openScriptureReaderOverlay('${scr.id}')" class="px-2 py-0.5 rounded-lg bg-plum-700 hover:bg-plum-800 text-[11px] font-bold text-white">Leggi grande</button>
-                            <button type="button" onclick="openScriptureModal(${compact}, '${scr.id}')" class="px-2 py-0.5 rounded-lg bg-ivory-100 hover:bg-plum-100 text-[11px] font-bold text-plum-900">Modifica</button>
-                            ${!state.meetingMode ? `
-                                <button type="button" onclick="deleteScriptureEntry('${scr.id}')" class="p-1 rounded-lg text-rose-700 hover:bg-rose-50" title="Elimina scrittura">
-                                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                                </button>
-                            ` : ''}
-                        </div>
-                    </div>
-                    ${scr.text ? `
-                        <p onclick="openScriptureReaderOverlay('${scr.id}')" style="font-size: ${state.scriptureFontSize || 16}px;" class="text-zinc-800 leading-relaxed whitespace-pre-wrap cursor-pointer hover:bg-plum-50/60 rounded-lg p-1 -m-1 transition">${escapeAttr(scr.text)}</p>
-                    ` : ''}
-                </div>
-            `;
-        }
-
-        function renderPdfScripturesDrawer() {
-            const listEl = document.getElementById('pdf-scriptures-list');
-            const countEl = document.getElementById('pdf-scriptures-count');
-            const filterBtn = document.getElementById('btn-scr-filter-toggle');
-            if (!listEl) return;
-
-            const wk = getWeekKey(state.currentWeekOffset);
-            const allSecScr = getSectionScriptures(state.activeSection, wk);
-            if (countEl) countEl.textContent = allSecScr.length;
-            if (filterBtn) {
-                filterBtn.textContent = pdfScripturesOnlyCurrentPage ? `Solo pag. ${activePdfPage}` : 'Tutte le scritture';
-            }
-
-            const shown = pdfScripturesOnlyCurrentPage
-                ? allSecScr.filter(s => s.pdfPage === activePdfPage)
-                : allSecScr;
-
-            listEl.innerHTML = shown.length === 0
-                ? `<p class="text-xs text-plum-700 bg-white border border-plum-200 rounded-xl p-2.5 col-span-full">Nessuna scrittura collegata${pdfScripturesOnlyCurrentPage ? ' a questa pagina' : ''}. Tocca <strong>+ Aggiungi Scrittura</strong> per inserirla.</p>`
-                : shown.map(s => renderSingleScriptureCardHtml(s, true)).join('');
-
-            if (window.lucide) lucide.createIcons();
-        }
-
-        function togglePdfSingleColumnLayout() {
-            state.pdfSingleCol = !state.pdfSingleCol;
-            const splitEl = document.getElementById('pdf-split-container');
-            const resizerEl = document.getElementById('pdf-resizer');
-            if (splitEl) splitEl.classList.toggle('single-col-layout', state.pdfSingleCol);
-            if (resizerEl) resizerEl.classList.toggle('hidden', state.pdfSingleCol);
-            document.getElementById('label-pdf-col-layout').textContent = state.pdfSingleCol ? '1 Col' : '2 Col';
-            if (!state.pdfSingleCol) applyPdfSplitWidths();
+        function changeScrModalSize(delta) {
+            state.scrModalFontSize = Math.max(18, Math.min(54, (state.scrModalFontSize || 26) + delta));
+            document.getElementById('scr-modal-text').style.fontSize = state.scrModalFontSize + 'px';
             saveState();
         }
 
-        function applyPdfSplitWidths() {
-            if (state.pdfSingleCol) return;
-            const leftPct = Math.max(15, Math.min(85, Number(state.pdfSplitLeftPct) || 70));
-            const rightPct = Math.max(15, 100 - leftPct);
-            const leftPane = document.getElementById('pdf-left-pane');
-            const rightPane = document.getElementById('pdf-right-pane');
-            if (leftPane) {
-                leftPane.style.flex = `0 0 ${leftPct}%`;
-                leftPane.style.width = leftPct + '%';
-            }
-            if (rightPane) {
-                rightPane.style.flex = `1 1 ${rightPct}%`;
-                rightPane.style.width = rightPct + '%';
-            }
-        }
-
-        function initPdfSplitResizer() {
-            const resizer = document.getElementById('pdf-resizer');
-            const container = document.getElementById('pdf-split-container');
-            const nativeContainer = document.getElementById('pdf-native-container');
-            if (!resizer || !container) return;
-
-            let dragging = false;
-
-            const updatePositionFromClientX = (clientX) => {
-                const rect = container.getBoundingClientRect();
-                if (rect.width <= 0) return;
-                const relX = clientX - rect.left;
-                const pct = (relX / rect.width) * 100;
-                state.pdfSplitLeftPct = Math.max(15, Math.min(85, Math.round(pct * 10) / 10));
-                applyPdfSplitWidths();
-            };
-
-            resizer.onpointerdown = (e) => {
-                if (state.pdfSingleCol) return;
-                e.preventDefault();
-                dragging = true;
-                if (resizer.setPointerCapture) {
-                    try { resizer.setPointerCapture(e.pointerId); } catch (_) {}
-                }
-                if (nativeContainer) nativeContainer.style.pointerEvents = 'none';
-                document.body.style.cursor = 'col-resize';
-            };
-
-            window.addEventListener('pointermove', (e) => {
-                if (!dragging || state.pdfSingleCol) return;
-                updatePositionFromClientX(e.clientX);
-            });
-
-            const stopDrag = () => {
-                if (!dragging) return;
-                dragging = false;
-                if (nativeContainer) nativeContainer.style.pointerEvents = '';
-                document.body.style.cursor = '';
-                saveState();
-            };
-
-            window.addEventListener('pointerup', stopDrag);
-            window.addEventListener('pointercancel', stopDrag);
-        }
-
-        function initPdfSplitResizer() {
-            const resizer = document.getElementById('pdf-resizer');
-            const container = document.getElementById('pdf-split-container');
-            if (!resizer || !container) return;
-
-            let dragging = false;
-
-            resizer.onpointerdown = (e) => {
-                if (state.pdfSingleCol) return;
-                e.preventDefault();
-                dragging = true;
-                resizer.setPointerCapture(e.pointerId);
-                document.body.style.cursor = 'col-resize';
-            };
-
-            resizer.onpointermove = (e) => {
-                if (!dragging || state.pdfSingleCol) return;
-                const rect = container.getBoundingClientRect();
-                if (rect.width <= 0) return;
-                const relX = e.clientX - rect.left;
-                const pct = (relX / rect.width) * 100;
-                state.pdfSplitLeftPct = Math.max(25, Math.min(82, Math.round(pct * 10) / 10));
-                applyPdfSplitWidths();
-            };
-
-            const stopDrag = () => {
-                if (!dragging) return;
-                dragging = false;
-                document.body.style.cursor = '';
-                saveState();
-            };
-
-            resizer.onpointerup = stopDrag;
-            resizer.onpointercancel = stopDrag;
-        }
-
-        function setPdfNotesFilterMode(mode) {
-            state.pdfNotesFilter = mode;
-            const btnPage = document.getElementById('filter-page-notes');
-            const btnAll = document.getElementById('filter-all-notes');
-            if (btnPage && btnAll) {
-                btnPage.className = mode === 'page' ? 'py-1.5 rounded-lg bg-plum-200 text-plum-900' : 'py-1.5 rounded-lg text-plum-700';
-                btnAll.className = mode === 'all' ? 'py-1.5 rounded-lg bg-plum-200 text-plum-900' : 'py-1.5 rounded-lg text-plum-700';
-            }
-            renderPdfSideNotes();
+        /* LETTORE PDF AD ALTA DEFINIZIONE RETINA + APPLE PENCIL */
+        async function handlePdfFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const arrayBuffer = await file.arrayBuffer();
+            activePdfBytes = new Uint8Array(arrayBuffer);
+            const s = getActiveSession();
+            s.pdfMeta = { name: file.name };
             saveState();
-        }
-
-        function renderPdfSideNotes() {
-            const container = document.getElementById('pdf-side-notes-list');
-            const heading = document.getElementById('pdf-notes-heading');
-            if (!container) return;
-
-            const wk = getWeekKey(state.currentWeekOffset);
-            let notes = getSectionNotes(state.activeSection, wk);
-
-            if (state.pdfNotesFilter === 'page') {
-                if (heading) heading.textContent = `Note della pagina ${activePdfPage}`;
-                notes = notes.filter(n => !Array.isArray(n.pdfPages) || n.pdfPages.length === 0 || n.pdfPages.includes(activePdfPage));
-            } else {
-                if (heading) heading.textContent = `Tutte le note (${notes.length})`;
-            }
-
-            container.innerHTML = notes.length === 0
-                ? `<p class="text-xs text-plum-700 bg-white border border-plum-200 rounded-xl p-3">Nessuna nota collegata a questa pagina.</p>`
-                : notes.map(n => renderSingleNoteCardHtml(n, true)).join('');
-
-            if (window.lucide) lucide.createIcons();
-            initAllPencilPads();
-        }
-
-        function setPdfAnnotTool(tool) {
-            pdfAnnotTool = tool;
-            ['scroll', 'pen', 'highlight', 'eraser'].forEach(t => {
-                const btn = document.getElementById('tool-pdf-' + t);
-                if (!btn) return;
-                btn.classList.toggle('bg-plum-100', t === tool);
-                btn.classList.toggle('bg-white', t !== tool);
-            });
-            const annotCanvas = document.getElementById('pdf-annot-canvas');
-            if (annotCanvas) {
-                const canDraw = (tool !== 'scroll' && !state.meetingMode);
-                annotCanvas.style.pointerEvents = canDraw ? 'auto' : 'none';
-                annotCanvas.style.touchAction = canDraw ? 'none' : 'auto';
-                pdfScrollLocked = canDraw;
-                document.getElementById('pdf-left-pane')?.classList.toggle('pdf-scroll-locked', canDraw);
-            }
-        }
-
-        function setPdfHighlightColor(colorKey) {
-            pdfHighlightColor = colorKey;
-            ['yellow', 'green', 'pink'].forEach(c => {
-                const btn = document.getElementById('hl-color-' + c);
-                if (!btn) return;
-                btn.classList.toggle('border-2', c === colorKey);
-                btn.classList.toggle('border-plum-900', c === colorKey);
-                btn.classList.toggle('scale-110', c === colorKey);
-            });
-            if (pdfAnnotTool !== 'highlight') setPdfAnnotTool('highlight');
-        }
-
-        function setPdfStrokeSize(sizeKey) {
-            pdfStrokeSize = sizeKey;
-            ['thin', 'medium', 'thick'].forEach(s => {
-                const btn = document.getElementById('stroke-size-' + s);
-                if (!btn) return;
-                btn.classList.toggle('bg-plum-700', s === sizeKey);
-                btn.classList.toggle('text-white', s === sizeKey);
-                btn.classList.toggle('bg-white', s !== sizeKey);
-                btn.classList.toggle('text-plum-900', s !== sizeKey);
-            });
-        }
-
-        function togglePdfPencilOnly() {
-            pdfPencilOnly = !pdfPencilOnly;
-            const btn = document.getElementById('btn-pdf-pencil-only');
-            if (btn) {
-                btn.textContent = pdfPencilOnly ? 'Solo Apple Pencil ✓' : 'Penna + Dita';
-                btn.classList.toggle('bg-plum-200', pdfPencilOnly);
-                btn.classList.toggle('bg-white', !pdfPencilOnly);
-            }
-        }
-
-        /* IMMAGINI E INFOGRAFICHE SUL PDF */
-        async function handlePdfOverlayImageUpload(event) {
-            const file = event.target.files?.[0];
-            if (!file || !activePdfMeta || state.meetingMode) return;
-            try {
-                const dataUrl = await compressImageFileToDataUrl(file, 850);
-                if (!activePdfMeta.overlayImages) activePdfMeta.overlayImages = {};
-                if (!Array.isArray(activePdfMeta.overlayImages[activePdfPage])) {
-                    activePdfMeta.overlayImages[activePdfPage] = [];
-                }
-                activePdfMeta.overlayImages[activePdfPage].push({
-                    id: 'pimg_' + Date.now(),
-                    src: dataUrl,
-                    xPct: 12,
-                    yPct: 12,
-                    wPct: 36
-                });
-                saveState();
-                renderPdfOverlayImages();
-            } catch (_) {}
+            await openPdfWorkspace(1);
             event.target.value = '';
         }
 
-        function renderPdfOverlayImages() {
-            const layer = document.getElementById('pdf-images-overlay-layer');
-            if (!layer || !activePdfMeta) return;
-            const items = activePdfMeta.overlayImages?.[activePdfPage] || [];
-            layer.innerHTML = items.map((item, idx) => `
-                <div style="left: ${item.xPct}%; top: ${item.yPct}%; width: ${item.wPct}%;"
-                    class="absolute pointer-events-auto group border-2 border-plum-500/70 rounded-xl shadow-lg bg-white/90 overflow-hidden select-none">
-                    <img src="${item.src}" onpointerdown="startDragPdfImage(event, ${idx})" alt="Immagine sul PDF" class="w-full h-auto block cursor-move touch-none">
-                    ${!state.meetingMode ? `
-                        <div class="flex items-center justify-between bg-plum-900/90 text-white px-1.5 py-0.5 text-[10px] font-bold">
-                            <button type="button" onclick="resizePdfOverlayImage(${idx}, -6)" class="px-1.5 hover:bg-plum-700 rounded">−</button>
-                            <button type="button" onclick="resizePdfOverlayImage(${idx}, 6)" class="px-1.5 hover:bg-plum-700 rounded">+</button>
-                            <button type="button" onclick="removePdfOverlayImage(${idx})" class="px-1.5 text-rose-300 hover:bg-rose-700 rounded">✕</button>
-                        </div>
-                    ` : ''}
-                </div>
-            `).join('');
+        async function openPdfWorkspace(startPage = 1) {
+            const s = getActiveSession();
+            document.getElementById('pdf-doc-title').textContent = s.pdfMeta ? s.pdfMeta.name : 'Documento PDF';
+            document.getElementById('pdf-workspace-overlay').classList.remove('hidden');
+            document.getElementById('pdf-left-pane').style.flex = `0 0 ${state.pdfSplitPercent || 54}%`;
+
+            if (activePdfBytes && window.pdfjsLib) {
+                try {
+                    const loadingTask = pdfjsLib.getDocument({
+                        data: activePdfBytes.slice(0),
+                        disableWorker: true,
+                        isEvalSupported: false
+                    });
+                    activePdfDoc = await loadingTask.promise;
+                    activePdfTotalPages = activePdfDoc.numPages;
+                    document.getElementById('pdf-total-pages').textContent = '/ ' + activePdfTotalPages;
+                    document.getElementById('pdf-canvas-wrapper').classList.remove('hidden');
+                    document.getElementById('pdf-fallback-frame').classList.add('hidden');
+                    await jumpToPdfPage(startPage);
+                } catch (err) {
+                    console.warn('Fallback PDF nativo:', err);
+                    showFallbackPdf(startPage);
+                }
+            } else if (activePdfBytes) {
+                showFallbackPdf(startPage);
+            }
+            renderPdfSideNotes();
+            renderPdfScripturesDrawer();
         }
 
-        function startDragPdfImage(event, idx) {
-            if (state.meetingMode || !activePdfMeta) return;
-            event.preventDefault();
-            const layer = document.getElementById('pdf-images-overlay-layer');
-            const items = activePdfMeta.overlayImages?.[activePdfPage];
-            if (!layer || !items || !items[idx]) return;
-
-            const rect = layer.getBoundingClientRect();
-            const startX = event.clientX;
-            const startY = event.clientY;
-            const origXPct = items[idx].xPct;
-            const origYPct = items[idx].yPct;
-
-            const onMove = (ev) => {
-                const dxPct = ((ev.clientX - startX) / rect.width) * 100;
-                const dyPct = ((ev.clientY - startY) / rect.height) * 100;
-                items[idx].xPct = Math.max(0, Math.min(85, origXPct + dxPct));
-                items[idx].yPct = Math.max(0, Math.min(85, origYPct + dyPct));
-                renderPdfOverlayImages();
-            };
-            const onUp = () => {
-                window.removeEventListener('pointermove', onMove);
-                window.removeEventListener('pointerup', onUp);
-                saveState();
-            };
-            window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', onUp);
+        function showFallbackPdf(page) {
+            if (!activePdfBytes) return;
+            const blob = new Blob([activePdfBytes], { type: 'application/pdf' });
+            const url = URL.createObjectURL(blob) + '#page=' + page;
+            document.getElementById('pdf-canvas-wrapper').classList.add('hidden');
+            const frame = document.getElementById('pdf-fallback-frame');
+            frame.classList.remove('hidden');
+            frame.src = url;
         }
 
-        function resizePdfOverlayImage(idx, deltaPct) {
-            if (state.meetingMode || !activePdfMeta) return;
-            const items = activePdfMeta.overlayImages?.[activePdfPage];
-            if (!items || !items[idx]) return;
-            items[idx].wPct = Math.max(15, Math.min(85, items[idx].wPct + deltaPct));
-            saveState();
-            renderPdfOverlayImages();
+        function closePdfWorkspace() {
+            document.getElementById('pdf-workspace-overlay').classList.add('hidden');
+            renderApp();
         }
 
-        function removePdfOverlayImage(idx) {
-            if (state.meetingMode || !activePdfMeta) return;
-            const items = activePdfMeta.overlayImages?.[activePdfPage];
-            if (!items) return;
-            items.splice(idx, 1);
-            saveState();
-            renderPdfOverlayImages();
+        async function jumpToPdfPage(pageNum) {
+            const p = Math.max(1, Math.min(activePdfTotalPages || 999, parseInt(pageNum, 10) || 1));
+            activePdfPage = p;
+            document.getElementById('pdf-page-input').value = p;
+            document.getElementById('btn-add-note-page-num').textContent = p;
+
+            if (activePdfDoc) {
+                await renderCurrentPdfPage();
+            } else if (activePdfBytes) {
+                showFallbackPdf(p);
+            }
+            renderPdfSideNotes();
         }
 
-        function setupPdfAnnotCanvas(canvas) {
-            if (!activePdfMeta) return;
-            if (!activePdfMeta.annotations) activePdfMeta.annotations = {};
-            if (!activePdfMeta.annotations[activePdfPage]) activePdfMeta.annotations[activePdfPage] = [];
+        function changePdfPage(delta) {
+            jumpToPdfPage(activePdfPage + delta);
+        }
+
+        async function changePdfZoom(delta) {
+            activePdfZoom = Math.max(0.6, Math.min(2.6, activePdfZoom + delta));
+            if (activePdfDoc) await renderCurrentPdfPage();
+        }
+
+        function goToLinkedPdfPage(pageNum) {
+            if (!activePdfBytes) return;
+            if (document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                openPdfWorkspace(pageNum);
+            } else {
+                jumpToPdfPage(pageNum);
+            }
+        }
+
+        async function renderCurrentPdfPage() {
+            if (!activePdfDoc) return;
+            const page = await activePdfDoc.getPage(activePdfPage);
+            const dpr = Math.min(Math.max(window.devicePixelRatio || 1, 2), 3);
+            const cssViewport = page.getViewport({ scale: activePdfZoom });
+            const renderViewport = page.getViewport({ scale: activePdfZoom * dpr });
+
+            const canvas = document.getElementById('pdf-render-canvas');
+            const annotCanvas = document.getElementById('pdf-annot-canvas');
+            const wrapper = document.getElementById('pdf-canvas-wrapper');
+            if (!canvas || !annotCanvas) return;
+
+            const cssWidth = Math.max(1, Math.floor(cssViewport.width));
+            const cssHeight = Math.max(1, Math.floor(cssViewport.height));
+            const renderWidth = Math.max(1, Math.floor(renderViewport.width));
+            const renderHeight = Math.max(1, Math.floor(renderViewport.height));
+
+            canvas.width = renderWidth;
+            canvas.height = renderHeight;
+            canvas.style.width = cssWidth + 'px';
+            canvas.style.height = cssHeight + 'px';
+
+            annotCanvas.width = cssWidth;
+            annotCanvas.height = cssHeight;
+            annotCanvas.style.width = cssWidth + 'px';
+            annotCanvas.style.height = cssHeight + 'px';
+
+            if (wrapper) {
+                wrapper.style.width = cssWidth + 'px';
+                wrapper.style.height = cssHeight + 'px';
+            }
 
             const ctx = canvas.getContext('2d');
-            const strokes = activePdfMeta.annotations[activePdfPage];
-            redrawPdfStrokes(ctx, canvas, strokes);
-            setPdfAnnotTool(state.meetingMode ? 'scroll' : pdfAnnotTool);
+            if (ctx) {
+                ctx.setTransform(1, 0, 0, 1, 0, 0);
+                ctx.clearRect(0, 0, renderWidth, renderHeight);
+                await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
+            }
 
-            let drawing = false;
-            let activeStroke = null;
+            redrawPdfAnnotations();
+            renderPdfOverlayImages();
+        }
 
-            canvas.onpointerdown = (e) => {
-                if (state.meetingMode || pdfAnnotTool === 'scroll') return;
-                if (pdfPencilOnly && e.pointerType === 'touch') return;
+        /* STRUMENTI DISEGNO APPLE PENCIL SUL PDF */
+        function setPdfTool(tool) {
+            pdfTool = tool;
+            ['none', 'pen', 'highlighter', 'eraser'].forEach(t => {
+                const btn = document.getElementById('tool-' + t);
+                if (!btn) return;
+                if (t === tool) {
+                    btn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-bold plum-primary';
+                } else {
+                    btn.className = 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#4a3343]';
+                }
+            });
+            const annotCanvas = document.getElementById('pdf-annot-canvas');
+            if (annotCanvas) {
+                annotCanvas.style.pointerEvents = tool === 'none' ? 'none' : 'auto';
+            }
+        }
+
+        function setHighlighterColor(color, btnEl) {
+            pdfHighlighterColor = color;
+            document.querySelectorAll('.hl-color-btn').forEach(b => b.classList.remove('ring-2', 'ring-[#6b2d5c]'));
+            if (btnEl) btnEl.classList.add('ring-2', 'ring-[#6b2d5c]');
+            setPdfTool('highlighter');
+        }
+
+        function togglePencilOnly() {
+            pencilOnly = !pencilOnly;
+            const btn = document.getElementById('btn-pencil-only');
+            btn.textContent = pencilOnly ? 'Solo Apple Pencil ✓' : 'Pencil + Dita';
+            btn.className = pencilOnly
+                ? 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800'
+                : 'px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-800';
+        }
+
+        function isStylusInput(e) {
+            if (!pencilOnly) return true;
+            if (e.pointerType === 'pen' || e.pointerType === 'mouse') return true;
+            if (e.touches && e.touches[0] && e.touches[0].touchType === 'stylus') return true;
+            if (typeof e.pressure === 'number' && e.pressure > 0 && e.pressure !== 0.5 && e.pressure !== 1) return true;
+            return false;
+        }
+
+        function getNormalizedCanvasPos(e, canvas) {
+            const rect = canvas.getBoundingClientRect();
+            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+            return {
+                x: (clientX - rect.left) / rect.width,
+                y: (clientY - rect.top) / rect.height
+            };
+        }
+
+        function setupPdfAnnotCanvas() {
+            const canvas = document.getElementById('pdf-annot-canvas');
+            if (!canvas) return;
+            canvas.style.pointerEvents = 'none';
+
+            const startDraw = (e) => {
+                if (pdfTool === 'none') return;
+                if (!isStylusInput(e)) return;
                 e.preventDefault();
-                canvas.setPointerCapture(e.pointerId);
-                const r = canvas.getBoundingClientRect();
-                const pt = { x: (e.clientX - r.left) * (canvas.width / r.width), y: (e.clientY - r.top) * (canvas.height / r.height) };
+                isDrawingPdf = true;
+                const pos = getNormalizedCanvasPos(e, canvas);
+                const s = getActiveSession();
+                if (!s.pdfAnnotations[activePdfPage]) s.pdfAnnotations[activePdfPage] = [];
 
-                if (pdfAnnotTool === 'eraser') {
-                    activePdfMeta.annotations[activePdfPage] = strokes.filter(st => !st.points.some(p => Math.hypot(p.x - pt.x, p.y - pt.y) < 18));
-                    redrawPdfStrokes(ctx, canvas, activePdfMeta.annotations[activePdfPage]);
-                    saveState();
+                if (pdfTool === 'eraser') {
+                    eraseNearPoint(pos);
                     return;
                 }
 
-                drawing = true;
-                activeStroke = {
-                    tool: pdfAnnotTool,
-                    color: pdfHighlightColor,
-                    size: pdfStrokeSize,
-                    points: [pt]
+                currentStroke = {
+                    tool: pdfTool,
+                    color: pdfTool === 'highlighter' ? pdfHighlighterColor : '#6b2d5c',
+                    width: pdfTool === 'highlighter' ? pdfStrokeWidth * 3.5 : pdfStrokeWidth,
+                    points: [pos]
                 };
-                strokes.push(activeStroke);
+                s.pdfAnnotations[activePdfPage].push(currentStroke);
+                redrawPdfAnnotations();
             };
 
-            canvas.onpointermove = (e) => {
-                if (!drawing || !activeStroke) return;
-                if (pdfPencilOnly && e.pointerType === 'touch') return;
-                const r = canvas.getBoundingClientRect();
-                const pt = { x: (e.clientX - r.left) * (canvas.width / r.width), y: (e.clientY - r.top) * (canvas.height / r.height) };
-                activeStroke.points.push(pt);
-                redrawPdfStrokes(ctx, canvas, strokes);
+            const moveDraw = (e) => {
+                if (!isDrawingPdf || pdfTool === 'none') return;
+                if (!isStylusInput(e)) return;
+                e.preventDefault();
+                const pos = getNormalizedCanvasPos(e, canvas);
+                if (pdfTool === 'eraser') {
+                    eraseNearPoint(pos);
+                    return;
+                }
+                if (currentStroke) {
+                    currentStroke.points.push(pos);
+                    redrawPdfAnnotations();
+                }
             };
 
-            canvas.onpointerup = () => {
-                if (!drawing) return;
-                drawing = false;
-                saveState();
+            const endDraw = () => {
+                if (isDrawingPdf) {
+                    isDrawingPdf = false;
+                    currentStroke = null;
+                    saveState();
+                }
             };
+
+            canvas.addEventListener('pointerdown', startDraw);
+            canvas.addEventListener('pointermove', moveDraw);
+            window.addEventListener('pointerup', endDraw);
+            canvas.addEventListener('touchstart', startDraw, { passive: false });
+            canvas.addEventListener('touchmove', moveDraw, { passive: false });
+            window.addEventListener('touchend', endDraw);
         }
 
-        function redrawPdfStrokes(ctx, canvas, strokes) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            const hlMap = {
-                yellow: 'rgba(253, 224, 71, 0.45)',
-                green: 'rgba(110, 231, 183, 0.45)',
-                pink: 'rgba(249, 168, 212, 0.48)'
-            };
-            const penWidths = { thin: 1.6, medium: 2.6, thick: 4.5 };
-            const hlWidths = { thin: 11, medium: 17, thick: 25 };
+        function eraseNearPoint(pos) {
+            const s = getActiveSession();
+            const list = s.pdfAnnotations[activePdfPage] || [];
+            s.pdfAnnotations[activePdfPage] = list.filter(stroke => {
+                return !stroke.points.some(pt => Math.hypot(pt.x - pos.x, pt.y - pos.y) < 0.025);
+            });
+            redrawPdfAnnotations();
+        }
 
+        function undoPdfStroke() {
+            const s = getActiveSession();
+            const list = s.pdfAnnotations[activePdfPage];
+            if (list && list.length > 0) {
+                list.pop();
+                saveState();
+                redrawPdfAnnotations();
+            }
+        }
+
+        function redrawPdfAnnotations() {
+            const canvas = document.getElementById('pdf-annot-canvas');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const s = getActiveSession();
+            const strokes = s.pdfAnnotations[activePdfPage] || [];
             strokes.forEach(st => {
-                if (!st.points || st.points.length < 2) return;
+                if (!st.points || st.points.length === 0) return;
                 ctx.save();
+                ctx.beginPath();
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
-                const sz = st.size || 'medium';
-                if (st.tool === 'highlight') {
-                    ctx.strokeStyle = hlMap[st.color || 'yellow'] || hlMap.yellow;
-                    ctx.lineWidth = hlWidths[sz] || 17;
-                } else {
-                    ctx.strokeStyle = '#6D2E5B';
-                    ctx.lineWidth = penWidths[sz] || 2.6;
+                ctx.strokeStyle = st.color;
+                ctx.lineWidth = st.width;
+                ctx.moveTo(st.points[0].x * canvas.width, st.points[0].y * canvas.height);
+                for (let i = 1; i < st.points.length; i++) {
+                    ctx.lineTo(st.points[i].x * canvas.width, st.points[i].y * canvas.height);
                 }
-                ctx.beginPath();
-                ctx.moveTo(st.points[0].x, st.points[0].y);
-                for (let i = 1; i < st.points.length; i++) ctx.lineTo(st.points[i].x, st.points[i].y);
                 ctx.stroke();
                 ctx.restore();
             });
         }
 
-        function pdfUndoStroke() {
-            if (!activePdfMeta || state.meetingMode) return;
-            const list = activePdfMeta.annotations?.[activePdfPage];
-            if (list && list.length > 0) {
-                list.pop();
-                const canvas = document.getElementById('pdf-annot-canvas');
-                redrawPdfStrokes(canvas.getContext('2d'), canvas, list);
+        /* IMMAGINI SOVRAPPOSTE SUL PDF */
+        function addPdfOverlayImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            compressImageFile(file, 700, (dataUrl) => {
+                const s = getActiveSession();
+                if (!s.pdfImages[activePdfPage]) s.pdfImages[activePdfPage] = [];
+                s.pdfImages[activePdfPage].push({
+                    id: 'pimg_' + Date.now(),
+                    src: dataUrl,
+                    x: 10,
+                    y: 10,
+                    width: 180
+                });
                 saveState();
+                renderPdfOverlayImages();
+            });
+            event.target.value = '';
+        }
+
+        function renderPdfOverlayImages() {
+            const layer = document.getElementById('pdf-images-layer');
+            if (!layer) return;
+            layer.innerHTML = '';
+            const s = getActiveSession();
+            const imgs = s.pdfImages[activePdfPage] || [];
+
+            imgs.forEach(item => {
+                const box = document.createElement('div');
+                box.className = 'overlay-img-box pointer-events-auto';
+                box.style.left = item.x + 'px';
+                box.style.top = item.y + 'px';
+                box.style.width = item.width + 'px';
+                box.innerHTML = `
+                    <img src="${item.src}" class="w-full h-auto rounded-lg pointer-events-none">
+                    <div class="flex justify-between bg-[#261822]/85 text-white text-xs px-1.5 py-0.5 rounded-b-lg">
+                        <button type="button" onclick="resizePdfImg('${item.id}', -25)">−</button>
+                        <button type="button" onclick="resizePdfImg('${item.id}', 25)">+</button>
+                        <button type="button" onclick="removePdfImg('${item.id}')" class="text-rose-300 font-bold">✕</button>
+                    </div>
+                `;
+
+                let startX = 0, startY = 0, origX = item.x, origY = item.y;
+                box.addEventListener('pointerdown', (e) => {
+                    if (e.target.tagName === 'BUTTON') return;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    origX = item.x;
+                    origY = item.y;
+                    box.setPointerCapture(e.pointerId);
+                });
+                box.addEventListener('pointermove', (e) => {
+                    if (!box.hasPointerCapture(e.pointerId)) return;
+                    item.x = Math.max(0, origX + (e.clientX - startX));
+                    item.y = Math.max(0, origY + (e.clientY - startY));
+                    box.style.left = item.x + 'px';
+                    box.style.top = item.y + 'px';
+                });
+                box.addEventListener('pointerup', () => saveState());
+                layer.appendChild(box);
+            });
+        }
+
+        function resizePdfImg(id, delta) {
+            const s = getActiveSession();
+            const item = (s.pdfImages[activePdfPage] || []).find(x => x.id === id);
+            if (item) {
+                item.width = Math.max(80, Math.min(500, item.width + delta));
+                saveState();
+                renderPdfOverlayImages();
             }
         }
 
-        /* BACKUP COMPLETO ESPORTA / IMPORTA */
-        function exportBackupJson() {
+        function removePdfImg(id) {
+            const s = getActiveSession();
+            s.pdfImages[activePdfPage] = (s.pdfImages[activePdfPage] || []).filter(x => x.id !== id);
             saveState();
+            renderPdfOverlayImages();
+        }
+
+        /* NOTE E SCRITTURE NEL PANNELLO LATERALE PDF */
+        function setPdfNotesFilter(filter) {
+            pdfNotesFilter = filter;
+            document.getElementById('filter-page-notes').className = filter === 'page'
+                ? 'px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#6b2d5c] shadow-2xs'
+                : 'px-2.5 py-1 rounded-md text-xs font-bold text-[#7c6575]';
+            document.getElementById('filter-all-notes').className = filter === 'all'
+                ? 'px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#6b2d5c] shadow-2xs'
+                : 'px-2.5 py-1 rounded-md text-xs font-bold text-[#7c6575]';
+            renderPdfSideNotes();
+        }
+
+        function renderPdfSideNotes() {
+            const container = document.getElementById('pdf-side-notes-list');
+            if (!container) return;
+            const s = getActiveSession();
+            const filtered = pdfNotesFilter === 'page'
+                ? s.notes.filter(n => Number(n.pdfPage) === Number(activePdfPage))
+                : s.notes;
+
+            if (filtered.length === 0) {
+                container.innerHTML = `<div class="text-center text-[#7c6575] text-sm py-8">Nessuna nota collegata a questa vista. Tocca <strong>+ Nota</strong> in alto.</div>`;
+                return;
+            }
+            container.innerHTML = filtered.map((n, idx) => renderNoteCardHtml(n, idx, filtered.length)).join('');
+        }
+
+        function togglePdfScripturesDrawer() {
+            const drawer = document.getElementById('pdf-scriptures-drawer');
+            drawer.classList.toggle('hidden');
+            renderPdfScripturesDrawer();
+        }
+
+        function renderPdfScripturesDrawer() {
+            const box = document.getElementById('pdf-scriptures-chips');
+            if (!box) return;
+            const s = getActiveSession();
+            if (s.scriptures.length === 0) {
+                box.innerHTML = '<span class="text-xs text-amber-800">Nessuna scrittura aggiunta in questa sessione.</span>';
+                return;
+            }
+            box.innerHTML = s.scriptures.map(scr => `
+                <button type="button" onclick="openScriptureModal('${scr.id}')" class="px-3 py-1.5 rounded-xl bg-white border border-amber-300 text-amber-950 font-bold text-xs shadow-2xs hover:bg-amber-100">
+                    📖 ${escapeHtml(scr.ref)} ${scr.pdfPage ? `(Pag. ${scr.pdfPage})` : ''}
+                </button>
+            `).join('');
+        }
+
+        /* BARRA DIVISORIA TRASCINABILE TRA PDF E NOTE */
+        function setupPdfResizer() {
+            const resizer = document.getElementById('pdf-resizer');
+            const container = document.getElementById('pdf-split-container');
+            const leftPane = document.getElementById('pdf-left-pane');
+            const frame = document.getElementById('pdf-fallback-frame');
+            if (!resizer || !container || !leftPane) return;
+
+            let dragging = false;
+
+            resizer.addEventListener('pointerdown', (e) => {
+                dragging = true;
+                resizer.classList.add('dragging');
+                resizer.setPointerCapture(e.pointerId);
+                if (frame) frame.style.pointerEvents = 'none';
+            });
+
+            resizer.addEventListener('pointermove', (e) => {
+                if (!dragging) return;
+                const rect = container.getBoundingClientRect();
+                const relX = e.clientX - rect.left;
+                const pct = Math.max(15, Math.min(85, (relX / rect.width) * 100));
+                state.pdfSplitPercent = Math.round(pct);
+                leftPane.style.flex = `0 0 ${state.pdfSplitPercent}%`;
+            });
+
+            const stopDrag = () => {
+                if (dragging) {
+                    dragging = false;
+                    resizer.classList.remove('dragging');
+                    if (frame) frame.style.pointerEvents = 'auto';
+                    saveState();
+                }
+            };
+            resizer.addEventListener('pointerup', stopDrag);
+            window.addEventListener('pointerup', stopDrag);
+        }
+
+        /* BACKUP ESPORTA / IMPORTA */
+        function exportBackup() {
             const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'Quaderno_Studio_' + new Date().toISOString().slice(0, 10) + '.json';
+            a.download = 'Quaderno_Studio_Backup_' + new Date().toISOString().slice(0, 10) + '.json';
             a.click();
             URL.revokeObjectURL(url);
         }
 
-        function importBackupJson(event) {
+        function importBackup(event) {
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
-                    const imported = JSON.parse(e.target.result);
-                    if (imported && Array.isArray(imported.notes)) {
-                        state = { ...state, ...imported };
+                    const data = JSON.parse(e.target.result);
+                    if (data && Array.isArray(data.sessions)) {
+                        state = { ...state, ...data };
                         saveState();
-                        updateWeekHeader();
-                        renderNavigation();
-                        renderActiveSection();
+                        renderApp();
                     }
-                } catch (_) {}
+                } catch (err) {
+                    console.error('Errore importazione:', err);
+                }
             };
             reader.readAsText(file);
             event.target.value = '';
         }
 
-        function escapeAttr(str) {
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/"/g, '&quot;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
-        }
+        /* RENDERING PRINCIPALE */
+        function renderApp() {
+            // Aggiorna label settimana
+            const wk = getWeekKey(state.weekOffset || 0);
+            document.getElementById('header-week-label').textContent = 'Settimana del ' + wk;
+            const weekLabels = {
+                '-1': 'Settimana scorsa',
+                '0': 'Questa settimana',
+                '1': 'Prossima settimana'
+            };
+            document.getElementById('week-selector-text').textContent = weekLabels[String(state.weekOffset || 0)] || ('Settimana ' + wk);
 
-        function updateTorreMeta(field, val) {
-            const wk = getWeekKey(state.currentWeekOffset);
-            const data = ensureWeekData(wk);
-            data[field] = val;
-            saveState();
-        }
+            // Aggiorna pulsante Preparazione / Adunanza
+            const modeBtn = document.getElementById('btn-toggle-study-mode');
+            const modeLbl = document.getElementById('study-mode-label');
+            if (state.studyMode === 'adunanza') {
+                modeBtn.className = 'flex items-center gap-2 px-3.5 py-2 rounded-full bg-amber-100 border border-amber-300 text-xs font-bold text-amber-950 transition';
+                modeLbl.textContent = 'Adunanza';
+            } else {
+                modeBtn.className = 'flex items-center gap-2 px-3.5 py-2 rounded-full bg-white border plum-border text-xs font-bold text-[#3d2937] hover:bg-[#f6eef4] transition';
+                modeLbl.textContent = 'Preparazione';
+            }
 
-        function renderActiveSection() {
-            if (state.activeSection === 'home') {
-                renderHomePage();
+            // Barra Pillole Sessioni (Home Page + Sessioni)
+            const navBar = document.getElementById('sessions-nav-bar');
+            const isHome = state.view === 'home';
+            navBar.innerHTML = `
+                <button type="button" onclick="goHome()"
+                    class="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold border transition ${isHome ? 'plum-primary border-[#6b2d5c]' : 'bg-white text-[#3d2937] plum-border hover:bg-[#f6eef4]'}">
+                    <i data-lucide="home" class="w-3.5 h-3.5"></i>
+                    <span>Home Page</span>
+                </button>
+            ` + state.sessions.map(s => {
+                const active = state.view === 'session' && s.id === state.activeSessionId;
+                return `
+                    <button type="button" onclick="openSession('${s.id}')"
+                        class="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold border transition ${active ? 'plum-primary border-[#6b2d5c]' : 'bg-white text-[#3d2937] plum-border hover:bg-[#f6eef4]'}">
+                        <i data-lucide="${s.lucideIcon || 'notebook-pen'}" class="w-3.5 h-3.5 ${active ? 'text-white' : 'text-[#6b2d5c]'}"></i>
+                        <span>${escapeHtml(s.name)}</span>
+                    </button>
+                `;
+            }).join('');
+
+            const main = document.getElementById('main-content');
+
+            if (state.view === 'home') {
+                main.innerHTML = `
+                    <div class="space-y-6">
+                        <!-- Banner Home Page -->
+                        <div class="bg-white rounded-3xl border plum-border p-6 shadow-2xs flex flex-wrap items-center justify-between gap-4">
+                            <div>
+                                <h2 class="text-xl sm:text-2xl font-extrabold text-[#261822]">Home Page — Le tue Sessioni di Studio</h2>
+                                <p class="text-sm text-[#7c6575] mt-1">Scegli una sessione per aprire note, scritture e PDF, oppure aggiungi e rinomina le sessioni.</p>
+                            </div>
+                            <button type="button" onclick="openCreateSessionModal()" class="inline-flex items-center gap-2 px-5 py-3 rounded-2xl plum-primary font-bold text-sm shadow-xs transition">
+                                <i data-lucide="plus" class="w-4 h-4"></i>
+                                <span>Nuova Sessione</span>
+                            </button>
+                        </div>
+
+                        <!-- Griglia Schede Sessioni -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                            ${state.sessions.map(s => {
+                                const pdfCount = s.pdfMeta ? 1 : 0;
+                                return `
+                                    <div onclick="openSession('${s.id}')" class="bg-white rounded-3xl border plum-border p-5 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between gap-6">
+                                        <div class="flex items-start justify-between gap-2">
+                                            <div class="w-11 h-11 rounded-2xl plum-soft border plum-border flex items-center justify-center text-[#6b2d5c]">
+                                                <i data-lucide="${s.lucideIcon || 'notebook-pen'}" class="w-5 h-5"></i>
+                                            </div>
+                                            <button type="button" onclick="openSession('${s.id}')" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-[#fbf9fa] border plum-border text-xs font-bold text-[#3d2937] hover:bg-[#f6eef4]">
+                                                <span>Apri</span>
+                                                <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+                                            </button>
+                                        </div>
+
+                                        <div>
+                                            <h3 class="text-lg font-extrabold text-[#261822]">${escapeHtml(s.name)}</h3>
+                                            <div class="flex flex-wrap items-center gap-1.5 mt-2.5">
+                                                <span class="px-2.5 py-0.5 rounded-full plum-soft text-xs font-semibold">${s.notes.length} note</span>
+                                                <span class="px-2.5 py-0.5 rounded-full plum-soft text-xs font-semibold">${s.scriptures.length} scritture</span>
+                                                <span class="px-2.5 py-0.5 rounded-full plum-soft text-xs font-semibold">${pdfCount} PDF</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="border-t plum-border pt-3 flex items-center justify-between">
+                                            <button type="button" onclick="openRenameSessionModal('${s.id}', event)" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#fbf9fa] border plum-border text-xs font-bold text-[#3d2937] hover:bg-[#f6eef4]">
+                                                <i data-lucide="pencil" class="w-3.5 h-3.5 text-[#6b2d5c]"></i>
+                                                <span>Rinomina</span>
+                                            </button>
+
+                                            ${s.isBase
+                                                ? `<span class="text-xs font-semibold text-[#6b2d5c]">Sessione base</span>`
+                                                : `<button type="button" onclick="deleteCustomSession('${s.id}', event)" class="text-xs font-bold text-rose-600 hover:underline">Elimina</button>`
+                                            }
+                                        </div>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+                if (window.lucide) lucide.createIcons();
                 return;
             }
-            const main = document.getElementById('main-content');
-            if (!main) return;
-            const wk = getWeekKey(state.currentWeekOffset);
-            const weekData = ensureWeekData(wk);
-            const sectionsList = getAllSections();
-            const sec = sectionsList.find(s => s.id === state.activeSection) || sectionsList[0];
-            const secNotes = getSectionNotes(sec.id, wk);
-            const secPdfs = state.pdfs.filter(p => p.section === sec.id);
-            const secScriptures = getSectionScriptures(sec.id, wk);
 
+            const s = getActiveSession();
             main.innerHTML = `
-                <div class="space-y-5">
-                    <div class="bg-white border border-plum-200 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-3">
-                        <div class="flex items-center gap-2.5">
-                            <button type="button" onclick="navigateToSection('home')" class="p-2 rounded-xl bg-ivory-100 hover:bg-plum-100 text-plum-900" title="Torna alla Home Page">
-                                <i data-lucide="home" class="w-4 h-4"></i>
-                            </button>
-                            <div class="w-10 h-10 rounded-xl bg-plum-100 text-plum-800 flex items-center justify-center">
-                                <i data-lucide="${sec.icon || 'folder'}" class="w-5 h-5"></i>
+                <div class="space-y-6">
+                    <!-- Intestazione Sessione -->
+                    <div class="bg-white rounded-3xl border plum-border p-4 sm:p-5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
+                        <div class="flex items-center gap-3">
+                            <div class="w-11 h-11 rounded-2xl plum-soft border plum-border flex items-center justify-center text-[#6b2d5c]">
+                                <i data-lucide="${s.lucideIcon || 'notebook-pen'}" class="w-5 h-5"></i>
                             </div>
                             <div>
                                 <div class="flex items-center gap-2">
-                                    <h2 class="text-lg font-extrabold text-plum-900">${escapeAttr(sec.label)}</h2>
-                                    ${!state.meetingMode ? `
-                                        <button type="button" onclick="openSessionModal('${sec.id}')" class="px-2 py-0.5 rounded-lg bg-ivory-100 hover:bg-plum-100 text-[11px] font-bold text-plum-800">Rinomina</button>
-                                    ` : ''}
+                                    <h2 class="text-xl sm:text-2xl font-extrabold text-[#261822]">${escapeHtml(s.name)}</h2>
+                                    <button type="button" onclick="openRenameSessionModal('${s.id}', event)" class="px-2.5 py-1 rounded-xl bg-[#f6eef4] text-xs font-bold text-[#6b2d5c]">Rinomina</button>
                                 </div>
-                                <p class="text-xs text-plum-700">${state.meetingMode ? 'Modalità Adunanza attiva (note preparate protette)' : 'Modalità Preparazione'}</p>
+                                <p class="text-xs text-[#7c6575] mt-0.5">
+                                    ${state.studyMode === 'adunanza' ? 'Modalità Adunanza attiva: le note preparate sono protette.' : 'Modalità Preparazione attiva'}
+                                </p>
                             </div>
                         </div>
 
                         <div class="flex flex-wrap items-center gap-2">
-                            ${!state.meetingMode ? `
-                                <label class="px-3 py-2 rounded-xl bg-plum-50 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-100 cursor-pointer">
-                                    + Importa PDF
-                                    <input type="file" accept="application/pdf,.pdf" onchange="handlePdfUpload(event)" class="hidden">
-                                </label>
-                                <button type="button" onclick="openScriptureModal(false)" class="px-3 py-2 rounded-xl bg-plum-50 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-100">+ Scrittura</button>
-                                <button type="button" onclick="openPastePrepModal(false)" class="px-3 py-2 rounded-xl bg-white border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-100">Incolla Preparazione</button>
-                                <button type="button" onclick="addCustomNote(false, 'text')" class="px-3 py-2 rounded-xl bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">+ Nuova Nota</button>
-                                <button type="button" onclick="addCustomNote(false, 'pencil')" class="px-3 py-2 rounded-xl bg-plum-100 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-200">+ Nota Pencil</button>
-                            ` : `
-                                <button type="button" onclick="openScriptureModal(false)" class="px-3 py-2 rounded-xl bg-plum-100 border border-plum-300 text-plum-900 text-xs font-bold hover:bg-plum-200">+ Scrittura</button>
-                                <button type="button" onclick="addQuickMeetingNote(false)" class="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-extrabold hover:bg-emerald-700">+ Appunto rapido</button>
-                            `}
+                            <label class="px-4 py-2.5 rounded-2xl bg-rose-600 text-white font-bold text-xs sm:text-sm cursor-pointer shadow-2xs">
+                                📄 Carica PDF
+                                <input type="file" accept="application/pdf" onchange="handlePdfFileUpload(event)" class="hidden">
+                            </label>
+                            ${activePdfBytes ? `
+                                <button type="button" onclick="openPdfWorkspace(activePdfPage)" class="px-4 py-2.5 rounded-2xl bg-[#261822] text-white font-bold text-xs sm:text-sm">
+                                    Apri PDF accanto alle Note
+                                </button>
+                            ` : ''}
+                            <button type="button" onclick="openPastePrepModal()" class="px-4 py-2.5 rounded-2xl plum-soft border plum-border font-bold text-xs sm:text-sm">
+                                📋 Incolla Preparazione
+                            </button>
+                            <button type="button" onclick="addNoteInCurrentSession(null)" class="px-4 py-2.5 rounded-2xl plum-primary font-bold text-xs sm:text-sm shadow-2xs">
+                                ${state.studyMode === 'adunanza' ? '⚡ + Appunto rapido' : '+ Aggiungi Nota'}
+                            </button>
                         </div>
                     </div>
 
-                    ${secScriptures.length > 0 ? `
-                        <div class="bg-white border border-plum-200 rounded-2xl p-4 shadow-sm space-y-2.5">
-                            <div class="flex items-center justify-between gap-2">
-                                <h3 class="text-xs font-extrabold uppercase tracking-wider text-plum-700 flex items-center gap-1.5">
-                                    <i data-lucide="book-open" class="w-4 h-4"></i> Scritture della sezione (${secScriptures.length})
-                                </h3>
-                                <div class="flex items-center gap-1">
-                                    <button type="button" onclick="changeScriptureFontSize(-2)" class="px-2 py-0.5 rounded-lg bg-ivory-100 border border-plum-200 text-xs font-extrabold text-plum-900">A−</button>
-                                    <button type="button" onclick="changeScriptureFontSize(2)" class="px-2 py-0.5 rounded-lg bg-ivory-100 border border-plum-200 text-xs font-extrabold text-plum-900">A+</button>
-                                </div>
-                            </div>
-                            <div class="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                                ${secScriptures.map(s => renderSingleScriptureCardHtml(s, false)).join('')}
-                            </div>
+                    <!-- Sezione Scritture della Sessione -->
+                    <div class="bg-white rounded-3xl border plum-border p-4 sm:p-5 space-y-3 shadow-2xs">
+                        <div class="flex flex-wrap items-center justify-between gap-2">
+                            <h3 class="text-base sm:text-lg font-extrabold text-[#261822]">📖 Scritture da Leggere (clicca per aprire grande)</h3>
                         </div>
-                    ` : ''}
 
-                    ${secPdfs.length > 0 ? `
-                        <div class="bg-white border border-plum-200 rounded-2xl p-4 shadow-sm space-y-2.5">
-                            <h3 class="text-xs font-extrabold uppercase tracking-wider text-plum-700">Documenti PDF della sezione</h3>
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                                ${secPdfs.map(pdf => `
-                                    <div class="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-ivory-50 border border-plum-200">
+                        <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
+                            <input type="text" id="new-scr-ref" placeholder="Es. Salmo 23:1" class="bg-[#fbf9fa] border plum-border rounded-xl px-3 py-2 text-sm font-bold">
+                            <input type="number" id="new-scr-page" min="1" placeholder="Pag. PDF (opz.)" class="bg-[#fbf9fa] border plum-border rounded-xl px-3 py-2 text-sm font-bold">
+                            <input type="text" id="new-scr-text" placeholder="Testo della scrittura..." class="sm:col-span-2 bg-[#fbf9fa] border plum-border rounded-xl px-3 py-2 text-sm">
+                        </div>
+                        <div class="flex justify-end">
+                            <button type="button" onclick="addScripture()" class="px-4 py-2 rounded-xl plum-primary font-bold text-xs sm:text-sm">
+                                + Salva Scrittura
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                            ${s.scriptures.length === 0
+                                ? '<p class="text-xs text-[#7c6575] col-span-full">Nessuna scrittura inserita. Aggiungila qui sopra per aprirla a schermo intero in sala.</p>'
+                                : s.scriptures.map(scr => `
+                                    <div onclick="openScriptureModal('${scr.id}')" class="bg-[#fbf9fa] rounded-2xl border plum-border p-3 hover:shadow-xs cursor-pointer flex items-center justify-between gap-2">
                                         <div class="min-w-0">
-                                            <p class="text-xs font-bold text-plum-900 truncate">${escapeAttr(pdf.name)}</p>
-                                            <p class="text-[11px] text-plum-700">Ultima pag. ${pdf.lastPage || 1}</p>
+                                            <p class="font-extrabold text-[#6b2d5c] text-base truncate">📖 ${escapeHtml(scr.ref)}</p>
+                                            <p class="text-xs text-[#7c6575] truncate">${escapeHtml(scr.text)}</p>
+                                            ${scr.pdfPage ? `<span class="inline-block mt-1 text-[11px] font-bold text-[#6b2d5c] plum-soft px-2 py-0.5 rounded-full">Collegata a Pag. ${scr.pdfPage}</span>` : ''}
                                         </div>
-                                        <div class="flex items-center gap-1 shrink-0">
-                                            <button type="button" onclick="openPdfInWorkspace('${pdf.id}')" class="px-2.5 py-1.5 rounded-lg bg-plum-700 text-white text-xs font-bold hover:bg-plum-800">Apri PDF</button>
-                                            ${!state.meetingMode ? `<button type="button" onclick="deletePdfDocument('${pdf.id}')" class="p-1.5 rounded-lg text-rose-700 hover:bg-rose-50" title="Elimina PDF"><i data-lucide="trash-2" class="w-4 h-4"></i></button>` : ''}
-                                        </div>
+                                        <button type="button" onclick="deleteScripture('${scr.id}', event)" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold shrink-0">✕</button>
                                     </div>
-                                `).join('')}
-                            </div>
+                                `).join('')
+                            }
                         </div>
-                    ` : ''}
+                    </div>
 
+                    <!-- Elenco Note -->
                     <div class="space-y-3">
-                        ${secNotes.length === 0
-                            ? `<div class="bg-white border border-plum-200 rounded-2xl p-6 text-center text-sm text-plum-700">Nessuna nota presente in questa sezione. Tocca <strong>+ Nuova Nota</strong> o <strong>+ Importa PDF</strong> per iniziare.</div>`
-                            : secNotes.map(n => renderSingleNoteCardHtml(n, false)).join('')}
+                        <div class="flex items-center justify-between">
+                            <h3 class="text-base sm:text-lg font-extrabold text-[#261822]">📝 Le tue Note (${s.notes.length})</h3>
+                        </div>
+                        ${s.notes.length === 0
+                            ? `<div class="bg-white rounded-3xl border border-dashed plum-border p-8 text-center text-[#7c6575] text-sm">
+                                Nessuna nota presente in questa sessione. Tocca <strong>+ Aggiungi Nota</strong> oppure <strong>Incolla Preparazione</strong>.
+                               </div>`
+                            : s.notes.map((n, idx) => renderNoteCardHtml(n, idx, s.notes.length)).join('')
+                        }
                     </div>
                 </div>
             `;
-
             if (window.lucide) lucide.createIcons();
-            initAllPencilPads();
         }
-
-        window.addEventListener('beforeunload', saveState);
-        window.addEventListener('pagehide', saveState);
 
         window.addEventListener('DOMContentLoaded', () => {
             loadState();
-            updateWeekHeader();
-            renderNavigation();
-            renderActiveSection();
-            applyPdfSplitWidths();
-            initPdfSplitResizer();
-            if (window.lucide) lucide.createIcons();
+            setupPdfAnnotCanvas();
+            setupPdfResizer();
+            renderApp();
         });
     </script>
 </body>
