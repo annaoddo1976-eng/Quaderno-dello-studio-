@@ -220,9 +220,17 @@
         @media (max-width: 639px) {
             #pdf-left-pane {
                 width: 100% !important;
+                height: 64% !important;
             }
             #pdf-right-pane {
                 width: 100% !important;
+                height: 36% !important;
+            }
+        }
+        @media (min-width: 640px) {
+            #pdf-left-pane,
+            #pdf-right-pane {
+                height: 100% !important;
             }
         }
 
@@ -237,7 +245,7 @@
         ::-webkit-scrollbar-thumb { background: #D4B2CA; border-radius: 9999px; }
     </style>
 </head>
-<body class="min-h-screen flex flex-col pb-20 sm:pb-6">
+<body class="min-h-screen flex flex-col pb-4">
 
     <!-- POPOVER RAPIDO SU SELEZIONE TESTO (EVIDENZIA O COPIA NELLE NOTE) -->
     <div id="selection-popover" class="no-print fixed z-[90] hidden items-center gap-1.5 bg-white text-black px-2.5 py-1.5 rounded-2xl shadow-xl border-2 border-plum-400">
@@ -772,34 +780,8 @@
         <main id="main-content" class="flex-1 flex flex-col w-full px-1 sm:px-2 pt-1.5"></main>
     </div>
 
-    <!-- BARRA DI NAVIGAZIONE INFERIORE FISSA (IPHONE & IPAD) -->
-    <nav class="no-print fixed bottom-0 inset-x-0 z-50 bg-white/95 backdrop-blur-md border-t border-plum-200 sm:hidden">
-        <div class="grid grid-cols-5 gap-1 px-1 py-1 text-[10px] font-bold text-black">
-            <button type="button" onclick="navigateTo('dashboard')" data-bottom-nav="dashboard" class="bottom-nav-btn flex flex-col items-center py-1 rounded-xl">
-                <i data-lucide="home" class="w-4 h-4 mb-0.5"></i>
-                <span>Home</span>
-            </button>
-            <button type="button" onclick="navigateTo('torre')" data-bottom-nav="torre" class="bottom-nav-btn flex flex-col items-center py-1 rounded-xl">
-                <i data-lucide="book-open" class="w-4 h-4 mb-0.5"></i>
-                <span>Torre</span>
-            </button>
-            <button type="button" onclick="navigateTo('vita_cristiana')" data-bottom-nav="vita_cristiana" class="bottom-nav-btn flex flex-col items-center py-1 rounded-xl">
-                <i data-lucide="heart-handshake" class="w-4 h-4 mb-0.5"></i>
-                <span>Vita cristiana</span>
-            </button>
-            <button type="button" onclick="navigateTo('studio_personale')" data-bottom-nav="studio_personale" class="bottom-nav-btn flex flex-col items-center py-1 rounded-xl">
-                <i data-lucide="graduation-cap" class="w-4 h-4 mb-0.5"></i>
-                <span>Studio</span>
-            </button>
-            <button type="button" onclick="openSessionModal()" class="flex flex-col items-center py-1 rounded-xl text-burgundy-700">
-                <i data-lucide="folder-plus" class="w-4 h-4 mb-0.5"></i>
-                <span>+ Sessione</span>
-            </button>
-        </div>
-    </nav>
-
     <!-- TOAST DI NOTIFICA -->
-    <div id="studio-toast" class="no-print fixed bottom-20 sm:bottom-6 right-4 z-[100] hidden bg-white text-black px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold border-2 border-plum-400"></div>
+    <div id="studio-toast" class="no-print fixed bottom-5 right-4 z-[100] hidden bg-white text-black px-4 py-2.5 rounded-2xl shadow-xl text-xs font-bold border-2 border-plum-400"></div>
 
     <script>
         /* =========================================================
@@ -2347,6 +2329,8 @@
         let pdfSwipeBound = false;
         let pdfThumbsOpen = false;
         let lastSelectedPdfText = '';
+        let currentPdfRenderTask = null;
+        let pdfRenderSeq = 0;
 
         function renderSectionPdfPanel(sectionId, labelTitle) {
             const sectionPdfs = state.pdfLibrary.filter(p => p.section === sectionId);
@@ -2611,6 +2595,7 @@
             const right = document.getElementById('pdf-right-pane');
             const resizer = document.getElementById('pdf-split-resizer');
             const lbl = document.getElementById('label-toggle-pdf-notes');
+            const isMobile = window.innerWidth < 640;
             if (pdfNotesHidden) {
                 right.classList.add('hidden');
                 if (resizer) resizer.classList.add('hidden');
@@ -2621,9 +2606,10 @@
                 right.classList.remove('hidden');
                 if (resizer) resizer.classList.remove('hidden');
                 const p = state.pdfSplitPercent || 70;
-                left.style.width = p + '%';
-                right.style.width = (100 - p) + '%';
-                left.style.height = '62%';
+                left.style.width = isMobile ? '100%' : (p + '%');
+                right.style.width = isMobile ? '100%' : ((100 - p) + '%');
+                left.style.height = isMobile ? '64%' : '100%';
+                right.style.height = isMobile ? '36%' : '100%';
                 lbl.textContent = 'Nascondi Note';
             }
             if (pdfAutoFitEnabled) renderCurrentPdfPage(true);
@@ -2651,12 +2637,20 @@
 
         async function renderCurrentPdfPage(autoFit = false) {
             if (!activePdfInstance || !activePdfMeta) return;
+            const mySeq = ++pdfRenderSeq;
+            if (currentPdfRenderTask) {
+                try { currentPdfRenderTask.cancel(); } catch (_) {}
+                currentPdfRenderTask = null;
+            }
+
             const pageNum = Math.max(1, Math.min(activePdfMeta.numPages, activePdfMeta.lastPage || 1));
             activePdfMeta.lastPage = pageNum;
             document.getElementById('pdf-page-input').value = pageNum;
             saveState();
 
             const page = await activePdfInstance.getPage(pageNum);
+            if (mySeq !== pdfRenderSeq) return;
+
             const totalRotation = ((page.rotate || 0) + (activePdfMeta.rotation || 0)) % 360;
             const unscaledViewport = page.getViewport({ scale: 1, rotation: totalRotation });
             const pane = document.getElementById('pdf-left-pane');
@@ -2689,7 +2683,20 @@
 
             const ctx = baseCanvas.getContext('2d');
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-            await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+
+            const renderTask = page.render({ canvasContext: ctx, viewport: viewport });
+            currentPdfRenderTask = renderTask;
+            try {
+                await renderTask.promise;
+            } catch (err) {
+                if (err && err.name === 'RenderingCancelledException') return;
+                throw err;
+            } finally {
+                if (currentPdfRenderTask === renderTask) {
+                    currentPdfRenderTask = null;
+                }
+            }
+            if (mySeq !== pdfRenderSeq) return;
 
             // Livello testo selezionabile PDF.js per evidenziare con un tocco o copiare nelle note
             const textLayerDiv = document.getElementById('pdf-text-layer');
@@ -3329,57 +3336,222 @@
             return `
                 <div class="-mx-1 sm:-mx-2 -mt-1.5 flex-1 flex flex-col">
                     <!-- INTESTAZIONE ILLUSTRATA CON TITOLO CORSIVO E FASCIA ONDULATA -->
-                    <div class="relative w-full overflow-hidden border-b border-plum-200 bg-[#F9F3F7]">
+                    <div class="relative w-full overflow-hidden border-b border-plum-200 bg-[#FAF1F5]">
                         ${state.customHeaderImage ? `
                             <img src="${state.customHeaderImage}" alt="Intestazione Quaderno" class="w-full h-36 sm:h-48 object-cover">
                         ` : `
-                            <svg viewBox="0 0 1200 220" preserveAspectRatio="xMidYMid slice" class="w-full h-36 sm:h-44 block">
+                            <svg viewBox="0 0 1200 280" preserveAspectRatio="xMidYMid slice" class="w-full h-40 sm:h-52 block">
                                 <defs>
-                                    <linearGradient id="bgHeaderGrad" x1="0" y1="0" x2="1" y2="1">
-                                        <stop offset="0%" stop-color="#F7EEF4"/>
-                                        <stop offset="50%" stop-color="#FBF7FA"/>
-                                        <stop offset="100%" stop-color="#F3E6EF"/>
+                                    <!-- Sfondo sfumato viola/lilla a sinistra verso crema/rosa chiaro a destra -->
+                                    <linearGradient id="bannerMainGrad" x1="0%" y1="15%" x2="100%" y2="85%">
+                                        <stop offset="0%" stop-color="#6B2763"/>
+                                        <stop offset="28%" stop-color="#A6669E"/>
+                                        <stop offset="56%" stop-color="#E7CEE1"/>
+                                        <stop offset="82%" stop-color="#FBF3F6"/>
+                                        <stop offset="100%" stop-color="#F8ECF2"/>
                                     </linearGradient>
-                                    <linearGradient id="waveGold" x1="0" y1="0" x2="1" y2="0">
-                                        <stop offset="0%" stop-color="#DFBE75" stop-opacity="0.25"/>
-                                        <stop offset="50%" stop-color="#C9A34E" stop-opacity="0.65"/>
-                                        <stop offset="100%" stop-color="#DFBE75" stop-opacity="0.25"/>
+                                    <!-- Fascia onda superiore crema-perla -->
+                                    <linearGradient id="topCremeGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#F8EDF2"/>
+                                        <stop offset="50%" stop-color="#FDF8FA"/>
+                                        <stop offset="100%" stop-color="#F9EFF4"/>
                                     </linearGradient>
+                                    <!-- Nastro dorato luminoso -->
+                                    <linearGradient id="goldRibbonGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                        <stop offset="0%" stop-color="#D4A656"/>
+                                        <stop offset="25%" stop-color="#F6E0A3"/>
+                                        <stop offset="50%" stop-color="#C8933F"/>
+                                        <stop offset="75%" stop-color="#F7E3AC"/>
+                                        <stop offset="100%" stop-color="#CFA04E"/>
+                                    </linearGradient>
+                                    <!-- Copertine libri realistici con volume 3D e riflessi in pelle -->
+                                    <linearGradient id="book1Purple" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" stop-color="#7B3273"/>
+                                        <stop offset="22%" stop-color="#5E1D57"/>
+                                        <stop offset="78%" stop-color="#481242"/>
+                                        <stop offset="100%" stop-color="#2E092A"/>
+                                    </linearGradient>
+                                    <linearGradient id="book2Ivory" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" stop-color="#FFFDF9"/>
+                                        <stop offset="25%" stop-color="#F4E9D8"/>
+                                        <stop offset="78%" stop-color="#E3D1B6"/>
+                                        <stop offset="100%" stop-color="#C5AF90"/>
+                                    </linearGradient>
+                                    <linearGradient id="book3Burgundy" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" stop-color="#9A2650"/>
+                                        <stop offset="24%" stop-color="#751539"/>
+                                        <stop offset="78%" stop-color="#560C28"/>
+                                        <stop offset="100%" stop-color="#380518"/>
+                                    </linearGradient>
+                                    <linearGradient id="book4Violet" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" stop-color="#984C90"/>
+                                        <stop offset="24%" stop-color="#742F6C"/>
+                                        <stop offset="78%" stop-color="#551C4F"/>
+                                        <stop offset="100%" stop-color="#370E33"/>
+                                    </linearGradient>
+                                    <!-- Fogli avorio realistici con effetto impilamento pagine -->
+                                    <linearGradient id="pagesRealistic" x1="0%" y1="0%" x2="0%" y2="100%">
+                                        <stop offset="0%" stop-color="#C9B08A"/>
+                                        <stop offset="18%" stop-color="#F8EBD4"/>
+                                        <stop offset="50%" stop-color="#EFE0C2"/>
+                                        <stop offset="85%" stop-color="#E4CFA9"/>
+                                        <stop offset="100%" stop-color="#BFA37A"/>
+                                    </linearGradient>
+                                    <!-- Ombra naturale sul piano -->
+                                    <radialGradient id="tableContactShadow" cx="50%" cy="50%" r="50%">
+                                        <stop offset="0%" stop-color="#2E0A2A" stop-opacity="0.42"/>
+                                        <stop offset="70%" stop-color="#4A1745" stop-opacity="0.16"/>
+                                        <stop offset="100%" stop-color="#4A1745" stop-opacity="0"/>
+                                    </radialGradient>
+                                    <filter id="bookShadow" x="-10%" y="-10%" width="120%" height="135%">
+                                        <feDropShadow dx="0" dy="5" stdDeviation="5" flood-color="#2E0A2A" flood-opacity="0.32"/>
+                                    </filter>
                                 </defs>
-                                <rect width="1200" height="220" fill="url(#bgHeaderGrad)"/>
-                                <path d="M0,155 C280,105 560,195 920,145 C1060,125 1140,145 1200,150 L1200,220 L0,220 Z" fill="#FAF6F1"/>
-                                <path d="M0,155 C280,105 560,195 920,145 C1060,125 1140,145 1200,150" fill="none" stroke="url(#waveGold)" stroke-width="3.5"/>
-                                <path d="M0,172 C320,130 620,208 980,162 C1100,148 1160,162 1200,165" fill="none" stroke="#D4B2CA" stroke-width="1.8" opacity="0.65"/>
 
-                                <!-- Pila illustrata dei 4 libri con dettagli floreali a sinistra -->
-                                <g transform="translate(85, 38)">
-                                    <rect x="6" y="102" width="132" height="22" rx="6" fill="#E7CFE0" stroke="#7D486E" stroke-width="2.2"/>
-                                    <line x1="18" y1="108" x2="126" y2="108" stroke="#FAF6F1" stroke-width="3"/>
-                                    <rect x="14" y="78" width="124" height="22" rx="6" fill="#F0CED9" stroke="#8F3656" stroke-width="2.2"/>
-                                    <line x1="24" y1="84" x2="128" y2="84" stroke="#FAF6F1" stroke-width="3"/>
-                                    <rect x="10" y="54" width="128" height="22" rx="6" fill="#EBD39B" stroke="#A68132" stroke-width="2.2"/>
-                                    <line x1="22" y1="60" x2="126" y2="60" stroke="#FAF6F1" stroke-width="3"/>
-                                    <rect x="18" y="30" width="116" height="22" rx="6" fill="#D4B2CA" stroke="#643256" stroke-width="2.2"/>
-                                    <line x1="28" y1="36" x2="124" y2="36" stroke="#FAF6F1" stroke-width="3"/>
-                                    <circle cx="142" cy="34" r="9" fill="#F9E8EE" stroke="#8F3656" stroke-width="1.8"/>
-                                    <circle cx="142" cy="34" r="3.5" fill="#C9A34E"/>
-                                    <path d="M128,28 Q116,14 106,24 Q118,32 128,28 Z" fill="#C5D8C1" stroke="#5A7A54" stroke-width="1.5"/>
-                                    <path d="M148,24 Q162,12 166,25 Q154,32 148,24 Z" fill="#C5D8C1" stroke="#5A7A54" stroke-width="1.5"/>
+                                <!-- Sfondo principale -->
+                                <rect width="1200" height="280" fill="url(#bannerMainGrad)"/>
+
+                                <!-- Piano chiaro in basso su cui poggiano i libri -->
+                                <path d="M0,235 Q360,222 760,242 T1200,238 L1200,280 L0,280 Z" fill="#FDF8FA" opacity="0.94"/>
+                                <!-- Ombra morbida di appoggio sotto la pila dei libri -->
+                                <ellipse cx="338" cy="246" rx="205" ry="14" fill="url(#tableContactShadow)"/>
+
+                                <!-- Onda superiore crema con bordo nastro dorato -->
+                                <path d="M0,0 L1200,0 L1200,210 C1100,150 960,115 760,65 C550,12 390,-2 240,35 C120,65 55,95 0,118 Z" fill="url(#topCremeGrad)"/>
+                                <path d="M0,118 C65,92 135,58 250,28 C400,-10 560,12 775,66 C975,118 1105,155 1200,216" fill="none" stroke="url(#goldRibbonGrad)" stroke-width="8" stroke-linecap="round"/>
+
+                                <!-- Onda inferiore destra con filettatura dorata -->
+                                <path d="M580,280 C760,268 990,265 1200,218 L1200,280 Z" fill="#E8CFE2" opacity="0.55"/>
+                                <path d="M620,278 C810,268 1020,256 1200,216" fill="none" stroke="url(#goldRibbonGrad)" stroke-width="5" stroke-linecap="round"/>
+
+                                <!-- PILA REALISTICA DEI 4 LIBRI RILEGATI IN PELLE -->
+                                <g transform="translate(152, 40)" filter="url(#bookShadow)">
+                                    <!-- Libro 4 (base, viola scuro con blocco pagine a destra e dorso a sinistra) -->
+                                    <g transform="translate(0, 152)">
+                                        <!-- Piatti superiore e inferiore della copertina -->
+                                        <rect x="4" y="0" width="364" height="7" rx="3.5" fill="#A15799"/>
+                                        <rect x="2" y="41" width="368" height="8" rx="4" fill="#3B0F36"/>
+                                        <!-- Blocco pagine avorio realistiche -->
+                                        <path d="M124,6 L360,6 C355,16 355,32 360,41 L124,41 Z" fill="url(#pagesRealistic)"/>
+                                        <line x1="130" y1="13" x2="355" y2="13" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="130" y1="20" x2="354" y2="20" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="130" y1="27" x2="354" y2="27" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="130" y1="34" x2="355" y2="34" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <!-- Dorso curvo in pelle a sinistra con nervi dorati in rilievo -->
+                                        <path d="M2,6 C2,2 12,0 26,0 L128,0 L128,49 L26,49 C12,49 2,47 2,42 Z" fill="url(#book4Violet)"/>
+                                        <path d="M10,5 L125,5" stroke="#C782BF" stroke-width="1.2" opacity="0.55"/>
+                                        <rect x="34" y="0.5" width="4.5" height="48" rx="1.5" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="44" y="0.5" width="2.5" height="48" rx="1" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="108" y="0.5" width="4.5" height="48" rx="1.5" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="118" y="0.5" width="2.5" height="48" rx="1" fill="url(#goldRibbonGrad)"/>
+                                    </g>
+
+                                    <!-- Libro 3 (bordeaux intenso con nervi dorati) -->
+                                    <g transform="translate(14, 105)">
+                                        <rect x="4" y="0" width="346" height="7" rx="3.5" fill="#A82D5A"/>
+                                        <rect x="2" y="41" width="350" height="8" rx="4" fill="#3B061A"/>
+                                        <path d="M120,6 L342,6 C337,16 337,32 342,41 L120,41 Z" fill="url(#pagesRealistic)"/>
+                                        <line x1="126" y1="13" x2="337" y2="13" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="126" y1="20" x2="336" y2="20" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="126" y1="27" x2="336" y2="27" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="126" y1="34" x2="337" y2="34" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <path d="M2,6 C2,2 12,0 26,0 L124,0 L124,49 L26,49 C12,49 2,47 2,42 Z" fill="url(#book3Burgundy)"/>
+                                        <path d="M10,5 L121,5" stroke="#D15E89" stroke-width="1.2" opacity="0.5"/>
+                                        <rect x="32" y="0.5" width="4.5" height="48" rx="1.5" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="42" y="0.5" width="2.5" height="48" rx="1" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="104" y="0.5" width="4.5" height="48" rx="1.5" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="114" y="0.5" width="2.5" height="48" rx="1" fill="url(#goldRibbonGrad)"/>
+                                    </g>
+
+                                    <!-- Libro 2 (avorio perla con filetti dorati) -->
+                                    <g transform="translate(26, 58)">
+                                        <rect x="4" y="0" width="324" height="7" rx="3.5" fill="#FFFFFF"/>
+                                        <rect x="2" y="41" width="328" height="8" rx="4" fill="#BFA888"/>
+                                        <path d="M114,6 L320,6 C315,16 315,32 320,41 L114,41 Z" fill="url(#pagesRealistic)"/>
+                                        <line x1="120" y1="13" x2="315" y2="13" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="120" y1="20" x2="314" y2="20" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="120" y1="27" x2="314" y2="27" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="120" y1="34" x2="315" y2="34" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <path d="M2,6 C2,2 12,0 26,0 L118,0 L118,49 L26,49 C12,49 2,47 2,42 Z" fill="url(#book2Ivory)"/>
+                                        <rect x="30" y="0.5" width="4.5" height="48" rx="1.5" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="40" y="0.5" width="2.5" height="48" rx="1" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="98" y="0.5" width="4.5" height="48" rx="1.5" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="108" y="0.5" width="2.5" height="48" rx="1" fill="url(#goldRibbonGrad)"/>
+                                    </g>
+
+                                    <!-- Libro 1 (in cima, prugna scuro con pagine a sinistra e dorso inciso in oro a destra) -->
+                                    <g transform="translate(46, 11)">
+                                        <rect x="4" y="0" width="280" height="7" rx="3.5" fill="#8C3E83"/>
+                                        <rect x="2" y="41" width="284" height="8" rx="4" fill="#2E092A"/>
+                                        <!-- Blocco pagine avorio a sinistra -->
+                                        <path d="M10,6 L116,6 L116,41 L10,41 C15,32 15,16 10,6 Z" fill="url(#pagesRealistic)"/>
+                                        <line x1="14" y1="13" x2="112" y2="13" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="15" y1="20" x2="112" y2="20" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="15" y1="27" x2="112" y2="27" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <line x1="14" y1="34" x2="112" y2="34" stroke="#CBB28B" stroke-width="0.9"/>
+                                        <!-- Dorso curvo a destra con fregio botanico dorato -->
+                                        <path d="M114,0 L262,0 C276,0 286,2 286,6 L286,42 C286,47 276,49 262,49 L114,49 Z" fill="url(#book1Purple)"/>
+                                        <path d="M117,5 L278,5" stroke="#B46AA9" stroke-width="1.2" opacity="0.5"/>
+                                        <rect x="122" y="0.5" width="4.5" height="48" rx="1.5" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="131" y="0.5" width="2.5" height="48" rx="1" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="256" y="0.5" width="4.5" height="48" rx="1.5" fill="url(#goldRibbonGrad)"/>
+                                        <rect x="265" y="0.5" width="2.5" height="48" rx="1" fill="url(#goldRibbonGrad)"/>
+                                        <!-- Fregio fogliare dorato inciso sul dorso -->
+                                        <g transform="translate(194, 24.5)" fill="url(#goldRibbonGrad)">
+                                            <ellipse cx="0" cy="0" rx="28" ry="3"/>
+                                            <ellipse cx="0" cy="0" rx="22" ry="2.8" transform="rotate(28)"/>
+                                            <ellipse cx="0" cy="0" rx="22" ry="2.8" transform="rotate(-28)"/>
+                                            <ellipse cx="0" cy="0" rx="15" ry="2.4" transform="rotate(58)"/>
+                                            <ellipse cx="0" cy="0" rx="15" ry="2.4" transform="rotate(-58)"/>
+                                            <circle cx="0" cy="0" r="4.2" fill="#FFF3C4"/>
+                                        </g>
+                                    </g>
+                                </g>
+
+                                <!-- RAMETTO D'ULIVO CON FIORELLINI BIANCHI IN BASSO A SINISTRA -->
+                                <g transform="translate(65, 118)">
+                                    <path d="M98,125 Q72,78 48,18" fill="none" stroke="#5A6E43" stroke-width="3.5" stroke-linecap="round"/>
+                                    <path d="M84,96 Q108,64 134,36" fill="none" stroke="#5A6E43" stroke-width="3" stroke-linecap="round"/>
+                                    <path d="M74,84 Q42,68 14,56" fill="none" stroke="#5A6E43" stroke-width="2.8" stroke-linecap="round"/>
+                                    <path d="M48,18 C36,34 38,54 50,64 C60,50 58,32 48,18 Z" fill="#6F8652" stroke="#4B5E35" stroke-width="1.2"/>
+                                    <path d="M134,36 C116,36 102,48 98,62 C114,62 128,50 134,36 Z" fill="#7D945E" stroke="#4B5E35" stroke-width="1.2"/>
+                                    <path d="M14,56 C24,72 42,78 56,74 C46,60 28,54 14,56 Z" fill="#687E4C" stroke="#4B5E35" stroke-width="1.2"/>
+                                    <path d="M8,92 C24,98 44,96 56,88 C42,80 22,82 8,92 Z" fill="#7D945E" stroke="#4B5E35" stroke-width="1.2"/>
+                                    <path d="M112,74 C122,86 138,90 150,86 C140,74 124,70 112,74 Z" fill="#687E4C" stroke="#4B5E35" stroke-width="1.2"/>
+                                    <ellipse cx="64" cy="86" rx="9" ry="13" transform="rotate(-25 64 86)" fill="#8FA36B" stroke="#586B3E" stroke-width="1.2"/>
+                                    <ellipse cx="105" cy="112" rx="8.5" ry="12" transform="rotate(35 105 112)" fill="#7E935B" stroke="#586B3E" stroke-width="1.2"/>
+                                    <g transform="translate(82, 95)">
+                                        <circle cx="0" cy="-9" r="6" fill="#FFFFFF" stroke="#E5D5DF" stroke-width="1"/>
+                                        <circle cx="9" cy="-2" r="6" fill="#FFF9FB" stroke="#E5D5DF" stroke-width="1"/>
+                                        <circle cx="6" cy="8" r="6" fill="#FFFFFF" stroke="#E5D5DF" stroke-width="1"/>
+                                        <circle cx="-6" cy="8" r="6" fill="#FFF9FB" stroke="#E5D5DF" stroke-width="1"/>
+                                        <circle cx="-9" cy="-2" r="6" fill="#FFFFFF" stroke="#E5D5DF" stroke-width="1"/>
+                                        <circle cx="0" cy="0" r="4" fill="#E3B95A"/>
+                                    </g>
+                                    <g transform="translate(56, 112) scale(0.85)">
+                                        <circle cx="0" cy="-9" r="6" fill="#FFFFFF" stroke="#E5D5DF" stroke-width="1"/>
+                                        <circle cx="9" cy="-2" r="6" fill="#FFF9FB" stroke="#E5D5DF" stroke-width="1"/>
+                                        <circle cx="6" cy="8" r="6" fill="#FFFFFF" stroke="#E5D5DF" stroke-width="1"/>
+                                        <circle cx="-6" cy="8" r="6" fill="#FFF9FB" stroke="#E5D5DF" stroke-width="1"/>
+                                        <circle cx="-9" cy="-2" r="6" fill="#FFFFFF" stroke="#E5D5DF" stroke-width="1"/>
+                                        <circle cx="0" cy="0" r="4" fill="#E3B95A"/>
+                                    </g>
+                                </g>
+
+                                <!-- TITOLO ELEGANTE A DESTRA "Quaderno per lo studio" + UNICO CUORICINO SU LINEA CONTINUA -->
+                                <g transform="translate(885, 112)" text-anchor="middle">
+                                    <text x="0" y="0" font-family="'Cormorant Garamond', Georgia, serif" font-style="italic" font-weight="700" font-size="68" fill="#5B1954" letter-spacing="-0.5">
+                                        Quaderno
+                                    </text>
+                                    <text x="0" y="58" font-family="'Cormorant Garamond', Georgia, serif" font-style="italic" font-weight="700" font-size="66" fill="#5B1954" letter-spacing="-0.5">
+                                        per lo studio
+                                    </text>
+                                    <!-- Linea calligrafica continua con un solo cuore integrato (nessun doppio cuore) -->
+                                    <path d="M-165,86 C-75,74 15,96 95,88 C115,86 124,78 124,72 C124,65 116,62 112,67 C109,71 112,78 122,86 C132,78 135,71 132,67 C128,62 120,65 120,72 C120,78 129,86 146,85 C156,84 164,81 172,77"
+                                          fill="none" stroke="#7A2E72" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"/>
                                 </g>
                             </svg>
                         `}
-
-                        <!-- Titolo centrale in corsivo elegante con ricciolo e cuoricino -->
-                        <div class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none px-4 text-center">
-                            <h1 class="font-script text-4xl sm:text-6xl text-plum-900 drop-shadow-2xs leading-none">
-                                Quaderno per lo studio
-                            </h1>
-                            <svg viewBox="0 0 320 26" class="w-48 sm:w-64 h-5 mt-0.5">
-                                <path d="M15,12 C85,4 125,20 152,12" fill="none" stroke="#8F3656" stroke-width="2" stroke-linecap="round"/>
-                                <path d="M160,17 C160,17 152,11 152,7 C152,4 155,3 157,5 C159,6 160,8 160,8 C160,8 161,6 163,5 C165,3 168,4 168,7 C168,11 160,17 160,17 Z" fill="#B35374"/>
-                                <path d="M168,12 C195,20 235,4 305,12" fill="none" stroke="#8F3656" stroke-width="2" stroke-linecap="round"/>
-                            </svg>
-                        </div>
 
                         <!-- Pulsante discreto Personalizza foto in basso a destra -->
                         <div class="no-print meeting-hide absolute bottom-2 right-2 flex items-center gap-1">
