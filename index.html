@@ -1747,32 +1747,99 @@
             const sel = window.getSelection();
             if (!el || !sel || sel.rangeCount === 0) return;
             const range = sel.getRangeAt(0);
-            if (el.contains(range.commonAncestorContainer)) {
+            if (!range.collapsed && el.contains(range.commonAncestorContainer)) {
                 savedEditorRanges[editorId] = range.cloneRange();
+            } else if (el.contains(range.commonAncestorContainer) && !savedEditorRanges[editorId]) {
+                savedEditorRanges[editorId] = range.cloneRange();
+            }
+        }
+
+        function captureAllActiveEditorSelections() {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return;
+            const range = sel.getRangeAt(0);
+            const container = range.commonAncestorContainer;
+            const el = (container.nodeType === 1 ? container : container.parentElement)?.closest('.rich-editor');
+            if (el && el.id) {
+                savedEditorRanges[el.id] = range.cloneRange();
             }
         }
 
         function restoreEditorSelection(editorId) {
             const el = document.getElementById(editorId);
-            if (!el) return;
-            el.focus();
+            if (!el) return null;
+            el.focus({ preventScroll: true });
             const range = savedEditorRanges[editorId];
             if (range) {
+                try {
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    sel.addRange(range);
+                    return range;
+                } catch (_) {}
+            }
+            const curSel = window.getSelection();
+            return (curSel && curSel.rangeCount > 0) ? curSel.getRangeAt(0) : null;
+        }
+
+        function wrapSelectionWithStyledSpan(editorId, applyStyleFn) {
+            const el = document.getElementById(editorId);
+            if (!el) return false;
+            const range = restoreEditorSelection(editorId);
+            if (!range || range.collapsed) return false;
+
+            try {
+                const wrapper = document.createElement('span');
+                applyStyleFn(wrapper);
+                const extracted = range.extractContents();
+                wrapper.appendChild(extracted);
+                range.insertNode(wrapper);
+
+                const newRange = document.createRange();
+                newRange.selectNodeContents(wrapper);
                 const sel = window.getSelection();
                 sel.removeAllRanges();
-                sel.addRange(range);
+                sel.addRange(newRange);
+                savedEditorRanges[editorId] = newRange.cloneRange();
+                return true;
+            } catch (_) {
+                return false;
             }
         }
 
         function execRichCmd(editorId, cmd, val = null) {
             const el = document.getElementById(editorId);
             if (!el) return;
-            restoreEditorSelection(editorId);
-            try {
-                document.execCommand('styleWithCSS', false, true);
-                document.execCommand(cmd, false, val);
-            } catch (_) {}
-            saveEditorSelection(editorId);
+            const range = restoreEditorSelection(editorId);
+            let appliedDirectly = false;
+
+            if (range && !range.collapsed) {
+                if (cmd === 'bold') {
+                    appliedDirectly = wrapSelectionWithStyledSpan(editorId, (sp) => { sp.style.fontWeight = '700'; });
+                } else if (cmd === 'italic') {
+                    appliedDirectly = wrapSelectionWithStyledSpan(editorId, (sp) => { sp.style.fontStyle = 'italic'; });
+                } else if (cmd === 'underline') {
+                    appliedDirectly = wrapSelectionWithStyledSpan(editorId, (sp) => { sp.style.textDecoration = 'underline'; });
+                } else if (cmd === 'hiliteColor') {
+                    appliedDirectly = wrapSelectionWithStyledSpan(editorId, (sp) => {
+                        sp.style.backgroundColor = val;
+                        sp.style.padding = '1px 3px';
+                        sp.style.borderRadius = '4px';
+                    });
+                } else if (cmd === 'foreColor') {
+                    appliedDirectly = wrapSelectionWithStyledSpan(editorId, (sp) => { sp.style.color = val; });
+                } else if (cmd === 'fontName') {
+                    appliedDirectly = wrapSelectionWithStyledSpan(editorId, (sp) => { sp.style.fontFamily = val; });
+                }
+            }
+
+            if (!appliedDirectly) {
+                try {
+                    document.execCommand('styleWithCSS', false, true);
+                    document.execCommand(cmd, false, val);
+                } catch (_) {}
+            }
+
             const noteId = editorId.startsWith('ed_cnote_') ? editorId.slice(9) : null;
             if (noteId) {
                 updateCustomNoteHtml(noteId, el.innerHTML);
@@ -1787,29 +1854,30 @@
             const n = state.customNotes.find(x => x.id === noteId);
             if (!n || !el) return;
 
-            restoreEditorSelection(editorId);
-            const sel = window.getSelection();
-            if (sel && sel.rangeCount > 0 && !sel.isCollapsed && el.contains(sel.getRangeAt(0).commonAncestorContainer)) {
-                const range = sel.getRangeAt(0);
-                const newSpanSize = Math.max(12, Math.min(34, (n.fontSize || 16) + delta));
-                const span = document.createElement('span');
-                span.style.fontSize = newSpanSize + 'px';
-                try {
-                    span.appendChild(range.extractContents());
-                    range.insertNode(span);
-                    sel.removeAllRanges();
-                    const newRange = document.createRange();
-                    newRange.selectNodeContents(span);
-                    sel.addRange(newRange);
-                    saveEditorSelection(editorId);
+            const range = restoreEditorSelection(editorId);
+            if (range && !range.collapsed && el.contains(range.commonAncestorContainer)) {
+                const currentBase = n.fontSize || 16;
+                const targetSpanSize = Math.max(12, Math.min(36, currentBase + delta));
+                const ok = wrapSelectionWithStyledSpan(editorId, (sp) => {
+                    sp.style.fontSize = targetSpanSize + 'px';
+                    sp.style.lineHeight = '1.55';
+                });
+                if (ok) {
                     updateCustomNoteHtml(noteId, el.innerHTML);
                     return;
-                } catch (_) {}
+                }
             }
 
-            n.fontSize = Math.max(12, Math.min(32, (n.fontSize || 16) + delta));
-            el.style.fontSize = n.fontSize + 'px';
-            saveState(true);
+            const nextSize = Math.max(12, Math.min(34, (n.fontSize || 16) + delta));
+            n.fontSize = nextSize;
+            el.style.setProperty('font-size', nextSize + 'px', 'important');
+            el.querySelectorAll('[style*="font-size"]').forEach(child => {
+                const cur = parseFloat(child.style.fontSize);
+                if (!isNaN(cur)) {
+                    child.style.fontSize = Math.max(12, Math.min(36, cur + delta)) + 'px';
+                }
+            });
+            updateCustomNoteHtml(noteId, el.innerHTML);
         }
 
         function handleCleanEditorPaste(event, noteId) {
@@ -1833,14 +1901,14 @@
 
         function renderRichTextToolbarHtml(editorId, noteId = null) {
             const sizeControls = noteId ? `
-                <button type="button" onpointerdown="event.preventDefault(); saveEditorSelection('${editorId}'); changeSingleNoteFontSize('${noteId}', -2)" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 text-xs font-bold text-black hover:bg-plum-100" title="Riduci dimensione testo">A−</button>
-                <button type="button" onpointerdown="event.preventDefault(); saveEditorSelection('${editorId}'); changeSingleNoteFontSize('${noteId}', 2)" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 text-xs font-bold text-black hover:bg-plum-100" title="Ingrandisci dimensione testo">A+</button>
+                <button type="button" onpointerdown="event.preventDefault(); changeSingleNoteFontSize('${noteId}', -2)" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 text-xs font-bold text-black hover:bg-plum-100" title="Riduci dimensione testo">A−</button>
+                <button type="button" onpointerdown="event.preventDefault(); changeSingleNoteFontSize('${noteId}', 2)" class="px-2 py-0.5 rounded-lg bg-white border border-plum-300 text-xs font-bold text-black hover:bg-plum-100" title="Ingrandisci dimensione testo">A+</button>
             ` : '';
 
             return `
                 <div class="no-print meeting-hide flex flex-wrap items-center gap-1 bg-plum-50 border border-plum-200 rounded-xl p-1 mb-1.5 text-xs">
                     ${sizeControls}
-                    <select onmousedown="saveEditorSelection('${editorId}')" ontouchstart="saveEditorSelection('${editorId}')" onchange="execRichCmd('${editorId}', 'fontName', this.value)" class="rounded-lg border border-plum-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-black">
+                    <select onchange="execRichCmd('${editorId}', 'fontName', this.value)" class="rounded-lg border border-plum-300 bg-white px-1.5 py-0.5 text-xs font-semibold text-black">
                         <option value="Inter">Moderno</option>
                         <option value="Lora">Classico</option>
                         <option value="Georgia">Editoriale</option>
@@ -1853,9 +1921,9 @@
                     <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'justifyLeft')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-black hover:bg-plum-100" title="Allinea a sinistra"><i data-lucide="align-left" class="w-3.5 h-3.5"></i></button>
                     <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'justifyFull')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-black hover:bg-plum-100" title="Giustifica"><i data-lucide="align-justify" class="w-3.5 h-3.5"></i></button>
                     <div class="flex items-center gap-1 pl-1 border-l border-plum-200">
-                        <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#000000')" class="w-4 h-4 rounded-full bg-black border border-white shadow-2xs" title="Nero"></button>
-                        <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#8F3656')" class="w-4 h-4 rounded-full bg-[#8F3656] border border-white shadow-2xs" title="Bordeaux"></button>
-                        <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#1D4ED8')" class="w-4 h-4 rounded-full bg-[#1D4ED8] border border-white shadow-2xs" title="Blu"></button>
+                        <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#000000')" class="w-4 h-4 rounded-full bg-black border border-white shadow-2xs" title="Testo Nero"></button>
+                        <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#8F3656')" class="w-4 h-4 rounded-full bg-[#8F3656] border border-white shadow-2xs" title="Testo Bordeaux"></button>
+                        <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'foreColor', '#1D4ED8')" class="w-4 h-4 rounded-full bg-[#1D4ED8] border border-white shadow-2xs" title="Testo Blu"></button>
                         <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'hiliteColor', '#FEF08A')" class="w-4 h-4 rounded-full bg-[#FEF08A] border border-plum-400 shadow-2xs" title="Evidenzia giallo"></button>
                         <button type="button" onpointerdown="event.preventDefault(); execRichCmd('${editorId}', 'hiliteColor', '#BBF7D0')" class="w-4 h-4 rounded-full bg-[#BBF7D0] border border-plum-400 shadow-2xs" title="Evidenzia verde"></button>
                     </div>
@@ -2210,9 +2278,10 @@
                                 ${isCollapsed ? 'Apri' : 'Chiudi'}
                             </button>
                             ${!isCollapsed && !isLockedInMeeting && (note.type === 'keyboard' || note.type === 'both') ? `
-                                <button type="button" onpointerdown="event.preventDefault(); saveEditorSelection('ed_cnote_${note.id}'); changeSingleNoteFontSize('${note.id}', -2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Riduci testo">A−</button>
-                                <button type="button" onpointerdown="event.preventDefault(); saveEditorSelection('ed_cnote_${note.id}'); changeSingleNoteFontSize('${note.id}', 2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Ingrandisci testo">A+</button>
+                                <button type="button" onpointerdown="event.preventDefault(); changeSingleNoteFontSize('${note.id}', -2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Riduci testo">A−</button>
+                                <button type="button" onpointerdown="event.preventDefault(); changeSingleNoteFontSize('${note.id}', 2)" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Ingrandisci testo">A+</button>
                                 <button type="button" onpointerdown="event.preventDefault(); execRichCmd('ed_cnote_${note.id}', 'bold')" class="px-1.5 py-0.5 rounded-lg bg-white border border-plum-300 text-[11px] font-bold text-black" title="Grassetto">B</button>
+                                <button type="button" onpointerdown="event.preventDefault(); execRichCmd('ed_cnote_${note.id}', 'hiliteColor', '#FEF08A')" class="px-1.5 py-0.5 rounded-lg bg-[#FEF08A] border border-plum-400 text-[11px] font-bold text-black" title="Evidenzia testo selezionato">Evid.</button>
                             ` : ''}
                             ${!isLockedInMeeting ? `
                                 <button type="button" onclick="deleteCustomNote('${note.id}')" class="p-1 rounded-lg bg-red-50 text-red-700 border border-red-200" title="Elimina nota">
@@ -4184,6 +4253,7 @@
         });
 
         document.addEventListener('selectionchange', () => {
+            captureAllActiveEditorSelections();
             clearTimeout(window._selPopTimer);
             window._selPopTimer = setTimeout(handlePdfTextSelectionChange, 120);
         });
