@@ -122,7 +122,7 @@
                 </button>
                 <label title="Importa Backup" class="w-9 h-9 rounded-full bg-white border plum-border flex items-center justify-center text-[#4a3343] hover:bg-[#f6eef4] cursor-pointer">
                     <i data-lucide="upload" class="w-4 h-4"></i>
-                    <input type="file" accept=".json" onchange="importBackup(event)" class="hidden">
+                    <input type="file" accept=".json,application/json,*/*" onchange="importBackup(event)" class="hidden">
                 </label>
             </div>
         </div>
@@ -130,6 +130,14 @@
         <!-- Barra Pillole Sessioni -->
         <div id="sessions-nav-bar" class="max-w-7xl mx-auto mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5"></div>
     </header>
+
+    <!-- BANNER NOTIFICA RAPIDA (ES. IMPORTA / ESPORTA BACKUP) -->
+    <div id="toast-banner" class="hidden max-w-7xl w-full mx-auto px-4 sm:px-6 pt-3">
+        <div id="toast-banner-box" class="rounded-2xl px-4 py-3 text-sm font-bold flex items-center justify-between gap-3 shadow-xs border">
+            <span id="toast-banner-text"></span>
+            <button type="button" onclick="document.getElementById('toast-banner').classList.add('hidden')" class="text-xs underline">Chiudi</button>
+        </div>
+    </div>
 
     <!-- CONTENUTO PRINCIPALE -->
     <main id="main-content" class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6"></main>
@@ -1327,18 +1335,144 @@
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
-                    const data = JSON.parse(e.target.result);
+                    const rawText = String(e.target.result || '').replace(/^\uFEFF/, '').trim();
+                    const data = JSON.parse(rawText);
+                    let importedNotesCount = 0;
+                    let importedScrCount = 0;
+
                     if (data && Array.isArray(data.sessions)) {
-                        state = { ...state, ...data };
-                        saveState();
-                        renderApp();
+                        // Formato con array sessions
+                        const incomingMap = {};
+                        data.sessions.forEach(s => { if (s && s.id) incomingMap[s.id] = s; });
+
+                        const merged = DEFAULT_SESSIONS.map(def => {
+                            const inc = incomingMap[def.id];
+                            if (!inc) return JSON.parse(JSON.stringify(def));
+                            const notes = Array.isArray(inc.notes) ? inc.notes : [];
+                            const scriptures = Array.isArray(inc.scriptures) ? inc.scriptures : [];
+                            importedNotesCount += notes.length;
+                            importedScrCount += scriptures.length;
+                            return {
+                                ...def,
+                                ...inc,
+                                name: inc.name || def.name,
+                                lucideIcon: def.lucideIcon,
+                                isBase: true,
+                                notes,
+                                scriptures,
+                                pdfAnnotations: inc.pdfAnnotations || {},
+                                pdfImages: inc.pdfImages || {}
+                            };
+                        });
+
+                        data.sessions.forEach(inc => {
+                            if (inc && inc.id && !DEFAULT_SESSIONS.some(d => d.id === inc.id)) {
+                                const notes = Array.isArray(inc.notes) ? inc.notes : [];
+                                const scriptures = Array.isArray(inc.scriptures) ? inc.scriptures : [];
+                                importedNotesCount += notes.length;
+                                importedScrCount += scriptures.length;
+                                merged.push({
+                                    ...inc,
+                                    lucideIcon: inc.lucideIcon || 'notebook-pen',
+                                    isBase: false,
+                                    notes,
+                                    scriptures,
+                                    pdfAnnotations: inc.pdfAnnotations || {},
+                                    pdfImages: inc.pdfImages || {}
+                                });
+                            }
+                        });
+
+                        state.sessions = merged;
+                        if (data.activeSessionId && state.sessions.some(x => x.id === data.activeSessionId)) {
+                            state.activeSessionId = data.activeSessionId;
+                        }
+                    } else if (data && (data.weeks || data.sections || data.notes || data.scriptures)) {
+                        // Compatibilità con backup delle versioni precedenti (organizzati per settimane/sezioni)
+                        const merged = JSON.parse(JSON.stringify(DEFAULT_SESSIONS));
+                        const targetByKey = {
+                            torre: merged.find(x => x.id === 'torre'),
+                            watchtower: merged.find(x => x.id === 'torre'),
+                            tesori: merged.find(x => x.id === 'tesori'),
+                            treasures: merged.find(x => x.id === 'tesori'),
+                            ministero: merged.find(x => x.id === 'ministero'),
+                            ministry: merged.find(x => x.id === 'ministero'),
+                            vita: merged.find(x => x.id === 'vita'),
+                            living: merged.find(x => x.id === 'vita'),
+                            personale: merged.find(x => x.id === 'personale'),
+                            personal: merged.find(x => x.id === 'personale')
+                        };
+
+                        const extractSectionItems = (secKey, secObj) => {
+                            if (!secObj || typeof secObj !== 'object') return;
+                            const dest = targetByKey[secKey] || merged[0];
+                            if (Array.isArray(secObj.notes)) {
+                                secObj.notes.forEach((n, i) => {
+                                    dest.notes.push({
+                                        id: n.id || ('imp_n_' + Date.now() + '_' + i),
+                                        title: n.title || ('Nota #' + (dest.notes.length + 1)),
+                                        html: n.html || n.content || n.text || '',
+                                        fontSize: n.fontSize || 17,
+                                        pdfPage: n.pdfPage || n.page || null,
+                                        collapsed: !!n.collapsed,
+                                        image: n.image || null,
+                                        isQuickNote: !!n.isQuickNote
+                                    });
+                                    importedNotesCount++;
+                                });
+                            }
+                            if (Array.isArray(secObj.scriptures)) {
+                                secObj.scriptures.forEach((sc, i) => {
+                                    dest.scriptures.push({
+                                        id: sc.id || ('imp_s_' + Date.now() + '_' + i),
+                                        ref: sc.ref || sc.reference || sc.title || 'Scrittura',
+                                        text: sc.text || sc.content || '',
+                                        pdfPage: sc.pdfPage || sc.page || null
+                                    });
+                                    importedScrCount++;
+                                });
+                            }
+                        };
+
+                        if (data.weeks && typeof data.weeks === 'object') {
+                            Object.values(data.weeks).forEach(weekObj => {
+                                if (weekObj && typeof weekObj === 'object') {
+                                    Object.entries(weekObj).forEach(([k, v]) => extractSectionItems(k, v));
+                                }
+                            });
+                        }
+                        if (data.sections && typeof data.sections === 'object') {
+                            Object.entries(data.sections).forEach(([k, v]) => extractSectionItems(k, v));
+                        }
+                        extractSectionItems('torre', data);
+                        state.sessions = merged;
+                    } else {
+                        showToast('Il file selezionato non è un backup valido del Quaderno per lo studio.', true);
+                        return;
                     }
+
+                    saveState();
+                    renderApp();
+                    showToast(`Backup importato con successo! (${importedNotesCount} note e ${importedScrCount} scritture ripristinate)`, false);
                 } catch (err) {
                     console.error('Errore importazione:', err);
+                    showToast('Errore durante la lettura del file di backup: assicurati di scegliere un file .json valido.', true);
                 }
             };
             reader.readAsText(file);
             event.target.value = '';
+        }
+
+        function showToast(message, isError = false) {
+            const banner = document.getElementById('toast-banner');
+            const box = document.getElementById('toast-banner-box');
+            const text = document.getElementById('toast-banner-text');
+            if (!banner || !box || !text) return;
+            text.textContent = message;
+            box.className = isError
+                ? 'rounded-2xl px-4 py-3 text-sm font-bold flex items-center justify-between gap-3 shadow-xs border bg-rose-50 text-rose-800 border-rose-200'
+                : 'rounded-2xl px-4 py-3 text-sm font-bold flex items-center justify-between gap-3 shadow-xs border bg-emerald-50 text-emerald-800 border-emerald-200';
+            banner.classList.remove('hidden');
         }
 
         /* RENDERING PRINCIPALE */
