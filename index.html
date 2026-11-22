@@ -540,6 +540,118 @@
         let sessionModalMode = 'create';
         let sessionModalTargetId = null;
 
+        /* ARCHIVIO PERSISTENTE PDF (INDEXEDDB) PER CONSERVARE I PDF TRA GLI AGGIORNAMENTI */
+        const PDF_DB_NAME = 'quaderno_studio_pdf_store_v1';
+        const PDF_STORE_NAME = 'pdfs';
+
+        function openPdfDatabase() {
+            return new Promise((resolve, reject) => {
+                if (!window.indexedDB) {
+                    reject(new Error('IndexedDB non supportato'));
+                    return;
+                }
+                const req = indexedDB.open(PDF_DB_NAME, 1);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains(PDF_STORE_NAME)) {
+                        db.createObjectStore(PDF_STORE_NAME);
+                    }
+                };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+
+        async function savePdfBinaryForSession(sessionId, arrayBuffer, fileName) {
+            try {
+                const db = await openPdfDatabase();
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction(PDF_STORE_NAME, 'readwrite');
+                    const store = tx.objectStore(PDF_STORE_NAME);
+                    store.put({ buffer: arrayBuffer, name: fileName, savedAt: Date.now() }, sessionId);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.warn('Impossibile salvare il PDF in IndexedDB:', e);
+            }
+        }
+
+        async function loadPdfBinaryForSession(sessionId) {
+            try {
+                const db = await openPdfDatabase();
+                return await new Promise((resolve, reject) => {
+                    const tx = db.transaction(PDF_STORE_NAME, 'readonly');
+                    const store = tx.objectStore(PDF_STORE_NAME);
+                    const req = store.get(sessionId);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => reject(req.error);
+                });
+            } catch (e) {
+                console.warn('Impossibile leggere il PDF da IndexedDB:', e);
+                return null;
+            }
+        }
+
+        async function restoreSessionPdfFromStorage(sessionId, autoOpenOverlay = false) {
+            const s = state.sessions.find(x => x.id === sessionId);
+            if (!s) return false;
+            const stored = await loadPdfBinaryForSession(sessionId);
+            if (!stored || !stored.buffer) {
+                activePdfDoc = null;
+                activePdfBytes = null;
+                return false;
+            }
+            activePdfBytes = stored.buffer;
+            const docName = stored.name || (s.pdfMeta && s.pdfMeta.name) || 'Documento.pdf';
+            s.pdfMeta = { name: docName };
+            const titleEl = document.getElementById('pdf-doc-title');
+            if (titleEl) titleEl.textContent = docName;
+
+            if (window.pdfjsLib) {
+                try {
+                    const loadingTask = pdfjsLib.getDocument({ data: stored.buffer.slice(0) });
+                    activePdfDoc = await loadingTask.promise;
+                    activePdfTotalPages = activePdfDoc.numPages;
+                    const wrapper = document.getElementById('pdf-canvas-wrapper');
+                    const frame = document.getElementById('pdf-fallback-frame');
+                    if (wrapper) wrapper.classList.remove('hidden');
+                    if (frame) frame.classList.add('hidden');
+                    if (autoOpenOverlay) {
+                        openPdfWorkspace(activePdfPage || 1);
+                    }
+                    return true;
+                } catch (err) {
+                    console.warn('Errore ripristino PDF con pdf.js:', err);
+                }
+            }
+            const blob = new Blob([stored.buffer], { type: 'application/pdf' });
+            if (autoOpenOverlay) {
+                openFallbackPdf(blob, activePdfPage || 1);
+            }
+            return true;
+        }
+
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            const chunkSize = 0x8000;
+            let binary = '';
+            for (let i = 0; i < bytes.length; i += chunkSize) {
+                binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunkSize));
+            }
+            return btoa(binary);
+        }
+
+        function base64ToArrayBuffer(base64) {
+            const binary = atob(base64);
+            const len = binary.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binary.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
         function getWeekKey(offset = 0) {
             const now = new Date();
             now.setDate(now.getDate() + offset * 7);
@@ -682,10 +794,11 @@
             renderApp();
         }
 
-        function openSession(id) {
+        async function openSession(id) {
             state.activeSessionId = id;
             state.view = 'session';
             saveState();
+            await restoreSessionPdfFromStorage(id, false);
             renderApp();
         }
 
@@ -1142,6 +1255,7 @@
 
             const arrayBuffer = await file.arrayBuffer();
             activePdfBytes = arrayBuffer;
+            await savePdfBinaryForSession(s.id, arrayBuffer, file.name);
             document.getElementById('pdf-doc-title').textContent = file.name;
 
             if (window.pdfjsLib) {
@@ -1731,12 +1845,24 @@
         }
 
         /* ESPORTA E IMPORTA BACKUP (COMPATIBILE CON TUTTI I FORMATI PRECEDENTI E ATTUALI) */
-        function exportBackup() {
+        async function exportBackup() {
+            const pdfBinaries = {};
+            for (const s of state.sessions) {
+                const stored = await loadPdfBinaryForSession(s.id);
+                if (stored && stored.buffer) {
+                    pdfBinaries[s.id] = {
+                        name: stored.name || (s.pdfMeta && s.pdfMeta.name) || 'Documento.pdf',
+                        base64: arrayBufferToBase64(stored.buffer)
+                    };
+                }
+            }
+
             const payload = {
                 app: 'Quaderno per lo studio',
                 exportedAt: new Date().toISOString(),
                 weekKey: getWeekKey(state.weekOffset || 0),
-                ...state
+                ...state,
+                pdfBinaries: pdfBinaries
             };
             const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -1745,14 +1871,14 @@
             a.download = 'Quaderno_Studio_Backup_' + new Date().toISOString().slice(0, 10) + '.json';
             a.click();
             URL.revokeObjectURL(url);
-            showToast('Backup esportato sul dispositivo!');
+            showToast('Backup esportato con tutte le note, i PDF e le evidenziazioni!');
         }
 
         function importBackup(event) {
             const file = event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = async function(e) {
                 try {
                     const rawData = JSON.parse(e.target.result);
                     if (!rawData || typeof rawData !== 'object') {
@@ -1762,6 +1888,7 @@
                     const root = rawData.state && typeof rawData.state === 'object' ? rawData.state : rawData;
                     let importedNotesCount = 0;
                     let importedScrCount = 0;
+                    let importedPdfCount = 0;
 
                     const normalizeNote = (n, idx) => {
                         if (typeof n === 'string') {
@@ -1862,42 +1989,42 @@
                                 }
                             }
                         }
-
-                        const scrKeys = ['scriptures', 'scritture', 'verses', 'versetti'];
-                        for (const sk of scrKeys) {
-                            if (Array.isArray(node[sk]) && node[sk].length > 0) {
-                                assignToSession(mappedId, labelName, null, node[sk]);
-                                foundDirect = true;
-                            }
-                        }
-
-                        // Cerca anche campi testuali diretti delle vecchie schede (es. mainNote, studyTitle, baseScripture, summary, comment)
-                        const legacyTextParts = [];
-                        if (typeof node.studyTitle === 'string' && node.studyTitle.trim()) legacyTextParts.push('Titolo: ' + node.studyTitle.trim());
-                        if (typeof node.baseScripture === 'string' && node.baseScripture.trim()) legacyTextParts.push('Scrittura base: ' + node.baseScripture.trim());
-                        if (typeof node.mainNote === 'string' && node.mainNote.trim()) legacyTextParts.push(node.mainNote.trim());
-                        if (typeof node.personalComment === 'string' && node.personalComment.trim()) legacyTextParts.push(node.personalComment.trim());
-                        if (typeof node.reviewNotes === 'string' && node.reviewNotes.trim()) legacyTextParts.push(node.reviewNotes.trim());
-                        if (legacyTextParts.length > 0) {
-                            assignToSession(mappedId, labelName, [{ title: labelName || 'Appunti importati', html: legacyTextParts.map(t => escapeHtml(t).replace(/\n/g, '<br>')).join('<br><br>') }], null);
-                            foundDirect = true;
-                        }
-
-                        Object.entries(node).forEach(([k, val]) => {
-                            if (foundDirect && (noteKeys.includes(k) || scrKeys.includes(k))) return;
-                            if (val && typeof val === 'object') {
-                                deepScanObject(val, k);
-                            }
-                        });
                     };
 
-                    if (Array.isArray(root.sessions) && root.sessions.some(s => (s.notes && s.notes.length) || (s.scriptures && s.scriptures.length))) {
+                    if (Array.isArray(root.sessions) && root.sessions.some(s => (s.notes && s.notes.length) || (s.scriptures && s.scriptures.length) || (s.pdfAnnotations && Object.keys(s.pdfAnnotations).length) || s.pdfMeta)) {
                         root.sessions.forEach(impSess => {
                             const mappedId = mapSessionId(impSess.id) || mapSessionId(impSess.name) || impSess.id;
                             assignToSession(mappedId, impSess.name, impSess.notes, impSess.scriptures);
+                            const target = state.sessions.find(s => s.id === mappedId);
+                            if (target) {
+                                if (impSess.pdfAnnotations && typeof impSess.pdfAnnotations === 'object') {
+                                    target.pdfAnnotations = { ...(target.pdfAnnotations || {}), ...impSess.pdfAnnotations };
+                                }
+                                if (impSess.pdfImages && typeof impSess.pdfImages === 'object') {
+                                    target.pdfImages = { ...(target.pdfImages || {}), ...impSess.pdfImages };
+                                }
+                                if (impSess.pdfMeta) {
+                                    target.pdfMeta = impSess.pdfMeta;
+                                }
+                            }
                         });
                     } else {
                         deepScanObject(root, '');
+                    }
+
+                    if (root.pdfBinaries && typeof root.pdfBinaries === 'object') {
+                        for (const [sessKey, pdfObj] of Object.entries(root.pdfBinaries)) {
+                            if (pdfObj && pdfObj.base64) {
+                                const mappedId = mapSessionId(sessKey) || sessKey;
+                                const buf = base64ToArrayBuffer(pdfObj.base64);
+                                await savePdfBinaryForSession(mappedId, buf, pdfObj.name || 'Documento.pdf');
+                                const target = state.sessions.find(s => s.id === mappedId);
+                                if (target) {
+                                    target.pdfMeta = { name: pdfObj.name || 'Documento.pdf' };
+                                }
+                                importedPdfCount++;
+                            }
+                        }
                     }
 
                     saveState();
@@ -1910,8 +2037,9 @@
                             saveState();
                         }
                     }
+                    await restoreSessionPdfFromStorage(state.activeSessionId, false);
                     renderApp();
-                    showToast(`Backup importato con successo! (${importedNotesCount} note e ${importedScrCount} scritture ripristinate)`, false);
+                    showToast(`Backup importato! (${importedNotesCount} note, ${importedScrCount} scritture${importedPdfCount > 0 ? ', ' + importedPdfCount + ' PDF con evidenziazioni' : ''} ripristinati)`, false);
                 } catch (err) {
                     console.error('Errore importazione:', err);
                     showToast('Errore durante la lettura del file di backup: assicurati di scegliere un file .json valido.', true);
@@ -2064,9 +2192,9 @@
                                 📄 Carica PDF
                                 <input type="file" accept="application/pdf" onchange="handlePdfFileUpload(event)" class="hidden">
                             </label>
-                            ${activePdfBytes ? `
-                                <button type="button" onclick="openPdfWorkspace(activePdfPage)" class="px-4 py-2.5 rounded-2xl bg-[#261822] text-white font-bold text-xs sm:text-sm">
-                                    Apri PDF accanto alle Note
+                            ${(activePdfBytes || s.pdfMeta) ? `
+                                <button type="button" onclick="openSavedOrActivePdf()" class="px-4 py-2.5 rounded-2xl bg-[#261822] text-white font-bold text-xs sm:text-sm">
+                                    Apri PDF accanto alle Note${s.pdfMeta && s.pdfMeta.name ? ' (' + escapeHtml(s.pdfMeta.name) + ')' : ''}
                                 </button>
                             ` : ''}
                             <button type="button" onclick="openPastePrepModal()" class="px-4 py-2.5 rounded-2xl plum-soft border plum-border font-bold text-xs sm:text-sm">
@@ -2137,12 +2265,24 @@
             });
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
+        async function openSavedOrActivePdf() {
+            if (activePdfBytes) {
+                openPdfWorkspace(activePdfPage || 1);
+                return;
+            }
+            const restored = await restoreSessionPdfFromStorage(state.activeSessionId, true);
+            if (!restored) {
+                showToast('Ricarica il PDF una volta per salvarlo permanentemente in questa sessione.', true);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', async () => {
             loadState();
             setupPdfAnnotCanvas();
             setupPdfSwipeNavigation();
             setupPdfResizer();
             enablePencilClicksOnPdfToolbar();
+            await restoreSessionPdfFromStorage(state.activeSessionId, false);
             renderApp();
         });
     </script>
