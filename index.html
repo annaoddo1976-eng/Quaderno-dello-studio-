@@ -7,6 +7,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/epubjs@0.3.93/dist/epub.min.js" crossorigin="anonymous"></script>
     <script src="https://unpkg.com/lucide@latest" crossorigin="anonymous"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
@@ -92,6 +93,13 @@
             pointer-events: none;
             transition: opacity 0.15s ease;
         }
+        #bible-side-panel button,
+        #bible-side-panel label {
+            touch-action: manipulation;
+        }
+        #bible-epub-viewer .epub-container {
+            -webkit-overflow-scrolling: touch;
+        }
     </style>
 </head>
 <body class="min-h-screen flex flex-col">
@@ -134,12 +142,6 @@
                     <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
                     <span>Salvato</span>
                 </span>
-
-                <!-- Pulsante Bibbia Integrata (EPUB / PDF) disponibile in tutte le sessioni -->
-                <button type="button" id="btn-open-bible" onclick="openBibleModal()" title="Apri Bibbia (Libro, Capitolo, Versetto)" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full bg-amber-100 border border-amber-300 text-xs font-extrabold text-amber-950 hover:bg-amber-200 transition">
-                    <i data-lucide="book-marked" class="w-4 h-4 text-[#6b2d5c]"></i>
-                    <span>📖 Bibbia</span>
-                </button>
 
                 <!-- Pulsante Sincronizzazione Cloud (iCloud Drive / OneDrive) -->
                 <button type="button" id="btn-cloud-sync" onclick="openCloudSyncModal()" title="Sincronizza con iCloud Drive o OneDrive" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#f6eef4] border plum-border text-xs font-bold text-[#6b2d5c] hover:bg-[#eadbe6] transition">
@@ -511,8 +513,9 @@
                 <button type="button" onclick="togglePdfScripturesDrawer()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-900">
                     📖 Scritture
                 </button>
-                <button type="button" onclick="openBibleModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-200 text-amber-950">
-                    📖 Bibbia
+                <button type="button" onclick="toggleBibleSidePanel()" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-200 text-amber-950">
+                    <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                    <span>Bibbia</span>
                 </button>
                 <button type="button" onclick="openPastePrepModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold plum-soft">
                     📋 Incolla Prep.
@@ -528,33 +531,29 @@
             <div id="pdf-scriptures-chips" class="max-w-7xl mx-auto flex flex-wrap gap-2"></div>
         </div>
 
-        <div id="pdf-split-container" class="flex-1 flex overflow-hidden relative">
-            <div id="pdf-left-pane" style="flex: 0 0 54%;" class="overflow-auto bg-slate-300 flex items-start p-4 relative">
-                <div id="pdf-flip-hint" class="hidden absolute left-1/2 -translate-x-1/2 top-4 px-3.5 py-1.5 rounded-full bg-[#261822]/90 text-white text-xs font-bold shadow-lg"></div>
-                <div id="pdf-canvas-wrapper" class="relative mx-auto bg-white shadow-xl">
+        <div id="pdf-split-container" class="flex-1 flex overflow-hidden">
+            <div id="pdf-left-pane" style="flex: 0 0 56%;" class="overflow-auto bg-slate-200/70 p-4 flex flex-col items-center relative">
+                <div id="pdf-flip-hint" class="hidden px-3 py-1 rounded-full bg-[#261822]/85 text-white text-xs font-bold shadow-md"></div>
+                <div id="pdf-canvas-wrapper" class="relative bg-white shadow-lg rounded-lg overflow-hidden">
                     <canvas id="pdf-render-canvas" class="block"></canvas>
-                    <canvas id="pdf-annot-canvas" class="absolute inset-0 touch-none z-20" style="pointer-events: none; touch-action: none; user-select: none;"></canvas>
-                    <div id="pdf-images-layer" class="absolute inset-0 pointer-events-none z-10"></div>
+                    <iframe id="pdf-fallback-frame" class="hidden w-[80vw] max-w-3xl h-[80vh] border-0"></iframe>
+                    <canvas id="pdf-annot-canvas" class="absolute inset-0 pointer-events-none"></canvas>
+                    <div id="pdf-images-layer" class="absolute inset-0 pointer-events-none"></div>
                 </div>
-                <iframe id="pdf-fallback-frame" class="hidden w-full h-full border-0 bg-white rounded-xl"></iframe>
             </div>
 
-            <div id="pdf-resizer" title="Trascina per allargare o stringere le note">
-                <div class="w-1 h-10 bg-[#6b2d5c] rounded-full"></div>
+            <div id="pdf-resizer" title="Trascina per ridimensionare">
+                <div class="w-1 h-10 rounded-full bg-white/80"></div>
             </div>
 
-            <div id="pdf-right-pane" class="flex-1 bg-[#fbf9fa] flex flex-col overflow-hidden min-w-[200px]">
+            <div class="flex-1 flex flex-col overflow-hidden bg-[#fbf9fa] min-w-[260px]">
                 <div class="bg-white border-b plum-border px-3 py-2 flex flex-wrap items-center justify-between gap-2">
                     <div class="flex items-center gap-1 bg-[#f6eef4] p-1 rounded-lg">
-                        <button type="button" id="filter-page-notes" onclick="setPdfNotesFilter('page')" class="px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#6b2d5c] shadow-2xs">
-                            Note della pagina
-                        </button>
-                        <button type="button" id="filter-all-notes" onclick="setPdfNotesFilter('all')" class="px-2.5 py-1 rounded-md text-xs font-bold text-[#7c6575]">
-                            Tutte le note
-                        </button>
+                        <button type="button" id="filter-page-notes" onclick="setPdfNotesFilter('page')" class="px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#6b2d5c] shadow-2xs">Note Pagina</button>
+                        <button type="button" id="filter-all-notes" onclick="setPdfNotesFilter('all')" class="px-2.5 py-1 rounded-md text-xs font-bold text-[#7c6575]">Tutte le Note</button>
                     </div>
-                    <button type="button" onclick="addNoteInCurrentSession(activePdfPage)" class="px-3 py-1.5 rounded-xl plum-primary font-bold text-xs">
-                        + Nota (Pag. <span id="btn-add-note-page-num">1</span>)
+                    <button type="button" onclick="addNoteInCurrentSession(activePdfPage)" class="px-3 py-1.5 rounded-xl plum-primary text-xs font-bold">
+                        + Nota Pag. <span id="btn-add-note-page-num">1</span>
                     </button>
                 </div>
                 <div id="pdf-side-notes-list" class="flex-1 overflow-y-auto p-3 space-y-3"></div>
@@ -562,50 +561,534 @@
         </div>
     </div>
 
+    <!-- PANNELLO LATERALE RICHIUDIBILE: BIBBIA -->
+    <aside id="bible-side-panel" class="fixed top-0 right-0 bottom-0 z-[92] w-full max-w-lg bg-white border-l plum-border shadow-2xl transform translate-x-full transition-transform duration-200 flex flex-col">
+        <div class="px-4 py-3 border-b plum-border flex items-center justify-between gap-2 bg-[#fbf9fa] shrink-0">
+            <div class="flex items-center gap-2.5 min-w-0">
+                <div class="w-9 h-9 rounded-2xl plum-soft border plum-border flex items-center justify-center text-[#6b2d5c] shrink-0">
+                    <i data-lucide="book-open" class="w-5 h-5"></i>
+                </div>
+                <div class="min-w-0">
+                    <h2 class="text-base sm:text-lg font-extrabold text-[#261822] leading-tight">Bibbia</h2>
+                    <p id="bible-epub-header-subtitle" class="text-[11px] font-medium text-[#7c6575] truncate">Nessun EPUB caricato</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-1.5 shrink-0">
+                <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl plum-primary font-bold text-xs cursor-pointer shadow-2xs">
+                    <i data-lucide="upload" class="w-3.5 h-3.5"></i>
+                    <span>Carica EPUB</span>
+                    <input type="file" accept=".epub,application/epub+zip" onchange="handleBibleEpubSelected(event)" class="hidden">
+                </label>
+                <button type="button" onclick="closeBibleSidePanel()" class="px-3 py-1.5 rounded-xl bg-white border plum-border text-xs font-extrabold text-[#4a3343] hover:bg-[#f6eef4]">
+                    ✕ Chiudi
+                </button>
+            </div>
+        </div>
+
+        <!-- Barra controlli lettore EPUB (visibile quando un EPUB è caricato) -->
+        <div id="bible-epub-toolbar" class="hidden px-3 py-2 border-b plum-border bg-white flex flex-wrap items-center justify-between gap-2 shrink-0">
+            <div class="flex items-center gap-1.5">
+                <button type="button" id="bible-epub-prev-btn" onclick="sideBibleGoToSpineOffset(-1)" class="px-2.5 py-1.5 rounded-xl bg-[#f6eef4] text-[#6b2d5c] font-bold text-xs hover:bg-[#eadbe6] transition">
+                    ◀ Cap. prec.
+                </button>
+                <button type="button" id="bible-epub-next-btn" onclick="sideBibleGoToSpineOffset(1)" class="px-2.5 py-1.5 rounded-xl bg-[#f6eef4] text-[#6b2d5c] font-bold text-xs hover:bg-[#eadbe6] transition">
+                    Cap. succ. ▶
+                </button>
+            </div>
+
+            <div class="flex items-center gap-1 bg-[#f6eef4] px-1.5 py-1 rounded-xl">
+                <button type="button" onclick="changeSideBibleFontSize(-15)" title="Riduci caratteri" class="px-2 py-1 rounded-lg bg-white text-[#261822] font-extrabold text-xs shadow-2xs">A−</button>
+                <span id="bible-epub-fontsize-label" class="px-1.5 text-[11px] font-bold text-[#6b2d5c] select-none min-w-[38px] text-center">100%</span>
+                <button type="button" onclick="changeSideBibleFontSize(15)" title="Ingrandisci caratteri" class="px-2 py-1 rounded-lg bg-white text-[#261822] font-extrabold text-xs shadow-2xs">A+</button>
+            </div>
+
+            <div id="bible-epub-chapter-label" class="w-full text-[11px] font-bold text-[#6b2d5c] bg-[#fbf9fa] border plum-border rounded-xl px-2.5 py-1 truncate">
+                Capitolo 1
+            </div>
+        </div>
+
+        <!-- Stato vuoto / caricamento iniziale -->
+        <div id="bible-epub-empty-box" class="p-5 flex-1 overflow-y-auto space-y-4">
+            <div class="bg-[#fbf9fa] border plum-border rounded-3xl p-5 space-y-3 text-center">
+                <div class="w-12 h-12 rounded-2xl plum-soft border plum-border flex items-center justify-center text-[#6b2d5c] mx-auto">
+                    <i data-lucide="book-open" class="w-6 h-6"></i>
+                </div>
+                <p id="bible-epub-file-status" class="text-xs sm:text-sm text-[#4a3343] font-medium">
+                    Nessun file EPUB caricato. Seleziona un file .epub per leggerlo qui e salvarlo automaticamente sul dispositivo.
+                </p>
+                <label class="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl plum-primary font-bold text-sm cursor-pointer shadow-2xs">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    <span>Carica EPUB</span>
+                    <input type="file" accept=".epub,application/epub+zip" onchange="handleBibleEpubSelected(event)" class="hidden">
+                </label>
+            </div>
+        </div>
+
+        <!-- Area di lettura scorrevole EPUB -->
+        <div id="bible-epub-reader-area" class="hidden flex-1 min-h-0 relative bg-white overflow-hidden">
+            <div id="bible-epub-loading-overlay" class="hidden absolute inset-0 z-10 bg-white/90 flex flex-col items-center justify-center gap-2 p-6 text-center">
+                <span class="text-sm font-extrabold text-[#6b2d5c]">Apertura EPUB in corso...</span>
+                <span class="text-xs text-[#7c6575]">Il file viene salvato sul dispositivo per i prossimi accessi.</span>
+            </div>
+            <div id="bible-epub-viewer" class="w-full h-full"></div>
+        </div>
+    </aside>
+
     <script>
-        const STORAGE_KEY = 'quaderno_studio_anna_v5';
+        /* PANNELLO LATERALE BIBBIA (LETTORE EPUB CON EPUB.JS + INDEXEDDB) */
+        const SIDE_EPUB_BINARY_KEY = 'side_panel_epub_binary';
+        const SIDE_EPUB_META_KEY = 'side_panel_epub_meta';
+
+        let sideBibleBook = null;
+        let sideBibleRendition = null;
+        let sideBibleToc = [];
+        let sideBibleMetaSaveTimer = null;
+        let sideBibleState = {
+            fileName: '',
+            bookTitle: '',
+            fontSizePct: 100,
+            lastCfi: null,
+            currentSpineIndex: 0,
+            totalSpineItems: 0,
+            pendingBuffer: null,
+            isRendered: false
+        };
+
+        async function saveSidePanelEpubBinary(arrayBuffer, fileName) {
+            try {
+                const db = await openPdfDatabase();
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction(BIBLE_STORE_NAME, 'readwrite');
+                    tx.objectStore(BIBLE_STORE_NAME).put({
+                        buffer: arrayBuffer.slice(0),
+                        name: fileName || 'Bibbia.epub',
+                        savedAt: new Date().toISOString()
+                    }, SIDE_EPUB_BINARY_KEY);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.warn('Errore salvataggio EPUB in IndexedDB:', e);
+            }
+        }
+
+        function persistSideBibleMeta() {
+            clearTimeout(sideBibleMetaSaveTimer);
+            sideBibleMetaSaveTimer = setTimeout(async () => {
+                try {
+                    const db = await openPdfDatabase();
+                    await new Promise((resolve, reject) => {
+                        const tx = db.transaction(BIBLE_STORE_NAME, 'readwrite');
+                        tx.objectStore(BIBLE_STORE_NAME).put({
+                            fileName: sideBibleState.fileName,
+                            bookTitle: sideBibleState.bookTitle,
+                            fontSizePct: sideBibleState.fontSizePct,
+                            lastCfi: sideBibleState.lastCfi,
+                            currentSpineIndex: sideBibleState.currentSpineIndex
+                        }, SIDE_EPUB_META_KEY);
+                        tx.oncomplete = () => resolve();
+                        tx.onerror = () => reject(tx.error);
+                    });
+                } catch (e) {
+                    console.warn('Errore salvataggio stato lettura EPUB:', e);
+                }
+            }, 300);
+        }
+
+        async function loadSavedSidePanelEpub() {
+            try {
+                const db = await openPdfDatabase();
+                const [binRec, metaRec] = await Promise.all([
+                    new Promise((resolve, reject) => {
+                        const tx = db.transaction(BIBLE_STORE_NAME, 'readonly');
+                        const req = tx.objectStore(BIBLE_STORE_NAME).get(SIDE_EPUB_BINARY_KEY);
+                        req.onsuccess = () => resolve(req.result || null);
+                        req.onerror = () => reject(req.error);
+                    }),
+                    new Promise((resolve, reject) => {
+                        const tx = db.transaction(BIBLE_STORE_NAME, 'readonly');
+                        const req = tx.objectStore(BIBLE_STORE_NAME).get(SIDE_EPUB_META_KEY);
+                        req.onsuccess = () => resolve(req.result || null);
+                        req.onerror = () => reject(req.error);
+                    })
+                ]);
+
+                if (metaRec) {
+                    sideBibleState.fontSizePct = metaRec.fontSizePct || 100;
+                    sideBibleState.lastCfi = metaRec.lastCfi || null;
+                    sideBibleState.currentSpineIndex = metaRec.currentSpineIndex || 0;
+                    sideBibleState.bookTitle = metaRec.bookTitle || '';
+                }
+
+                if (binRec && binRec.buffer) {
+                    sideBibleState.pendingBuffer = binRec.buffer;
+                    sideBibleState.fileName = binRec.name || 'Bibbia.epub';
+                    const subtitleEl = document.getElementById('bible-epub-header-subtitle');
+                    if (subtitleEl) {
+                        subtitleEl.textContent = sideBibleState.bookTitle || sideBibleState.fileName;
+                    }
+                    const statusEl = document.getElementById('bible-epub-file-status');
+                    if (statusEl) {
+                        statusEl.textContent = 'EPUB salvato pronto: ' + sideBibleState.fileName;
+                    }
+                }
+            } catch (e) {
+                console.warn('Errore ripristino EPUB da IndexedDB:', e);
+            }
+        }
+
+        function findTocLabelForHref(tocItems, targetHref) {
+            if (!Array.isArray(tocItems) || !targetHref) return '';
+            const cleanTarget = targetHref.split('#')[0];
+            for (const item of tocItems) {
+                const itemHref = (item.href || '').split('#')[0];
+                if (itemHref && (itemHref === cleanTarget || cleanTarget.endsWith(itemHref) || itemHref.endsWith(cleanTarget))) {
+                    return (item.label || '').trim();
+                }
+                if (item.subitems && item.subitems.length > 0) {
+                    const nested = findTocLabelForHref(item.subitems, targetHref);
+                    if (nested) return nested;
+                }
+            }
+            return '';
+        }
+
+        function applySideBibleFontSizeToRendition() {
+            const pct = sideBibleState.fontSizePct || 100;
+            const labelEl = document.getElementById('bible-epub-fontsize-label');
+            if (labelEl) labelEl.textContent = pct + '%';
+
+            if (!sideBibleRendition) return;
+            try {
+                sideBibleRendition.themes.fontSize(pct + '%');
+                const contentsList = sideBibleRendition.getContents ? sideBibleRendition.getContents() : [];
+                contentsList.forEach(c => {
+                    if (c && c.document && c.document.body) {
+                        c.document.body.style.fontSize = pct + '%';
+                    }
+                });
+                setTimeout(() => {
+                    try {
+                        if (sideBibleRendition && typeof sideBibleRendition.resize === 'function') {
+                            sideBibleRendition.resize();
+                        }
+                    } catch (_) {}
+                }, 60);
+            } catch (e) {
+                console.warn('Errore aggiornamento dimensione testo EPUB:', e);
+            }
+        }
+
+        function updateSideBibleChapterInfo() {
+            const labelEl = document.getElementById('bible-epub-chapter-label');
+            const prevBtn = document.getElementById('bible-epub-prev-btn');
+            const nextBtn = document.getElementById('bible-epub-next-btn');
+            const spineItems = (sideBibleBook && sideBibleBook.spine && sideBibleBook.spine.spineItems) || [];
+            const total = spineItems.length || sideBibleState.totalSpineItems || 0;
+            const idx = Math.max(0, Math.min(Math.max(0, total - 1), sideBibleState.currentSpineIndex || 0));
+
+            let tocTitle = '';
+            if (spineItems[idx] && spineItems[idx].href) {
+                tocTitle = findTocLabelForHref(sideBibleToc, spineItems[idx].href);
+            }
+            if (labelEl) {
+                const posText = total > 0 ? `Sezione ${idx + 1} / ${total}` : 'Lettura EPUB';
+                labelEl.textContent = tocTitle ? `${tocTitle} (${posText})` : posText;
+            }
+            if (prevBtn) prevBtn.disabled = idx <= 0;
+            if (nextBtn) nextBtn.disabled = total > 0 && idx >= total - 1;
+        }
+
+        async function renderSidePanelEpubFromBuffer(arrayBuffer, fileName, restoreTargetCfi = null) {
+            const emptyBox = document.getElementById('bible-epub-empty-box');
+            const readerArea = document.getElementById('bible-epub-reader-area');
+            const toolbar = document.getElementById('bible-epub-toolbar');
+            const loadingOverlay = document.getElementById('bible-epub-loading-overlay');
+            const viewerEl = document.getElementById('bible-epub-viewer');
+            const subtitleEl = document.getElementById('bible-epub-header-subtitle');
+
+            if (typeof window.ePub !== 'function') {
+                showToast('Libreria epub.js non disponibile. Verifica la connessione internet e riprova.', true);
+                return;
+            }
+
+            if (emptyBox) emptyBox.classList.add('hidden');
+            if (toolbar) toolbar.classList.remove('hidden');
+            if (readerArea) readerArea.classList.remove('hidden');
+            if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+
+            try {
+                if (sideBibleRendition) {
+                    try { sideBibleRendition.destroy(); } catch (_) {}
+                    sideBibleRendition = null;
+                }
+                if (sideBibleBook) {
+                    try { sideBibleBook.destroy(); } catch (_) {}
+                    sideBibleBook = null;
+                }
+                if (viewerEl) viewerEl.innerHTML = '';
+
+                // Passa una copia dell'ArrayBuffer così il buffer salvato resta integro
+                sideBibleBook = window.ePub(arrayBuffer.slice(0));
+                await sideBibleBook.ready;
+
+                const meta = await sideBibleBook.loaded.metadata.catch(() => ({}));
+                const nav = await sideBibleBook.loaded.navigation.catch(() => ({ toc: [] }));
+                sideBibleToc = (nav && Array.isArray(nav.toc)) ? nav.toc : [];
+                sideBibleState.fileName = fileName || sideBibleState.fileName || 'Bibbia.epub';
+                sideBibleState.bookTitle = (meta && meta.title) ? meta.title : sideBibleState.fileName;
+                sideBibleState.totalSpineItems = (sideBibleBook.spine && sideBibleBook.spine.spineItems)
+                    ? sideBibleBook.spine.spineItems.length
+                    : 0;
+
+                if (subtitleEl) {
+                    subtitleEl.textContent = sideBibleState.bookTitle;
+                }
+
+                // Attende un frame affinché il contenitore abbia le dimensioni reali prima di renderTo
+                await new Promise(resolve => requestAnimationFrame(resolve));
+
+                sideBibleRendition = sideBibleBook.renderTo('bible-epub-viewer', {
+                    width: '100%',
+                    height: '100%',
+                    flow: 'scrolled-doc',
+                    spread: 'none',
+                    allowScriptedContent: false
+                });
+
+                // Stile leggibile e compatibile con lo scorrimento fluido su iPad e desktop
+                sideBibleRendition.hooks.content.register((contents) => {
+                    const doc = contents && contents.document;
+                    if (!doc || !doc.head) return;
+                    let styleEl = doc.getElementById('quaderno-epub-custom-style');
+                    if (!styleEl) {
+                        styleEl = doc.createElement('style');
+                        styleEl.id = 'quaderno-epub-custom-style';
+                        doc.head.appendChild(styleEl);
+                    }
+                    styleEl.textContent = `
+                        html, body {
+                            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
+                            color: #261822 !important;
+                            background: #ffffff !important;
+                            line-height: 1.65 !important;
+                            padding: 14px 16px 40px 16px !important;
+                            margin: 0 !important;
+                            box-sizing: border-box !important;
+                            word-wrap: break-word !important;
+                        }
+                        img, svg { max-width: 100% !important; height: auto !important; }
+                        a { color: #6b2d5c !important; }
+                    `;
+                    if (doc.body) {
+                        doc.body.style.fontSize = (sideBibleState.fontSizePct || 100) + '%';
+                    }
+                });
+
+                sideBibleRendition.on('relocated', (location) => {
+                    if (!location || !location.start) return;
+                    if (typeof location.start.index === 'number') {
+                        sideBibleState.currentSpineIndex = location.start.index;
+                    }
+                    if (location.start.cfi) {
+                        sideBibleState.lastCfi = location.start.cfi;
+                    }
+                    updateSideBibleChapterInfo();
+                    persistSideBibleMeta();
+                });
+
+                if (restoreTargetCfi) {
+                    try {
+                        await sideBibleRendition.display(restoreTargetCfi);
+                    } catch (_) {
+                        await sideBibleRendition.display();
+                    }
+                } else {
+                    await sideBibleRendition.display();
+                }
+
+                sideBibleState.isRendered = true;
+                applySideBibleFontSizeToRendition();
+                updateSideBibleChapterInfo();
+                persistSideBibleMeta();
+            } catch (err) {
+                console.error('Errore apertura EPUB nel pannello Bibbia:', err);
+                if (emptyBox) emptyBox.classList.remove('hidden');
+                if (readerArea) readerArea.classList.add('hidden');
+                if (toolbar) toolbar.classList.add('hidden');
+                const statusEl = document.getElementById('bible-epub-file-status');
+                if (statusEl) {
+                    statusEl.textContent = 'Impossibile aprire questo file EPUB. Verifica che sia un file .epub valido.';
+                }
+                showToast('Impossibile leggere il file EPUB selezionato.', true);
+            } finally {
+                if (loadingOverlay) loadingOverlay.classList.add('hidden');
+                if (window.lucide) lucide.createIcons();
+            }
+        }
+
+        async function sideBibleGoToSpineOffset(delta) {
+            if (!sideBibleBook || !sideBibleRendition) return;
+            const spineItems = (sideBibleBook.spine && sideBibleBook.spine.spineItems) || [];
+            if (spineItems.length === 0) return;
+
+            let currentIdx = sideBibleState.currentSpineIndex || 0;
+            try {
+                const loc = sideBibleRendition.currentLocation();
+                if (loc && loc.start && typeof loc.start.index === 'number') {
+                    currentIdx = loc.start.index;
+                }
+            } catch (_) {}
+
+            let targetIdx = currentIdx + delta;
+            while (targetIdx >= 0 && targetIdx < spineItems.length && spineItems[targetIdx].linear === false) {
+                targetIdx += delta;
+            }
+
+            if (targetIdx < 0 || targetIdx >= spineItems.length) {
+                showToast(delta < 0 ? 'Sei già al primo capitolo.' : 'Sei già all\'ultimo capitolo.');
+                return;
+            }
+
+            try {
+                await sideBibleRendition.display(spineItems[targetIdx].href);
+                sideBibleState.currentSpineIndex = targetIdx;
+                updateSideBibleChapterInfo();
+                const viewer = document.getElementById('bible-epub-viewer');
+                if (viewer) {
+                    const scroller = viewer.querySelector('.epub-container') || viewer;
+                    scroller.scrollTop = 0;
+                }
+                applySideBibleFontSizeToRendition();
+            } catch (err) {
+                console.warn('Errore cambio capitolo EPUB:', err);
+            }
+        }
+
+        function changeSideBibleFontSize(delta) {
+            sideBibleState.fontSizePct = Math.max(70, Math.min(220, (sideBibleState.fontSizePct || 100) + delta));
+            applySideBibleFontSizeToRendition();
+            persistSideBibleMeta();
+        }
+
+        function toggleBibleSidePanel() {
+            const panel = document.getElementById('bible-side-panel');
+            if (!panel) return;
+            const isOpening = panel.classList.contains('translate-x-full');
+            panel.classList.toggle('translate-x-full');
+            if (window.lucide) lucide.createIcons();
+
+            if (isOpening) {
+                if (!sideBibleState.isRendered && sideBibleState.pendingBuffer) {
+                    renderSidePanelEpubFromBuffer(
+                        sideBibleState.pendingBuffer,
+                        sideBibleState.fileName,
+                        sideBibleState.lastCfi
+                    );
+                } else if (sideBibleState.isRendered && sideBibleRendition) {
+                    setTimeout(() => {
+                        try { sideBibleRendition.resize(); } catch (_) {}
+                    }, 220);
+                }
+            }
+        }
+
+        function closeBibleSidePanel() {
+            const panel = document.getElementById('bible-side-panel');
+            if (!panel) return;
+            panel.classList.add('translate-x-full');
+        }
+
+        async function handleBibleEpubSelected(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            const statusEl = document.getElementById('bible-epub-file-status');
+            if (statusEl) {
+                statusEl.textContent = 'Caricamento di ' + file.name + ' in corso...';
+            }
+
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                sideBibleState.pendingBuffer = arrayBuffer;
+                sideBibleState.fileName = file.name;
+                sideBibleState.lastCfi = null;
+                sideBibleState.currentSpineIndex = 0;
+
+                await saveSidePanelEpubBinary(arrayBuffer, file.name);
+                await renderSidePanelEpubFromBuffer(arrayBuffer, file.name, null);
+                showToast('EPUB caricato e salvato sul dispositivo: ' + file.name);
+            } catch (err) {
+                console.error('Errore selezione file EPUB:', err);
+                showToast('Errore durante il caricamento del file EPUB.', true);
+            }
+            event.target.value = '';
+        }
+
+        window.addEventListener('resize', () => {
+            const panel = document.getElementById('bible-side-panel');
+            if (panel && !panel.classList.contains('translate-x-full') && sideBibleRendition) {
+                try { sideBibleRendition.resize(); } catch (_) {}
+            }
+        });
+
+        /* CONFIGURAZIONE E STATO GLOBALE DEL QUADERNO */
         if (window.pdfjsLib) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
         }
 
+        const STORAGE_KEY = 'quaderno_studio_anna_v1';
+
         const DEFAULT_SESSIONS = [
-            { id: 'torre', name: 'Torre di Guardia', lucideIcon: 'book-open', isBase: true, notes: [], scriptures: [], pdfMeta: null, pdfAnnotations: {}, pdfImages: {} },
-            { id: 'tesori', name: 'Tesori della Parola', lucideIcon: 'gem', isBase: true, notes: [], scriptures: [], pdfMeta: null, pdfAnnotations: {}, pdfImages: {} },
-            { id: 'ministero', name: 'Efficaci nel Ministero', lucideIcon: 'message-circle', isBase: true, notes: [], scriptures: [], pdfMeta: null, pdfAnnotations: {}, pdfImages: {} },
-            { id: 'vita', name: 'Vita Cristiana', lucideIcon: 'heart', isBase: true, notes: [], scriptures: [], pdfMeta: null, pdfAnnotations: {}, pdfImages: {} },
-            { id: 'discorsi', name: 'Discorsi Pubblici', lucideIcon: 'mic', isBase: true, notes: [], scriptures: [], pdfMeta: null, pdfAnnotations: {}, pdfImages: {} },
-            { id: 'personale', name: 'Studio Personale', lucideIcon: 'sparkles', isBase: true, notes: [], scriptures: [], pdfMeta: null, pdfAnnotations: {}, pdfImages: {} }
+            { id: 'torre', name: 'Torre di Guardia', lucideIcon: 'book-open', isBase: true },
+            { id: 'tesori', name: 'Tesori della Parola', lucideIcon: 'gem', isBase: true },
+            { id: 'ministero', name: 'Efficaci nel Ministero', lucideIcon: 'message-circle', isBase: true },
+            { id: 'vita', name: 'Vita Cristiana', lucideIcon: 'heart-handshake', isBase: true },
+            { id: 'discorsi', name: 'Discorsi Pubblici', lucideIcon: 'mic', isBase: true },
+            { id: 'personale', name: 'Studio Personale', lucideIcon: 'sparkles', isBase: true }
         ];
 
         let state = {
             view: 'home',
             activeSessionId: 'torre',
-            studyMode: 'preparazione',
             weekOffset: 0,
-            sessions: JSON.parse(JSON.stringify(DEFAULT_SESSIONS))
+            studyMode: 'preparazione',
+            sessions: []
         };
+
+        let sessionModalMode = 'create';
+        let sessionModalTargetId = null;
+        let modalScrSize = 26;
 
         let activePdfDoc = null;
         let activePdfBytes = null;
         let activePdfPage = 1;
         let activePdfTotalPages = 1;
-        let activePdfZoom = 1.1;
+        let activePdfZoom = 1.25;
         let activePdfRenderTask = null;
         let pdfTool = 'none';
         let pdfHighlighterColor = 'rgba(250, 204, 21, 0.42)';
         let pdfStrokeWidth = 4;
         let pencilOnlyMode = true;
         let pdfNotesFilter = 'page';
-        let modalScrSize = 26;
-        let sessionModalMode = 'create';
-        let sessionModalTargetId = null;
 
         function escapeHtml(str) {
             return String(str || '')
                 .replace(/&/g, '&amp;')
                 .replace(/</g, '&lt;')
                 .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;');
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function getWeekMondayIso(offsetWeeks = 0) {
+            const now = new Date();
+            const day = now.getDay();
+            const diffToMonday = (day === 0 ? -6 : 1 - day) + (offsetWeeks * 7);
+            const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diffToMonday);
+            const dd = String(monday.getDate()).padStart(2, '0');
+            const mm = String(monday.getMonth() + 1).padStart(2, '0');
+            const yyyy = monday.getFullYear();
+            return `${dd}/${mm}/${yyyy}`;
         }
 
         function getAnnotDpr() {
@@ -614,46 +1097,47 @@
 
         function isStylusInput(e) {
             if (!pencilOnlyMode) return true;
-            if (e.pointerType) {
-                if (e.pointerType === 'pen' || e.pointerType === 'mouse') return true;
-                if (e.pointerType === 'touch') return false;
-            }
-            if (e.touches && e.touches.length > 0) {
-                const t = e.touches[0];
-                if (t.touchType === 'stylus') return true;
-                return false;
-            }
-            return true;
-        }
-
-        function getWeekMondayIso(offset = 0) {
-            const now = new Date();
-            const day = now.getDay();
-            const diffToMonday = (day === 0 ? -6 : 1 - day) + offset * 7;
-            const monday = new Date(now);
-            monday.setDate(now.getDate() + diffToMonday);
-            return monday.toISOString().slice(0, 10);
+            if (!e) return false;
+            if (e.pointerType === 'pen' || e.pointerType === 'mouse') return true;
+            if (e.touches && e.touches.length > 0 && e.touches[0].touchType === 'stylus') return true;
+            if (e.changedTouches && e.changedTouches.length > 0 && e.changedTouches[0].touchType === 'stylus') return true;
+            return false;
         }
 
         function getActiveSession() {
-            let s = state.sessions.find(x => x.id === state.activeSessionId);
-            if (!s) {
-                s = state.sessions[0];
-                state.activeSessionId = s.id;
-            }
-            if (!Array.isArray(s.notes)) s.notes = [];
-            if (!Array.isArray(s.scriptures)) s.scriptures = [];
-            if (!s.pdfAnnotations) s.pdfAnnotations = {};
-            if (!s.pdfImages) s.pdfImages = {};
-            return s;
+            return state.sessions.find(s => s.id === state.activeSessionId) || state.sessions[0];
         }
 
         function ensureAllDefaultSessions() {
+            if (!Array.isArray(state.sessions)) state.sessions = [];
             DEFAULT_SESSIONS.forEach(def => {
-                if (!state.sessions.some(s => s.id === def.id)) {
-                    state.sessions.push(JSON.parse(JSON.stringify(def)));
+                const exists = state.sessions.find(s => s.id === def.id);
+                if (!exists) {
+                    state.sessions.push({
+                        id: def.id,
+                        name: def.name,
+                        lucideIcon: def.lucideIcon,
+                        isBase: true,
+                        notes: [],
+                        scriptures: [],
+                        pdfMeta: null,
+                        pdfAnnotations: {},
+                        pdfImages: {}
+                    });
+                } else {
+                    exists.isBase = true;
+                    if (!exists.lucideIcon) exists.lucideIcon = def.lucideIcon;
                 }
             });
+            state.sessions.forEach(s => {
+                if (!Array.isArray(s.notes)) s.notes = [];
+                if (!Array.isArray(s.scriptures)) s.scriptures = [];
+                if (!s.pdfAnnotations || typeof s.pdfAnnotations !== 'object') s.pdfAnnotations = {};
+                if (!s.pdfImages || typeof s.pdfImages !== 'object') s.pdfImages = {};
+            });
+            if (!state.sessions.some(s => s.id === state.activeSessionId)) {
+                state.activeSessionId = state.sessions[0] ? state.sessions[0].id : 'torre';
+            }
         }
 
         function loadState() {
@@ -2800,25 +3284,24 @@
             s.scriptures.push({
                 id: 'scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
                 ref: passage.ref,
-                text: passage.text,
-                pdfPage: null
+                pdfPage: null,
+                text: passage.text
             });
             saveState();
             closeBibleModal();
             renderApp();
-            showToast(`${passage.ref} salvato nelle Scritture della sessione!`);
+            showToast(`${passage.ref} salvato nelle Scritture!`);
         }
 
         async function openBiblePdfInMainReader() {
             if (!bibleData || bibleData.type !== 'pdf' || !bibleData.pdfBuffer) return;
-            closeBibleModal();
-            if (state.view === 'home') state.view = 'session';
             const s = getActiveSession();
             s.pdfMeta = { name: bibleData.fileName || 'Bibbia.pdf' };
             activePdfBytes = bibleData.pdfBuffer;
             await savePdfBinaryForSession(s.id, bibleData.pdfBuffer, s.pdfMeta.name);
+            saveState();
+            closeBibleModal();
             await restoreSessionPdfFromStorage(s.id, true);
-            renderApp();
         }
 
         /* TOAST NOTIFICA E BACKUP JSON */
@@ -3084,6 +3567,10 @@
                             </div>
 
                             <div class="flex flex-wrap items-center gap-2">
+                                <button type="button" onclick="toggleBibleSidePanel()" class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-2xl bg-amber-100 border border-amber-300 text-amber-950 font-bold text-xs sm:text-sm hover:bg-amber-200 transition">
+                                    <i data-lucide="book-open" class="w-4 h-4 text-[#6b2d5c]"></i>
+                                    <span>Bibbia</span>
+                                </button>
                                 <label class="px-4 py-2.5 rounded-2xl bg-rose-600 text-white font-bold text-xs sm:text-sm cursor-pointer shadow-2xs">
                                     📄 Carica PDF
                                     <input type="file" accept="application/pdf" onchange="handlePdfFileUpload(event)" class="hidden">
@@ -3163,6 +3650,7 @@
             loadState();
             await restoreStateFromIndexedDbIfNeeded();
             await loadBibleFromIndexedDb();
+            await loadSavedSidePanelEpub();
             const pdfOverlay = document.getElementById('pdf-workspace-overlay');
             if (pdfOverlay) pdfOverlay.classList.add('hidden');
             setupPdfAnnotCanvas();
