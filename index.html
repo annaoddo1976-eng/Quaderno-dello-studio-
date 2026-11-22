@@ -170,6 +170,17 @@
         #pdf-resizer.dragging #pdf-resizer-handle {
             background: rgba(255, 255, 255, 0.9);
         }
+        #pdf-resizer.hidden,
+        #pdf-right-pane.hidden,
+        #pdf-notes-panel-body.hidden,
+        #pdf-bible-panel-slot.hidden {
+            display: none !important;
+        }
+        #pdf-left-pane.pdf-fullscreen-pane {
+            flex: 1 1 100% !important;
+            width: 100% !important;
+            min-width: 0 !important;
+        }
         .overlay-img-box {
             position: absolute;
             border: 2px dashed #6b2d5c;
@@ -593,9 +604,10 @@
                 <span id="pdf-total-pages" class="text-xs font-semibold text-[#6b2d5c]">/ 1</span>
                 <button type="button" onclick="changePdfPage(1)" class="px-2.5 py-1 rounded-lg bg-white font-bold shadow-2xs">▶</button>
                 <span class="mx-1 text-[#d7bfd0]">|</span>
-                <button type="button" onclick="changePdfZoom(-0.15)" class="px-2 py-1 rounded-lg bg-white font-bold text-xs">−</button>
-                <button type="button" onclick="changePdfZoom(0.15)" class="px-2 py-1 rounded-lg bg-white font-bold text-xs">+</button>
-                <button type="button" onclick="fitPdfZoomToPane()" title="Adatta il PDF allo spazio visibile" class="px-2 py-1 rounded-lg bg-white font-bold text-[11px] text-[#6b2d5c]">Adatta</button>
+                <button type="button" onclick="changePdfZoom(-0.15)" title="Riduci zoom" class="px-2 py-1 rounded-lg bg-white font-bold text-xs">−</button>
+                <button type="button" onclick="changePdfZoom(0.15)" title="Aumenta zoom" class="px-2 py-1 rounded-lg bg-white font-bold text-xs">+</button>
+                <button type="button" id="btn-pdf-fit-width" onclick="setPdfFitMode('width')" title="Adatta il PDF alla larghezza disponibile" class="px-2 py-1 rounded-lg plum-primary font-bold text-[11px]">Larghezza</button>
+                <button type="button" id="btn-pdf-fit-page" onclick="setPdfFitMode('page')" title="Mostra l'intera pagina PDF sullo schermo" class="px-2 py-1 rounded-lg bg-white font-bold text-[11px] text-[#6b2d5c]">Pag. intera</button>
             </div>
 
             <div class="flex flex-wrap items-center gap-1.5">
@@ -616,13 +628,13 @@
                 </select>
 
                 <button type="button" id="tool-eraser" onclick="setPdfTool('eraser')" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#4a3343]">🧹 Gomma</button>
-                <button type="button" onclick="undoPdfStroke()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#4a3343]">↩️</button>
+                <button type="button" onclick="undoPdfStroke()" title="Annulla ultimo tratto" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#4a3343]">↩️</button>
 
                 <button type="button" id="btn-pencil-only" onclick="togglePencilOnly()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800">
                     Solo Apple Pencil ✓
                 </button>
 
-                <button type="button" id="btn-pdf-layout-toggle" onclick="togglePdfLayoutPreference()" title="Cambia disposizione PDF e Note (Affiancati o Sopra/Sotto)" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#6b2d5c] border plum-border">
+                <button type="button" id="btn-pdf-layout-toggle" onclick="togglePdfLayoutPreference()" title="Cambia disposizione PDF e Pannello (Affiancati o Sopra/Sotto)" class="hidden px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#6b2d5c] border plum-border">
                     ⇳ Sopra/Sotto
                 </button>
 
@@ -631,10 +643,16 @@
                     <input type="file" accept="image/*" onchange="addPdfOverlayImage(event)" class="hidden">
                 </label>
 
-                <button type="button" onclick="toggleBibleSidePanel()" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-200 text-amber-950">
+                <button type="button" id="btn-pdf-toolbar-notes" onclick="togglePdfSidePanel('notes')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-[#f6eef4] text-[#6b2d5c] border plum-border hover:bg-[#eadbe6] transition">
+                    <i data-lucide="sticky-note" class="w-3.5 h-3.5"></i>
+                    <span>Note</span>
+                </button>
+
+                <button type="button" id="btn-pdf-toolbar-bible" onclick="togglePdfSidePanel('bible')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-amber-100 text-amber-950 border border-amber-300 hover:bg-amber-200 transition">
                     <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
                     <span>Bibbia</span>
                 </button>
+
                 <button type="button" onclick="openPastePrepModal()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold plum-soft">
                     📋 Incolla Prep.
                 </button>
@@ -642,7 +660,7 @@
         </div>
 
         <div id="pdf-split-container" class="flex-1 flex overflow-hidden">
-            <div id="pdf-left-pane" style="flex: 0 0 56%;" class="bg-slate-200/70 p-2 sm:p-4">
+            <div id="pdf-left-pane" style="flex: 1 1 100%;" class="pdf-fullscreen-pane bg-slate-200/70 p-2 sm:p-4">
                 <div id="pdf-flip-hint" class="hidden w-fit mx-auto mb-2 px-3 py-1 rounded-full bg-[#261822]/85 text-white text-xs font-bold shadow-md"></div>
                 <div id="pdf-canvas-wrapper" class="relative bg-white shadow-lg rounded-lg overflow-hidden">
                     <canvas id="pdf-render-canvas" class="block"></canvas>
@@ -652,27 +670,48 @@
                 </div>
             </div>
 
-            <div id="pdf-resizer" title="Trascina per ridimensionare" aria-label="Barra divisoria ridimensionabile tra PDF e Note">
+            <div id="pdf-resizer" class="hidden" title="Trascina per ridimensionare" aria-label="Barra divisoria ridimensionabile tra PDF e pannello laterale">
                 <div id="pdf-resizer-handle"></div>
             </div>
 
-            <div id="pdf-right-pane" class="bg-[#fbf9fa]">
-                <div class="bg-white border-b plum-border px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
-                    <div class="flex items-center gap-1 bg-[#f6eef4] p-1 rounded-lg">
-                        <button type="button" id="filter-page-notes" onclick="setPdfNotesFilter('page')" class="px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#6b2d5c] shadow-2xs">Note Pagina</button>
-                        <button type="button" id="filter-all-notes" onclick="setPdfNotesFilter('all')" class="px-2.5 py-1 rounded-md text-xs font-bold text-[#7c6575]">Tutte le Note</button>
+            <div id="pdf-right-pane" class="hidden bg-[#fbf9fa]">
+                <div class="bg-white border-b plum-border px-3 py-2 flex items-center justify-between gap-2 shrink-0">
+                    <div class="flex items-center gap-1 bg-[#f6eef4] p-1 rounded-xl">
+                        <button type="button" id="pdf-side-tab-notes" onclick="openPdfSidePanel('notes')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-white text-[#6b2d5c] shadow-2xs transition">
+                            <i data-lucide="sticky-note" class="w-3.5 h-3.5"></i>
+                            <span>Note</span>
+                        </button>
+                        <button type="button" id="pdf-side-tab-bible" onclick="openPdfSidePanel('bible')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#7c6575] hover:text-[#6b2d5c] transition">
+                            <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                            <span>Bibbia</span>
+                        </button>
                     </div>
-                    <button type="button" onclick="addNoteInCurrentSession(activePdfPage)" class="px-3 py-1.5 rounded-xl plum-primary text-xs font-bold">
-                        + Nota Pag. <span id="btn-add-note-page-num">1</span>
+                    <button type="button" onclick="closePdfSidePanel()" title="Chiudi pannello e torna al PDF a schermo intero" class="px-2.5 py-1.5 rounded-xl bg-[#f6eef4] hover:bg-[#eadbe6] text-[#6b2d5c] font-extrabold text-xs shrink-0">
+                        ✕ Chiudi
                     </button>
                 </div>
-                <div id="pdf-side-notes-list" class="p-3 space-y-3"></div>
+
+                <div id="pdf-notes-panel-body" class="flex-1 min-h-0 flex flex-col overflow-hidden">
+                    <div class="bg-white border-b plum-border px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
+                        <div class="flex items-center gap-1 bg-[#f6eef4] p-1 rounded-lg">
+                            <button type="button" id="filter-page-notes" onclick="setPdfNotesFilter('page')" class="px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#6b2d5c] shadow-2xs">Note Pagina</button>
+                            <button type="button" id="filter-all-notes" onclick="setPdfNotesFilter('all')" class="px-2.5 py-1 rounded-md text-xs font-bold text-[#7c6575]">Tutte le Note</button>
+                        </div>
+                        <button type="button" onclick="addNoteInCurrentSession(activePdfPage)" class="px-3 py-1.5 rounded-xl plum-primary text-xs font-bold">
+                            + Nota Pag. <span id="btn-add-note-page-num">1</span>
+                        </button>
+                    </div>
+                    <div id="pdf-side-notes-list" class="p-3 space-y-3"></div>
+                </div>
+
+                <div id="pdf-bible-panel-slot" class="hidden flex-1 min-h-0 flex flex-col overflow-hidden bg-white"></div>
             </div>
         </div>
     </div>
 
     <!-- PANNELLO LATERALE RICHIUDIBILE: BIBBIA -->
     <aside id="bible-side-panel" class="fixed top-0 right-0 bottom-0 z-[92] w-full max-w-lg bg-white border-l plum-border shadow-2xl transform translate-x-full transition-transform duration-200 flex flex-col">
+        <div id="bible-panel-inner-content" class="flex flex-col flex-1 min-h-0 h-full">
         <div class="px-4 py-3 border-b plum-border flex items-center justify-between gap-2 bg-[#fbf9fa] shrink-0">
             <div class="flex items-center gap-2.5 min-w-0">
                 <div class="w-9 h-9 rounded-2xl plum-soft border plum-border flex items-center justify-center text-[#6b2d5c] shrink-0">
@@ -689,7 +728,7 @@
                     <span>Carica EPUB</span>
                     <input type="file" accept=".epub,application/epub+zip" onchange="handleBibleEpubSelected(event)" class="hidden">
                 </label>
-                <button type="button" onclick="closeBibleSidePanel()" class="px-3 py-1.5 rounded-xl bg-white border plum-border text-xs font-extrabold text-[#4a3343] hover:bg-[#f6eef4]">
+                <button type="button" id="bible-panel-close-drawer-btn" onclick="closeBibleSidePanel()" class="px-3 py-1.5 rounded-xl bg-white border plum-border text-xs font-extrabold text-[#4a3343] hover:bg-[#f6eef4]">
                     ✕ Chiudi
                 </button>
             </div>
@@ -766,9 +805,14 @@
             <div id="bible-side-structured-reader" class="hidden w-full h-full overflow-y-auto p-4 pb-16 space-y-2 text-[#261822] leading-relaxed" style="-webkit-overflow-scrolling: touch; font-size: 17px;"></div>
             <div id="bible-epub-viewer" class="w-full h-full"></div>
         </div>
+        </div>
     </aside>
 
     <script>
+        if (window.pdfjsLib && pdfjsLib.GlobalWorkerOptions) {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        }
+
         /* PANNELLO LATERALE BIBBIA (LETTORE EPUB STRUTTURATO + FALLBACK EPUB.JS + INDEXEDDB) */
         const SIDE_EPUB_BINARY_KEY = 'side_panel_epub_binary';
         const SIDE_EPUB_META_KEY = 'side_panel_epub_meta';
@@ -811,6 +855,19 @@
         }
 
         function persistSideBibleMeta() {
+            if (!state.uiPrefs || typeof state.uiPrefs !== 'object') {
+                state.uiPrefs = getDefaultUiPrefs();
+            }
+            state.uiPrefs.lastBiblePos = {
+                bookIdx: sideBibleState.bookIdx || 0,
+                chapterIdx: sideBibleState.chapterIdx || 0,
+                verseNum: sideBibleState.verseNum || null,
+                fontSizePct: sideBibleState.fontSizePct || 100
+            };
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            } catch (_) {}
+
             clearTimeout(sideBibleMetaSaveTimer);
             sideBibleMetaSaveTimer = setTimeout(async () => {
                 try {
@@ -854,6 +911,7 @@
                     })
                 ]);
 
+                const fallbackPos = (state.uiPrefs && state.uiPrefs.lastBiblePos) || null;
                 if (metaRec) {
                     sideBibleState.fontSizePct = metaRec.fontSizePct || 100;
                     sideBibleState.lastCfi = metaRec.lastCfi || null;
@@ -862,6 +920,11 @@
                     if (typeof metaRec.bookIdx === 'number') sideBibleState.bookIdx = metaRec.bookIdx;
                     if (typeof metaRec.chapterIdx === 'number') sideBibleState.chapterIdx = metaRec.chapterIdx;
                     if (metaRec.verseNum) sideBibleState.verseNum = metaRec.verseNum;
+                } else if (fallbackPos) {
+                    sideBibleState.fontSizePct = fallbackPos.fontSizePct || 100;
+                    if (typeof fallbackPos.bookIdx === 'number') sideBibleState.bookIdx = fallbackPos.bookIdx;
+                    if (typeof fallbackPos.chapterIdx === 'number') sideBibleState.chapterIdx = fallbackPos.chapterIdx;
+                    if (fallbackPos.verseNum) sideBibleState.verseNum = fallbackPos.verseNum;
                 }
 
                 if (binRec && binRec.buffer) {
@@ -1374,7 +1437,64 @@
             persistSideBibleMeta();
         }
 
+        async function ensureSideBibleContentReady() {
+            if (bibleData && bibleData.type === 'epub' && bibleData.parserVersion === BIBLE_PARSER_VERSION && bibleData.books.length > 0) {
+                renderSideBibleStructuredUI(false);
+            } else if (sideBibleState.pendingBuffer) {
+                await renderSidePanelEpubFromBuffer(
+                    sideBibleState.pendingBuffer,
+                    sideBibleState.fileName,
+                    sideBibleState.lastCfi
+                );
+            } else if (sideBibleState.isRendered && sideBibleRendition) {
+                setTimeout(() => {
+                    try { sideBibleRendition.resize(); } catch (_) {}
+                }, 120);
+            }
+        }
+
+        function mountBiblePanelTo(target) {
+            const inner = document.getElementById('bible-panel-inner-content');
+            const drawer = document.getElementById('bible-side-panel');
+            const pdfSlot = document.getElementById('pdf-bible-panel-slot');
+            const closeDrawerBtn = document.getElementById('bible-panel-close-drawer-btn');
+            const structuredEl = document.getElementById('bible-side-structured-reader');
+            if (!inner || !drawer || !pdfSlot) return;
+
+            const savedScroll = structuredEl ? structuredEl.scrollTop : 0;
+            const dest = target === 'pdf' ? pdfSlot : drawer;
+            const changedParent = inner.parentElement !== dest;
+
+            if (changedParent) {
+                dest.appendChild(inner);
+                if (structuredEl) {
+                    requestAnimationFrame(() => {
+                        structuredEl.scrollTop = savedScroll;
+                    });
+                }
+                if (sideBibleState.mode === 'epubjs' && sideBibleRendition) {
+                    setTimeout(() => {
+                        try {
+                            sideBibleRendition.resize();
+                            if (sideBibleState.lastCfi) sideBibleRendition.display(sideBibleState.lastCfi);
+                        } catch (_) {}
+                    }, 100);
+                }
+            }
+
+            if (closeDrawerBtn) {
+                closeDrawerBtn.classList.toggle('hidden', target === 'pdf');
+            }
+        }
+
         async function toggleBibleSidePanel() {
+            const pdfOverlay = document.getElementById('pdf-workspace-overlay');
+            if (pdfOverlay && !pdfOverlay.classList.contains('hidden')) {
+                await togglePdfSidePanel('bible');
+                return;
+            }
+
+            mountBiblePanelTo('drawer');
             const panel = document.getElementById('bible-side-panel');
             if (!panel) return;
             const isOpening = panel.classList.contains('translate-x-full');
@@ -1382,26 +1502,17 @@
             if (window.lucide) lucide.createIcons();
 
             if (isOpening) {
-                if (bibleData && bibleData.type === 'epub' && bibleData.parserVersion === BIBLE_PARSER_VERSION && bibleData.books.length > 0) {
-                    renderSideBibleStructuredUI(false);
-                } else if (sideBibleState.pendingBuffer) {
-                    await renderSidePanelEpubFromBuffer(
-                        sideBibleState.pendingBuffer,
-                        sideBibleState.fileName,
-                        sideBibleState.lastCfi
-                    );
-                } else if (sideBibleState.isRendered && sideBibleRendition) {
-                    setTimeout(() => {
-                        try { sideBibleRendition.resize(); } catch (_) {}
-                    }, 220);
-                }
+                await ensureSideBibleContentReady();
             }
         }
 
         function closeBibleSidePanel() {
+            const pdfOverlay = document.getElementById('pdf-workspace-overlay');
+            if (pdfOverlay && !pdfOverlay.classList.contains('hidden') && activePdfSidePanel === 'bible') {
+                closePdfSidePanel();
+            }
             const panel = document.getElementById('bible-side-panel');
-            if (!panel) return;
-            panel.classList.add('translate-x-full');
+            if (panel) panel.classList.add('translate-x-full');
         }
 
         async function handleBibleEpubSelected(event) {
@@ -2677,7 +2788,8 @@
 
                     renderBibleModalView();
                     const panel = document.getElementById('bible-side-panel');
-                    if (panel && !panel.classList.contains('translate-x-full')) {
+                    const isBibleDockedOpen = activePdfSidePanel === 'bible' && !document.getElementById('pdf-workspace-overlay').classList.contains('hidden');
+                    if (isBibleDockedOpen || (panel && !panel.classList.contains('translate-x-full'))) {
                         renderSideBibleStructuredUI(false);
                     }
                     showToast(`Bibbia EPUB verificata: ${bibleData.books.length}/66 libri salvati permanentemente!`);
@@ -3027,6 +3139,18 @@
 
         const STORAGE_KEY = 'quaderno_studio_anna_v1';
 
+        function getDefaultUiPrefs() {
+            return {
+                notesPanelWidthPct: 30,
+                biblePanelWidthPct: 30,
+                notesPanelWidthPortraitPct: 40,
+                biblePanelWidthPortraitPct: 40,
+                stackPanelHeightPct: 44,
+                pdfFitMode: 'width',
+                lastBiblePos: null
+            };
+        }
+
         const DEFAULT_SESSIONS = [
             { id: 'torre', name: 'Torre di Guardia', lucideIcon: 'book-open', isBase: true },
             { id: 'tesori', name: 'Tesori della Parola', lucideIcon: 'gem', isBase: true },
@@ -3043,7 +3167,8 @@
             studyMode: 'preparazione',
             sessions: [],
             pdfPageLinks: {},
-            clearedPdfPageNotes: {}
+            clearedPdfPageNotes: {},
+            uiPrefs: getDefaultUiPrefs()
         };
 
         let sessionModalMode = 'create';
@@ -3055,15 +3180,15 @@
         let activePdfPage = 1;
         let activePdfTotalPages = 1;
         let activePdfZoom = 1.25;
+        let activePdfCanvasDpr = 1;
         let activePdfRenderTask = null;
         let pdfTool = 'none';
         let pdfHighlighterColor = 'rgba(250, 204, 21, 0.42)';
         let pdfStrokeWidth = 4;
         let pencilOnlyMode = true;
         let pdfNotesFilter = 'page';
-        let pdfSplitRatioLandscape = 56;
-        let pdfSplitRatioPortrait = 54;
-        let pdfStackRatioPortrait = 54;
+        let activePdfSidePanel = 'none'; // 'none' | 'notes' | 'bible'
+        let pdfSideNotesScrollTop = 0;
         let pdfLayoutPreference = 'auto'; // 'auto' | 'side' | 'stacked'
         let currentPdfLayoutMode = 'side'; // 'side' | 'stacked'
         let pdfUserManualZoom = false;
@@ -3332,6 +3457,7 @@
 
         function ensureAllDefaultSessions() {
             if (!Array.isArray(state.sessions)) state.sessions = [];
+            state.uiPrefs = { ...getDefaultUiPrefs(), ...(state.uiPrefs && typeof state.uiPrefs === 'object' ? state.uiPrefs : {}) };
             DEFAULT_SESSIONS.forEach(def => {
                 const exists = state.sessions.find(s => s.id === def.id);
                 if (!exists) {
@@ -3607,14 +3733,15 @@
                     const copy = record.buffer.slice(0);
                     activePdfDoc = await pdfjsLib.getDocument({ data: copy }).promise;
                     activePdfTotalPages = activePdfDoc.numPages || 1;
-                    activePdfPage = 1;
+                    const savedLastPage = (s && Number(s.lastPdfPage)) || 1;
+                    activePdfPage = Math.max(1, Math.min(activePdfTotalPages, savedLastPage));
                 } catch (err) {
                     console.warn('Fallback iframe per PDF:', err);
                     activePdfDoc = null;
                 }
             }
             if (autoOpen) {
-                openPdfWorkspace(1);
+                openPdfWorkspace(null);
             }
             return true;
         }
@@ -3929,6 +4056,7 @@
             const hwVisible = !!n.handwriting.visible;
             const hwHeight = n.handwriting.height || 260;
             const hwStrokesCount = Array.isArray(n.handwriting.strokes) ? n.handwriting.strokes.length : 0;
+            const hwCfg = getNoteHwConfig(n.id);
             const pageDisplayVal = formatNotePdfPagesDisplay(n);
             const hasSessionPdf = !!(activePdfBytes || (activeSess && activeSess.pdfMeta));
             return `
@@ -3989,11 +4117,17 @@
                                 <div class="bg-[#f6eef4] border-b plum-border px-3 py-1.5 flex flex-wrap items-center justify-between gap-1.5">
                                     <div class="flex flex-wrap items-center gap-1">
                                         <span class="text-[11px] font-extrabold text-[#6b2d5c] mr-1">✏️ Foglio a mano:</span>
-                                        <button type="button" onclick="setNoteHwTool('${n.id}', 'pen', '#261822')" class="px-2 py-1 rounded-lg bg-white text-[#261822] text-xs font-bold border plum-border">Penna Nera</button>
-                                        <button type="button" onclick="setNoteHwTool('${n.id}', 'pen', '#6b2d5c')" class="px-2 py-1 rounded-lg bg-white text-[#6b2d5c] text-xs font-bold border plum-border">Prugna</button>
-                                        <button type="button" onclick="setNoteHwTool('${n.id}', 'pen', '#0369a1')" class="px-2 py-1 rounded-lg bg-white text-sky-700 text-xs font-bold border plum-border">Blu</button>
-                                        <button type="button" onclick="setNoteHwTool('${n.id}', 'highlighter', 'rgba(250, 204, 21, 0.42)')" class="px-2 py-1 rounded-lg bg-yellow-200 text-amber-950 text-xs font-bold">Evidenzia</button>
-                                        <button type="button" onclick="setNoteHwTool('${n.id}', 'eraser', '')" class="px-2 py-1 rounded-lg bg-white text-[#4a3343] text-xs font-bold border plum-border">🧹 Gomma</button>
+                                        <button type="button" onclick="setNoteHwTool('${n.id}', 'pen', '#261822')" class="px-2 py-1 rounded-lg ${hwCfg.tool === 'pen' && hwCfg.color === '#261822' ? 'plum-primary' : 'bg-white text-[#261822]'} text-xs font-bold border plum-border">Nera</button>
+                                        <button type="button" onclick="setNoteHwTool('${n.id}', 'pen', '#6b2d5c')" class="px-2 py-1 rounded-lg ${hwCfg.tool === 'pen' && hwCfg.color === '#6b2d5c' ? 'plum-primary' : 'bg-white text-[#6b2d5c]'} text-xs font-bold border plum-border">Prugna</button>
+                                        <button type="button" onclick="setNoteHwTool('${n.id}', 'pen', '#0369a1')" class="px-2 py-1 rounded-lg ${hwCfg.tool === 'pen' && hwCfg.color === '#0369a1' ? 'plum-primary' : 'bg-white text-sky-700'} text-xs font-bold border plum-border">Blu</button>
+                                        <button type="button" onclick="setNoteHwTool('${n.id}', 'pen', '#15803d')" class="px-2 py-1 rounded-lg ${hwCfg.tool === 'pen' && hwCfg.color === '#15803d' ? 'plum-primary' : 'bg-white text-emerald-700'} text-xs font-bold border plum-border">Verde</button>
+                                        <button type="button" onclick="setNoteHwTool('${n.id}', 'highlighter', 'rgba(250, 204, 21, 0.42)')" class="px-2 py-1 rounded-lg ${hwCfg.tool === 'highlighter' ? 'bg-yellow-400 text-[#261822] ring-2 ring-[#6b2d5c]' : 'bg-yellow-200 text-amber-950'} text-xs font-bold">Evidenzia</button>
+                                        <select onchange="setNoteHwWidth('${n.id}', Number(this.value))" title="Spessore tratto" class="text-[11px] font-bold bg-white border plum-border rounded-lg px-1.5 py-1">
+                                            <option value="1.8" ${hwCfg.penWidth === 1.8 ? 'selected' : ''}>Sottile</option>
+                                            <option value="2.8" ${(!hwCfg.penWidth || hwCfg.penWidth === 2.8) ? 'selected' : ''}>Medio</option>
+                                            <option value="5.2" ${hwCfg.penWidth === 5.2 ? 'selected' : ''}>Largo</option>
+                                        </select>
+                                        <button type="button" onclick="setNoteHwTool('${n.id}', 'eraser', '')" class="px-2 py-1 rounded-lg ${hwCfg.tool === 'eraser' ? 'plum-primary' : 'bg-white text-[#4a3343]'} text-xs font-bold border plum-border">🧹 Gomma</button>
                                         <button type="button" onclick="undoNoteHandwriting('${n.id}')" class="px-2 py-1 rounded-lg bg-white text-[#4a3343] text-xs font-bold border plum-border">↩️</button>
                                     </div>
                                     <div class="flex items-center gap-1">
@@ -4023,7 +4157,7 @@
 
         function getNoteHwConfig(noteId) {
             if (!noteHwToolState[noteId]) {
-                noteHwToolState[noteId] = { tool: 'pen', color: '#261822', width: 2.6 };
+                noteHwToolState[noteId] = { tool: 'pen', color: '#261822', penWidth: 2.8, width: 2.8 };
             }
             return noteHwToolState[noteId];
         }
@@ -4046,7 +4180,20 @@
             const cfg = getNoteHwConfig(noteId);
             cfg.tool = tool;
             if (color) cfg.color = color;
-            cfg.width = tool === 'highlighter' ? 14 : 2.6;
+            cfg.width = tool === 'highlighter' ? 14 : (cfg.penWidth || 2.8);
+            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                renderPdfSideNotes();
+            } else {
+                renderApp();
+            }
+        }
+
+        function setNoteHwWidth(noteId, widthVal) {
+            const cfg = getNoteHwConfig(noteId);
+            cfg.penWidth = widthVal || 2.8;
+            if (cfg.tool !== 'highlighter') {
+                cfg.width = cfg.penWidth;
+            }
         }
 
         function resizeNoteHandwriting(noteId, delta) {
@@ -4200,10 +4347,10 @@
                     e.stopPropagation();
                     const rect = cachedRect || canvas.getBoundingClientRect();
                     const cfg = getNoteHwConfig(noteId);
-                    const pt = (e.touches && e.touches[0]) || e;
-                    const pos = getRel(pt.clientX, pt.clientY, rect);
 
                     if (cfg.tool === 'eraser') {
+                        const pt = (e.touches && e.touches[0]) || e;
+                        const pos = getRel(pt.clientX, pt.clientY, rect);
                         const s = getActiveSession();
                         const n = s.notes.find(x => x.id === noteId);
                         if (n && n.handwriting && Array.isArray(n.handwriting.strokes)) {
@@ -4217,7 +4364,12 @@
                     }
 
                     if (!stroke) return;
-                    stroke.points.push(pos);
+                    const events = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : [e];
+                    for (let i = 0; i < events.length; i++) {
+                        const ev = events[i];
+                        const pt = (ev.touches && ev.touches[0]) || ev;
+                        stroke.points.push(getRel(pt.clientX, pt.clientY, rect));
+                    }
                     redrawNoteHandwritingCanvas(noteId, stroke);
                 };
 
@@ -4230,11 +4382,19 @@
                     }
                     activePtr = null;
                     cachedRect = null;
+
+                    const cfg = getNoteHwConfig(noteId);
+                    if (cfg.tool === 'eraser') {
+                        saveState();
+                        return;
+                    }
+
                     if (stroke && stroke.points.length > 0) {
                         const s = getActiveSession();
                         const n = s.notes.find(x => x.id === noteId);
                         if (n) {
                             if (!n.handwriting) n.handwriting = { visible: true, height: 260, strokes: [] };
+                            if (!Array.isArray(n.handwriting.strokes)) n.handwriting.strokes = [];
                             n.handwriting.strokes.push(stroke);
                             saveState();
                         }
@@ -4257,158 +4417,154 @@
                 }
             });
         }
-        /* SCRITTURE DELLA SESSIONE (dati interni conservati per retrocompatibilità e backup) */
-        function addScripture() {
-            const refEl = document.getElementById('new-scr-ref');
-            const pageEl = document.getElementById('new-scr-page');
-            const textEl = document.getElementById('new-scr-text');
-            if (!refEl || !pageEl || !textEl) return;
-            const ref = refEl.value.trim();
-            if (!ref) return;
-            const s = getActiveSession();
-            const pg = parseInt(pageEl.value, 10);
-            s.scriptures.push({
-                id: 'scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
-                ref,
-                pdfPage: pg > 0 ? pg : null,
-                text: textEl.value.trim() || '(Testo non inserito)'
-            });
-            refEl.value = '';
-            pageEl.value = '';
-            textEl.value = '';
-            saveState();
-            renderApp();
-        }
 
-        function deleteScripture(scrId) {
-            const s = getActiveSession();
-            s.scriptures = s.scriptures.filter(x => x.id !== scrId);
-            saveState();
-            renderApp();
-        }
-
-        function openScriptureModal(scrId) {
-            const s = getActiveSession();
-            const scr = s.scriptures.find(x => x.id === scrId);
-            if (!scr) return;
-            document.getElementById('scr-modal-ref').textContent = scr.ref;
-            document.getElementById('scr-modal-text').textContent = scr.text;
-            const gotoBtn = document.getElementById('scr-modal-goto-pdf');
-            if (scr.pdfPage && activePdfBytes) {
-                gotoBtn.classList.remove('hidden');
-                gotoBtn.onclick = () => {
-                    closeScriptureModal();
-                    openPdfWorkspace(scr.pdfPage);
-                };
-            } else {
-                gotoBtn.classList.add('hidden');
-            }
-            document.getElementById('scripture-reader-modal').classList.remove('hidden');
-        }
-
-        function closeScriptureModal() {
-            document.getElementById('scripture-reader-modal').classList.add('hidden');
-        }
-
-        function changeScrModalSize(delta) {
-            modalScrSize = Math.max(18, Math.min(54, modalScrSize + delta));
-            document.getElementById('scr-modal-text').style.fontSize = modalScrSize + 'px';
-        }
-
-        /* INCOLLA PREPARAZIONE */
+        /* MODALE INCOLLA PREPARAZIONE & LETTURA SCRITTURE */
         function openPastePrepModal() {
-            document.getElementById('paste-prep-error').classList.add('hidden');
-            document.getElementById('paste-prep-modal').classList.remove('hidden');
-            setTimeout(() => document.getElementById('paste-prep-textarea').focus(), 40);
+            const modal = document.getElementById('paste-prep-modal');
+            const ta = document.getElementById('paste-prep-textarea');
+            const err = document.getElementById('paste-prep-error');
+            if (ta) ta.value = '';
+            if (err) err.classList.add('hidden');
+            if (modal) modal.classList.remove('hidden');
+            if (ta) setTimeout(() => ta.focus(), 40);
         }
 
         function closePastePrepModal() {
-            document.getElementById('paste-prep-modal').classList.add('hidden');
+            const modal = document.getElementById('paste-prep-modal');
+            if (modal) modal.classList.add('hidden');
         }
 
         async function pasteFromClipboardToPrep() {
+            const ta = document.getElementById('paste-prep-textarea');
+            if (!ta) return;
             try {
-                const text = await navigator.clipboard.readText();
-                if (text) {
-                    document.getElementById('paste-prep-textarea').value = text;
+                if (navigator.clipboard && navigator.clipboard.readText) {
+                    const txt = await navigator.clipboard.readText();
+                    if (txt) {
+                        ta.value = (ta.value ? ta.value + '\n\n' : '') + txt;
+                        return;
+                    }
                 }
-            } catch (_) {
-                showToast('Tieni premuto nel riquadro e tocca "Incolla".', true);
-            }
+            } catch (_) {}
+            ta.focus();
+            showToast('Incolla il testo nel riquadro (Cmd/Ctrl+V oppure tocca e scegli Incolla).');
         }
 
         function processPastedPreparation() {
-            const raw = document.getElementById('paste-prep-textarea').value.trim();
+            const ta = document.getElementById('paste-prep-textarea');
+            const err = document.getElementById('paste-prep-error');
+            const raw = ta ? ta.value.trim() : '';
             if (!raw) {
-                document.getElementById('paste-prep-error').classList.remove('hidden');
+                if (err) err.classList.remove('hidden');
                 return;
             }
-            const blocks = raw.split(/\n\s*\n+/).map(b => b.trim()).filter(Boolean);
+            if (err) err.classList.add('hidden');
+            const paragraphs = raw.split(/\n\s*\n+/).map(p => p.trim()).filter(Boolean);
+            const blocks = paragraphs.length > 1 ? paragraphs : raw.split(/\n+/).map(p => p.trim()).filter(Boolean);
             const s = getActiveSession();
+            const pdfOverlay = document.getElementById('pdf-workspace-overlay');
+            const pdfOpen = pdfOverlay && !pdfOverlay.classList.contains('hidden');
+            const pageToLink = pdfOpen ? activePdfPage : null;
+            const currentPdfId = (s.pdfMeta && s.pdfMeta.pdfId) || null;
             blocks.forEach((blk, i) => {
-                const lines = blk.split('\n');
-                const firstLine = lines[0].trim();
-                const hasShortTitle = lines.length > 1 && firstLine.length <= 70;
-                const title = hasShortTitle ? firstLine : `Paragrafo ${s.notes.length + 1}`;
-                const bodyText = hasShortTitle ? lines.slice(1).join('\n').trim() : blk;
+                const noteId = 'note_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2, 5);
                 s.notes.push({
-                    id: 'note_' + Date.now() + '_' + i + '_' + Math.random().toString(36).slice(2, 5),
-                    title,
-                    html: escapeHtml(bodyText).replace(/\n/g, '<br>'),
+                    id: noteId,
+                    noteId: noteId,
+                    sessionId: s.id,
+                    pdfId: pageToLink ? currentPdfId : null,
+                    title: 'Paragrafo #' + (s.notes.length + 1),
+                    html: escapeHtml(blk).replace(/\n/g, '<br>'),
                     fontSize: 17,
-                    pdfPage: null,
+                    pdfPage: pageToLink,
+                    pageNumber: pageToLink,
+                    pdfPages: pageToLink ? [pageToLink] : [],
                     collapsed: false,
                     image: null,
                     isQuickNote: false,
                     handwriting: { visible: false, height: 260, strokes: [] }
                 });
             });
-            document.getElementById('paste-prep-textarea').value = '';
             closePastePrepModal();
             saveState();
             renderApp();
-            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
-                renderPdfSideNotes();
-            }
+            if (pdfOpen) renderPdfSideNotes();
             showToast(`Creati ${blocks.length} paragrafi nelle note!`);
         }
 
-        /* LETTORE PDF RETINA HD, APPLE PENCIL, EVIDENZIATORI, FOTO E SFOGLIAMENTO A LIBRO */
+        function openScriptureModal(scrId) {
+            const s = getActiveSession();
+            const scr = (s.scriptures || []).find(x => x.id === scrId);
+            if (!scr) return;
+            const modal = document.getElementById('scripture-reader-modal');
+            const refEl = document.getElementById('scr-modal-ref');
+            const textEl = document.getElementById('scr-modal-text');
+            const gotoBtn = document.getElementById('scr-modal-goto-pdf');
+            if (refEl) refEl.textContent = scr.ref || '';
+            if (textEl) {
+                textEl.textContent = scr.text || '';
+                textEl.style.fontSize = modalScrSize + 'px';
+            }
+            if (gotoBtn) {
+                if (scr.pdfPage && (activePdfBytes || s.pdfMeta)) {
+                    gotoBtn.classList.remove('hidden');
+                    gotoBtn.onclick = () => {
+                        closeScriptureModal();
+                        openPdfWorkspace(scr.pdfPage);
+                    };
+                } else {
+                    gotoBtn.classList.add('hidden');
+                }
+            }
+            if (modal) modal.classList.remove('hidden');
+        }
+
+        function closeScriptureModal() {
+            const modal = document.getElementById('scripture-reader-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function changeScrModalSize(delta) {
+            modalScrSize = Math.max(16, Math.min(54, modalScrSize + delta));
+            const textEl = document.getElementById('scr-modal-text');
+            if (textEl) textEl.style.fontSize = modalScrSize + 'px';
+        }
+
+        /* CARICAMENTO E LETTORE PDF */
         async function handlePdfFileUpload(event) {
-            const file = event.target.files[0];
+            const file = event.target.files && event.target.files[0];
             if (!file) return;
             try {
-                const buf = await file.arrayBuffer();
+                const arrayBuffer = await file.arrayBuffer();
                 const s = getActiveSession();
-                const existingSamePdfId = (s.pdfMeta && s.pdfMeta.name === file.name && s.pdfMeta.pdfId)
+                const existingPdfId = (s.pdfMeta && s.pdfMeta.name === file.name && s.pdfMeta.pdfId)
                     ? s.pdfMeta.pdfId
-                    : null;
-                const stablePdfId = await savePdfBinaryForSession(s.id, buf, file.name, existingSamePdfId);
+                    : generateStablePdfId(s.id, file.name);
+                const savedPdfId = await savePdfBinaryForSession(s.id, arrayBuffer, file.name, existingPdfId);
                 s.pdfMeta = {
                     ...(s.pdfMeta || {}),
-                    pdfId: stablePdfId,
+                    pdfId: savedPdfId,
                     sessionId: s.id,
                     name: file.name
                 };
-                activePdfBytes = buf;
-                // Associa il pdfId alle note già collegate a una pagina PDF nella sessione, senza mai cancellare i numeri di pagina
+                s.lastPdfPage = 1;
                 (s.notes || []).forEach(n => {
                     normalizeNoteRecord(n, s);
-                    if (n.pdfPage && !n.pdfId) {
-                        n.pdfId = stablePdfId;
-                    }
+                    if (n.pdfPage && !n.pdfId) n.pdfId = savedPdfId;
                 });
                 saveState();
-                await restoreSessionPdfFromStorage(s.id, true);
+                await restoreSessionPdfFromStorage(s.id, false);
                 renderApp();
-            } catch (e) {
-                console.error('Errore apertura PDF:', e);
-                showToast('Impossibile leggere il PDF selezionato.', true);
+                await openPdfWorkspace(1);
+                showToast('PDF caricato e salvato: ' + file.name);
+            } catch (err) {
+                console.error('Errore caricamento PDF:', err);
+                showToast('Errore durante il caricamento del file PDF.', true);
             }
             event.target.value = '';
         }
 
-        async function openPdfWorkspace(targetPage = 1) {
+        async function openPdfWorkspace(targetPage = null) {
             const s = getActiveSession();
             if (!activePdfBytes) {
                 const ok = await restoreSessionPdfFromStorage(s.id, false);
@@ -4417,43 +4573,221 @@
                     return;
                 }
             }
+            // Chiude eventuale drawer Bibbia esterno prima di aprire lo spazio PDF
+            const drawer = document.getElementById('bible-side-panel');
+            if (drawer) drawer.classList.add('translate-x-full');
+
             document.getElementById('pdf-doc-title').textContent = (s.pdfMeta && s.pdfMeta.name) || 'Documento.pdf';
             document.getElementById('pdf-workspace-overlay').classList.remove('hidden');
-            const parsedTarget = Math.max(1, parseInt(targetPage, 10) || 1);
-            activePdfPage = activePdfDoc ? Math.min(activePdfTotalPages, parsedTarget) : parsedTarget;
+
+            const explicitPage = (targetPage !== null && targetPage !== undefined) ? parseInt(targetPage, 10) : null;
+            const resumedPage = (s && Number(s.lastPdfPage)) || 1;
+            const desiredPage = Math.max(1, explicitPage || resumedPage);
+            activePdfPage = activePdfDoc ? Math.min(activePdfTotalPages, desiredPage) : desiredPage;
+            s.lastPdfPage = activePdfPage;
+            saveState();
+
+            // All'apertura il PDF occupa sempre tutto lo schermo sotto la barra degli strumenti
+            activePdfSidePanel = 'none';
             pdfUserManualZoom = false;
+            updatePdfFitModeButtons();
+            updatePdfSidePanelButtons();
             applyPdfSplitLayout(false);
-            renderPdfSideNotes();
+            if (window.lucide) lucide.createIcons();
+
             await new Promise(resolve => requestAnimationFrame(resolve));
             applyPdfSplitLayout(false);
             await renderCurrentPdfPage();
         }
 
         function closePdfWorkspace() {
+            const notesListEl = document.getElementById('pdf-side-notes-list');
+            if (notesListEl && activePdfSidePanel === 'notes') {
+                pdfSideNotesScrollTop = notesListEl.scrollTop;
+            }
+            activePdfSidePanel = 'none';
+            mountBiblePanelTo('drawer');
+            const drawer = document.getElementById('bible-side-panel');
+            if (drawer) drawer.classList.add('translate-x-full');
             document.getElementById('pdf-workspace-overlay').classList.add('hidden');
             renderApp();
+        }
+
+        function persistActivePdfPage() {
+            const s = getActiveSession();
+            if (s) {
+                s.lastPdfPage = activePdfPage;
+                saveState();
+            }
         }
 
         async function changePdfPage(delta) {
             const next = activePdfPage + delta;
             if (next < 1 || next > activePdfTotalPages) return;
             activePdfPage = next;
+            persistActivePdfPage();
             await renderCurrentPdfPage();
-            renderPdfSideNotes();
+            if (activePdfSidePanel === 'notes') {
+                renderPdfSideNotes();
+            }
         }
 
         async function jumpToPdfPage(val) {
             const num = parseInt(val, 10);
             if (!num || num < 1 || num > activePdfTotalPages) return;
             activePdfPage = num;
+            persistActivePdfPage();
             await renderCurrentPdfPage();
-            renderPdfSideNotes();
+            if (activePdfSidePanel === 'notes') {
+                renderPdfSideNotes();
+            }
         }
 
         async function changePdfZoom(delta) {
             pdfUserManualZoom = true;
-            activePdfZoom = Math.max(0.45, Math.min(2.6, Number((activePdfZoom + delta).toFixed(2))));
+            activePdfZoom = Math.max(0.4, Math.min(2.6, Number((activePdfZoom + delta).toFixed(2))));
+            updatePdfFitModeButtons();
             await renderCurrentPdfPage();
+        }
+
+        function updatePdfFitModeButtons() {
+            const fitMode = (state.uiPrefs && state.uiPrefs.pdfFitMode) || 'width';
+            const btnW = document.getElementById('btn-pdf-fit-width');
+            const btnP = document.getElementById('btn-pdf-fit-page');
+            if (btnW) {
+                btnW.className = (!pdfUserManualZoom && fitMode === 'width')
+                    ? 'px-2 py-1 rounded-lg plum-primary font-bold text-[11px]'
+                    : 'px-2 py-1 rounded-lg bg-white font-bold text-[11px] text-[#6b2d5c]';
+            }
+            if (btnP) {
+                btnP.className = (!pdfUserManualZoom && fitMode === 'page')
+                    ? 'px-2 py-1 rounded-lg plum-primary font-bold text-[11px]'
+                    : 'px-2 py-1 rounded-lg bg-white font-bold text-[11px] text-[#6b2d5c]';
+            }
+        }
+
+        async function setPdfFitMode(mode) {
+            if (!state.uiPrefs) state.uiPrefs = getDefaultUiPrefs();
+            state.uiPrefs.pdfFitMode = mode === 'page' ? 'page' : 'width';
+            pdfUserManualZoom = false;
+            saveState();
+            updatePdfFitModeButtons();
+            await renderCurrentPdfPage();
+        }
+
+        function updatePdfSidePanelButtons() {
+            const tbNotes = document.getElementById('btn-pdf-toolbar-notes');
+            const tbBible = document.getElementById('btn-pdf-toolbar-bible');
+            const tabNotes = document.getElementById('pdf-side-tab-notes');
+            const tabBible = document.getElementById('pdf-side-tab-bible');
+
+            if (tbNotes) {
+                tbNotes.className = activePdfSidePanel === 'notes'
+                    ? 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold plum-primary border border-[#6b2d5c] shadow-2xs transition'
+                    : 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-[#f6eef4] text-[#6b2d5c] border plum-border hover:bg-[#eadbe6] transition';
+            }
+            if (tbBible) {
+                tbBible.className = activePdfSidePanel === 'bible'
+                    ? 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-amber-400 text-[#261822] border border-amber-500 ring-2 ring-[#6b2d5c] shadow-2xs transition'
+                    : 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-amber-100 text-amber-950 border border-amber-300 hover:bg-amber-200 transition';
+            }
+            if (tabNotes) {
+                tabNotes.className = activePdfSidePanel === 'notes'
+                    ? 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-white text-[#6b2d5c] shadow-2xs transition'
+                    : 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#7c6575] hover:text-[#6b2d5c] transition';
+            }
+            if (tabBible) {
+                tabBible.className = activePdfSidePanel === 'bible'
+                    ? 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-white text-[#6b2d5c] shadow-2xs transition'
+                    : 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#7c6575] hover:text-[#6b2d5c] transition';
+            }
+        }
+
+        async function openPdfSidePanel(panelType) {
+            if (panelType !== 'notes' && panelType !== 'bible') {
+                await closePdfSidePanel();
+                return;
+            }
+            const notesListEl = document.getElementById('pdf-side-notes-list');
+            if (activePdfSidePanel === 'notes' && panelType !== 'notes' && notesListEl) {
+                pdfSideNotesScrollTop = notesListEl.scrollTop;
+            }
+
+            const prevPanel = activePdfSidePanel;
+            activePdfSidePanel = panelType;
+
+            const notesBody = document.getElementById('pdf-notes-panel-body');
+            const bibleSlot = document.getElementById('pdf-bible-panel-slot');
+
+            if (panelType === 'notes') {
+                if (bibleSlot) bibleSlot.classList.add('hidden');
+                if (notesBody) notesBody.classList.remove('hidden');
+                renderPdfSideNotes();
+            } else {
+                if (notesBody) notesBody.classList.add('hidden');
+                if (bibleSlot) bibleSlot.classList.remove('hidden');
+                mountBiblePanelTo('pdf');
+            }
+
+            updatePdfSidePanelButtons();
+            applyPdfSplitLayout(false);
+            if (window.lucide) lucide.createIcons();
+
+            await new Promise(resolve => requestAnimationFrame(resolve));
+
+            if (panelType === 'notes' && notesListEl) {
+                notesListEl.scrollTop = pdfSideNotesScrollTop;
+            } else if (panelType === 'bible') {
+                await ensureSideBibleContentReady();
+            }
+
+            // Ricalcola la dimensione del PDF quando lo spazio disponibile cambia, mantenendo pagina e annotazioni
+            if (!pdfUserManualZoom && activePdfDoc && (prevPanel !== panelType)) {
+                await renderCurrentPdfPage();
+            }
+        }
+
+        async function togglePdfSidePanel(panelType) {
+            if (activePdfSidePanel === panelType) {
+                await closePdfSidePanel();
+            } else {
+                await openPdfSidePanel(panelType);
+            }
+        }
+
+        async function closePdfSidePanel() {
+            const notesListEl = document.getElementById('pdf-side-notes-list');
+            if (activePdfSidePanel === 'notes' && notesListEl) {
+                pdfSideNotesScrollTop = notesListEl.scrollTop;
+            }
+            activePdfSidePanel = 'none';
+            updatePdfSidePanelButtons();
+            applyPdfSplitLayout(false);
+
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            if (!pdfUserManualZoom && activePdfDoc) {
+                await renderCurrentPdfPage();
+            }
+        }
+
+        function getSavedPanelWidthPct(panelType, portrait) {
+            const prefs = state.uiPrefs || getDefaultUiPrefs();
+            if (panelType === 'bible') {
+                return portrait ? (prefs.biblePanelWidthPortraitPct || 40) : (prefs.biblePanelWidthPct || 30);
+            }
+            return portrait ? (prefs.notesPanelWidthPortraitPct || 40) : (prefs.notesPanelWidthPct || 30);
+        }
+
+        function setSavedPanelWidthPct(panelType, portrait, pct) {
+            if (!state.uiPrefs) state.uiPrefs = getDefaultUiPrefs();
+            const clamped = Math.max(18, Math.min(62, Number(pct.toFixed(2))));
+            if (panelType === 'bible') {
+                if (portrait) state.uiPrefs.biblePanelWidthPortraitPct = clamped;
+                else state.uiPrefs.biblePanelWidthPct = clamped;
+            } else {
+                if (portrait) state.uiPrefs.notesPanelWidthPortraitPct = clamped;
+                else state.uiPrefs.notesPanelWidthPct = clamped;
+            }
         }
 
         function isPortraitViewport() {
@@ -4464,9 +4798,8 @@
             const portrait = isPortraitViewport();
             const resizerSideW = 12;
             const resizerStackH = 14;
-            // In verticale servono almeno 280px per le note e 320px per il PDF per restare entrambi leggibili affiancati
-            const minRightSidePx = portrait ? 280 : 280;
-            const minLeftSidePx = portrait ? 320 : 320;
+            const minRightSidePx = 280;
+            const minLeftSidePx = 320;
             const canFitSideBySide = containerWidth >= (minLeftSidePx + minRightSidePx + resizerSideW);
             const minTopStackPx = Math.min(180, Math.max(130, Math.floor(containerHeight * 0.28)));
             const minBottomStackPx = Math.min(180, Math.max(130, Math.floor(containerHeight * 0.28)));
@@ -4487,23 +4820,40 @@
             const container = document.getElementById('pdf-split-container');
             const leftPane = document.getElementById('pdf-left-pane');
             const rightPane = document.getElementById('pdf-right-pane');
+            const resizer = document.getElementById('pdf-resizer');
             const toggleBtn = document.getElementById('btn-pdf-layout-toggle');
-            if (!overlay || overlay.classList.contains('hidden') || !container || !leftPane || !rightPane) return;
+            if (!overlay || overlay.classList.contains('hidden') || !container || !leftPane || !rightPane || !resizer) return;
+
+            // Modalità PDF a schermo intero quando nessun pannello laterale è aperto
+            if (activePdfSidePanel === 'none') {
+                container.classList.remove('layout-stacked');
+                resizer.classList.add('hidden');
+                rightPane.classList.add('hidden');
+                leftPane.classList.add('pdf-fullscreen-pane');
+                leftPane.style.flex = '1 1 100%';
+                leftPane.style.width = '100%';
+                leftPane.style.minWidth = '0px';
+                if (toggleBtn) toggleBtn.classList.add('hidden');
+                if (reRenderPdf && activePdfDoc) {
+                    renderCurrentPdfPage();
+                }
+                return;
+            }
+
+            leftPane.classList.remove('pdf-fullscreen-pane');
+            resizer.classList.remove('hidden');
+            rightPane.classList.remove('hidden');
 
             const rect = container.getBoundingClientRect();
             const w = Math.max(1, rect.width || window.innerWidth);
             const h = Math.max(1, rect.height || window.innerHeight);
             const c = getPdfLayoutConstraints(w, h);
 
-            // In landscape resta sempre affiancato invariato; in portrait usa affiancato se c'è spazio, altrimenti passa automaticamente a impilato
             let targetMode = 'side';
             if (!c.canFitSideBySide) {
                 targetMode = 'stacked';
             } else if (c.portrait && pdfLayoutPreference === 'stacked') {
                 targetMode = 'stacked';
-            } else if (!c.portrait && pdfLayoutPreference === 'stacked') {
-                // In orizzontale mantieni sempre la vista affiancata standard
-                targetMode = 'side';
             } else {
                 targetMode = 'side';
             }
@@ -4512,8 +4862,10 @@
 
             if (targetMode === 'stacked') {
                 container.classList.add('layout-stacked');
+                const panelHeightPct = (state.uiPrefs && state.uiPrefs.stackPanelHeightPct) || 44;
+                const pdfTopPct = 100 - panelHeightPct;
                 const maxTopPx = Math.max(c.minTopStackPx, h - c.resizerStackH - c.minBottomStackPx);
-                const desiredTopPx = Math.round((pdfStackRatioPortrait / 100) * h);
+                const desiredTopPx = Math.round((pdfTopPct / 100) * h);
                 const clampedTopPx = Math.max(c.minTopStackPx, Math.min(maxTopPx, desiredTopPx));
                 leftPane.style.flex = `0 0 ${clampedTopPx}px`;
                 leftPane.style.width = '100%';
@@ -4524,9 +4876,10 @@
                 rightPane.style.minHeight = `${c.minBottomStackPx}px`;
             } else {
                 container.classList.remove('layout-stacked');
-                const ratio = c.portrait ? pdfSplitRatioPortrait : pdfSplitRatioLandscape;
+                const savedPanelPct = getSavedPanelWidthPct(activePdfSidePanel, c.portrait);
+                const pdfPct = 100 - savedPanelPct;
                 const maxLeftPx = Math.max(c.minLeftSidePx, w - c.resizerSideW - c.minRightSidePx);
-                const desiredLeftPx = Math.round((ratio / 100) * w);
+                const desiredLeftPx = Math.round((pdfPct / 100) * (w - c.resizerSideW));
                 const clampedLeftPx = Math.max(c.minLeftSidePx, Math.min(maxLeftPx, desiredLeftPx));
                 leftPane.style.flex = `0 0 ${clampedLeftPx}px`;
                 leftPane.style.width = '';
@@ -4565,7 +4918,7 @@
             const rect = container.getBoundingClientRect();
             const c = getPdfLayoutConstraints(rect.width || window.innerWidth, rect.height || window.innerHeight);
             if (!c.canFitSideBySide) {
-                showToast('Schermo troppo stretto per due colonne affiancate: resta attiva la vista verticale PDF sopra / Note sotto.');
+                showToast('Schermo troppo stretto per due colonne affiancate: resta attiva la vista verticale PDF sopra / Pannello sotto.');
                 return;
             }
             pdfLayoutPreference = currentPdfLayoutMode === 'stacked' ? 'side' : 'stacked';
@@ -4576,8 +4929,7 @@
         }
 
         async function fitPdfZoomToPane() {
-            pdfUserManualZoom = false;
-            await renderCurrentPdfPage();
+            await setPdfFitMode('width');
         }
 
         async function renderCurrentPdfPage() {
@@ -4614,38 +4966,51 @@
                     try { activePdfRenderTask.cancel(); } catch (_) {}
                 }
                 const page = await activePdfDoc.getPage(activePdfPage);
-                const portrait = isPortraitViewport();
+                const fitMode = (state.uiPrefs && state.uiPrefs.pdfFitMode) || 'width';
 
-                // In verticale (o in vista impilata), se l'utente non ha zoomato manualmente, adatta la pagina alla larghezza visibile così la barra divisoria non copre mai il PDF
                 if (!pdfUserManualZoom && leftPane) {
                     const baseViewport = page.getViewport({ scale: 1 });
                     const paneStyles = window.getComputedStyle(leftPane);
                     const padX = (parseFloat(paneStyles.paddingLeft) || 0) + (parseFloat(paneStyles.paddingRight) || 0);
-                    const availWidth = Math.max(160, leftPane.clientWidth - padX - 8);
-                    const fitScale = Math.max(0.45, Math.min(2.2, Number((availWidth / Math.max(1, baseViewport.width)).toFixed(3))));
-                    if (portrait || currentPdfLayoutMode === 'stacked') {
-                        activePdfZoom = fitScale;
-                    } else {
-                        // In modalità orizzontale mantiene il comportamento standard (1.25) senza uscire dal pannello se stretto
-                        activePdfZoom = Math.min(1.25, fitScale < 1.25 ? fitScale : 1.25);
-                    }
+                    const padY = (parseFloat(paneStyles.paddingTop) || 0) + (parseFloat(paneStyles.paddingBottom) || 0);
+                    const availWidth = Math.max(180, leftPane.clientWidth - padX - 10);
+                    const availHeight = Math.max(180, leftPane.clientHeight - padY - 12);
+
+                    const fitWidthScale = availWidth / Math.max(1, baseViewport.width);
+                    const fitPageScale = Math.min(fitWidthScale, availHeight / Math.max(1, baseViewport.height));
+                    const targetScale = fitMode === 'page' ? fitPageScale : fitWidthScale;
+                    activePdfZoom = Math.max(0.35, Math.min(2.6, Number(targetScale.toFixed(3))));
                 }
 
                 const viewport = page.getViewport({ scale: activePdfZoom });
-                const dpr = getAnnotDpr();
+                const rawDpr = getAnnotDpr();
+                const maxCanvasPixels = 12000000;
+                const estPixels = viewport.width * viewport.height * rawDpr * rawDpr;
+                const dpr = estPixels > maxCanvasPixels
+                    ? Math.max(1, Math.sqrt(maxCanvasPixels / Math.max(1, viewport.width * viewport.height)))
+                    : rawDpr;
+                activePdfCanvasDpr = dpr;
 
-                renderCanvas.width = Math.round(viewport.width * dpr);
-                renderCanvas.height = Math.round(viewport.height * dpr);
-                renderCanvas.style.width = Math.round(viewport.width) + 'px';
-                renderCanvas.style.height = Math.round(viewport.height) + 'px';
+                const cssW = Math.round(viewport.width);
+                const cssH = Math.round(viewport.height);
 
-                annotCanvas.width = Math.round(viewport.width * dpr);
-                annotCanvas.height = Math.round(viewport.height * dpr);
-                annotCanvas.style.width = Math.round(viewport.width) + 'px';
-                annotCanvas.style.height = Math.round(viewport.height) + 'px';
+                renderCanvas.width = Math.round(cssW * dpr);
+                renderCanvas.height = Math.round(cssH * dpr);
+                renderCanvas.style.width = cssW + 'px';
+                renderCanvas.style.height = cssH + 'px';
 
-                wrapper.style.width = Math.round(viewport.width) + 'px';
-                wrapper.style.height = Math.round(viewport.height) + 'px';
+                annotCanvas.width = Math.round(cssW * dpr);
+                annotCanvas.height = Math.round(cssH * dpr);
+                annotCanvas.style.width = cssW + 'px';
+                annotCanvas.style.height = cssH + 'px';
+
+                wrapper.style.width = cssW + 'px';
+                wrapper.style.height = cssH + 'px';
+
+                if (leftPane && pdfTool === 'none') {
+                    const needsHorizPan = cssW > leftPane.clientWidth + 6;
+                    leftPane.style.touchAction = needsHorizPan ? 'pan-x pan-y' : 'pan-y';
+                }
 
                 const ctx = renderCanvas.getContext('2d');
                 ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -4704,7 +5069,7 @@
         function redrawPdfAnnotations(previewStroke = null) {
             const canvas = document.getElementById('pdf-annot-canvas');
             if (!canvas) return;
-            const dpr = getAnnotDpr();
+            const dpr = activePdfCanvasDpr || getAnnotDpr();
             const cssW = parseFloat(canvas.style.width) || (canvas.width / dpr) || 600;
             const cssH = parseFloat(canvas.style.height) || (canvas.height / dpr) || 800;
             const ctx = canvas.getContext('2d');
@@ -4928,6 +5293,7 @@
             let activePtrId = null;
 
             resizer.addEventListener('pointerdown', (e) => {
+                if (activePdfSidePanel === 'none') return;
                 e.preventDefault();
                 dragging = true;
                 activePtrId = e.pointerId;
@@ -4936,7 +5302,7 @@
             });
 
             window.addEventListener('pointermove', (e) => {
-                if (!dragging) return;
+                if (!dragging || activePdfSidePanel === 'none') return;
                 if (activePtrId !== null && e.pointerId !== activePtrId) return;
                 const rect = container.getBoundingClientRect();
                 const c = getPdfLayoutConstraints(rect.width, rect.height);
@@ -4944,17 +5310,16 @@
                 if (currentPdfLayoutMode === 'stacked') {
                     const maxTopPx = Math.max(c.minTopStackPx, rect.height - c.resizerStackH - c.minBottomStackPx);
                     const newTopPx = Math.max(c.minTopStackPx, Math.min(maxTopPx, e.clientY - rect.top));
-                    pdfStackRatioPortrait = (newTopPx / Math.max(1, rect.height)) * 100;
+                    const panelHeightPct = ((rect.height - newTopPx - c.resizerStackH) / Math.max(1, rect.height)) * 100;
+                    if (!state.uiPrefs) state.uiPrefs = getDefaultUiPrefs();
+                    state.uiPrefs.stackPanelHeightPct = Math.max(22, Math.min(72, Number(panelHeightPct.toFixed(2))));
                     leftPane.style.flex = `0 0 ${Math.round(newTopPx)}px`;
                 } else {
                     const maxLeftPx = Math.max(c.minLeftSidePx, rect.width - c.resizerSideW - c.minRightSidePx);
                     const newLeftPx = Math.max(c.minLeftSidePx, Math.min(maxLeftPx, e.clientX - rect.left));
-                    const pct = (newLeftPx / Math.max(1, rect.width)) * 100;
-                    if (c.portrait) {
-                        pdfSplitRatioPortrait = pct;
-                    } else {
-                        pdfSplitRatioLandscape = pct;
-                    }
+                    const availW = Math.max(1, rect.width - c.resizerSideW);
+                    const panelPct = ((availW - newLeftPx) / availW) * 100;
+                    setSavedPanelWidthPct(activePdfSidePanel, c.portrait, panelPct);
                     leftPane.style.flex = `0 0 ${Math.round(newLeftPx)}px`;
                 }
             });
@@ -4964,9 +5329,12 @@
                 dragging = false;
                 activePtrId = null;
                 resizer.classList.remove('dragging');
-                // Se non è stato scelto uno zoom manuale, adatta subito il PDF alla nuova larghezza della colonna
+                saveState();
                 if (!pdfUserManualZoom && activePdfDoc) {
                     renderCurrentPdfPage();
+                }
+                if (activePdfSidePanel === 'bible' && sideBibleState.mode === 'epubjs' && sideBibleRendition) {
+                    try { sideBibleRendition.resize(); } catch (_) {}
                 }
             };
 
@@ -5014,7 +5382,10 @@
                     src: e.target.result,
                     x: 40,
                     y: 40,
-                    w: 160
+                    w: 160,
+                    rx: 0.06,
+                    ry: 0.05,
+                    rw: 0.25
                 });
                 saveState();
                 renderPdfOverlayImages();
@@ -5036,12 +5407,20 @@
             if (!layer) return;
             const s = getActiveSession();
             const imgs = (s.pdfImages && s.pdfImages[activePdfPage]) || [];
-            layer.innerHTML = imgs.map(im => `
-                <div class="overlay-img-box pointer-events-auto" style="left:${im.x}px; top:${im.y}px; width:${im.w}px;">
-                    <img src="${im.src}" class="w-full h-auto rounded-lg block pointer-events-none">
-                    <button type="button" onclick="deletePdfOverlayImage('${im.id}')" class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-600 text-white text-xs font-bold">✕</button>
-                </div>
-            `).join('');
+            const wrapper = document.getElementById('pdf-canvas-wrapper');
+            const wrapW = (wrapper && wrapper.clientWidth) || 600;
+            const wrapH = (wrapper && wrapper.clientHeight) || 800;
+            layer.innerHTML = imgs.map(im => {
+                const leftVal = typeof im.rx === 'number' ? `${(im.rx * 100).toFixed(2)}%` : `${Math.min(im.x || 40, Math.max(0, wrapW - 40))}px`;
+                const topVal = typeof im.ry === 'number' ? `${(im.ry * 100).toFixed(2)}%` : `${Math.min(im.y || 40, Math.max(0, wrapH - 40))}px`;
+                const widthVal = typeof im.rw === 'number' ? `${(im.rw * 100).toFixed(2)}%` : `${im.w || 160}px`;
+                return `
+                    <div class="overlay-img-box pointer-events-auto" style="left:${leftVal}; top:${topVal}; width:${widthVal};">
+                        <img src="${im.src}" class="w-full h-auto rounded-lg block pointer-events-none">
+                        <button type="button" onclick="deletePdfOverlayImage('${im.id}')" class="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-rose-600 text-white text-xs font-bold">✕</button>
+                    </div>
+                `;
+            }).join('');
         }
 
         function togglePdfScripturesDrawer() {
@@ -6083,8 +6462,8 @@
                                     <input type="file" accept="application/pdf" onchange="handlePdfFileUpload(event)" class="hidden">
                                 </label>
                                 ${activePdfBytes || s.pdfMeta ? `
-                                    <button type="button" onclick="openPdfWorkspace(activePdfPage)" class="px-4 py-2.5 rounded-2xl bg-[#261822] text-white font-bold text-xs sm:text-sm">
-                                        Apri PDF accanto alle Note
+                                    <button type="button" onclick="openPdfWorkspace(null)" class="px-4 py-2.5 rounded-2xl bg-[#261822] text-white font-bold text-xs sm:text-sm">
+                                        Apri PDF (Schermo Intero)
                                     </button>
                                 ` : ''}
                                 <button type="button" onclick="openPastePrepModal()" class="px-4 py-2.5 rounded-2xl plum-soft border plum-border font-bold text-xs sm:text-sm">
