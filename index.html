@@ -756,14 +756,15 @@
             return `
                 <div class="bg-white rounded-3xl border ${n.isQuickNote ? 'border-amber-300 bg-amber-50/30' : 'plum-border'} p-4 shadow-2xs space-y-3">
                     <div class="flex flex-wrap items-start justify-between gap-2">
-                        <div class="flex items-start gap-2 flex-1 min-w-[140px]">
+                        <div class="flex items-start gap-2 flex-1 min-w-0 max-w-full">
                             <button type="button" onclick="toggleNoteCollapse('${n.id}')" class="w-7 h-7 mt-0.5 rounded-lg bg-[#f6eef4] text-[#6b2d5c] font-bold text-xs flex items-center justify-center shrink-0">
                                 ${n.collapsed ? '▶' : '▼'}
                             </button>
                             <div contenteditable="true"
                                  oninput="updateNoteTitle('${n.id}', this.innerText)"
                                  data-placeholder="Titolo nota..."
-                                 class="font-extrabold text-base text-[#261822] bg-transparent border-b border-transparent focus:border-[#6b2d5c] outline-none w-full whitespace-pre-wrap break-words leading-snug">${escapeHtml(n.title)}</div>
+                                 style="overflow-wrap: anywhere; word-break: break-word;"
+                                 class="font-extrabold text-base text-[#261822] bg-transparent border-b border-transparent focus:border-[#6b2d5c] outline-none flex-1 min-w-0 whitespace-pre-wrap leading-snug">${escapeHtml(n.title)}</div>
                         </div>
 
                         <div class="flex flex-wrap items-center gap-1.5">
