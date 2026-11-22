@@ -690,8 +690,104 @@
         let pencilOnly = true;
         let isDrawingPdf = false;
         let currentStroke = null;
+        let annotationSaveTimer = null;
+        let hasPendingAnnotationSave = false;
         let sessionModalMode = 'create';
         let sessionModalTargetId = null;
+
+        function getAnnotDpr() {
+            return Math.min(window.devicePixelRatio || 1, 2);
+        }
+
+        function getOrCreateLiveAnnotCanvas() {
+            let liveCanvas = document.getElementById('pdf-live-canvas');
+            if (!liveCanvas) {
+                const wrapper = document.getElementById('pdf-canvas-wrapper');
+                const annotCanvas = document.getElementById('pdf-annot-canvas');
+                if (!wrapper || !annotCanvas) return null;
+                liveCanvas = document.createElement('canvas');
+                liveCanvas.id = 'pdf-live-canvas';
+                liveCanvas.className = 'absolute inset-0 pointer-events-none';
+                liveCanvas.style.zIndex = '31';
+                liveCanvas.style.touchAction = 'none';
+                wrapper.appendChild(liveCanvas);
+            }
+            return liveCanvas;
+        }
+
+        function syncLiveAnnotCanvasSize() {
+            const annotCanvas = document.getElementById('pdf-annot-canvas');
+            const liveCanvas = getOrCreateLiveAnnotCanvas();
+            if (!annotCanvas || !liveCanvas) return;
+            if (liveCanvas.width !== annotCanvas.width || liveCanvas.height !== annotCanvas.height) {
+                liveCanvas.width = annotCanvas.width;
+                liveCanvas.height = annotCanvas.height;
+            }
+            liveCanvas.style.width = annotCanvas.style.width;
+            liveCanvas.style.height = annotCanvas.style.height;
+        }
+
+        function clearLiveAnnotCanvas() {
+            const liveCanvas = document.getElementById('pdf-live-canvas');
+            if (!liveCanvas) return;
+            const ctx = liveCanvas.getContext('2d');
+            if (!ctx) return;
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, liveCanvas.width, liveCanvas.height);
+        }
+
+        function scheduleAnnotationSave() {
+            hasPendingAnnotationSave = true;
+            clearTimeout(annotationSaveTimer);
+            annotationSaveTimer = setTimeout(() => {
+                if (hasPendingAnnotationSave) {
+                    hasPendingAnnotationSave = false;
+                    saveState();
+                }
+            }, 600);
+        }
+
+        function flushAnnotationSave() {
+            clearTimeout(annotationSaveTimer);
+            if (hasPendingAnnotationSave) {
+                hasPendingAnnotationSave = false;
+                saveState();
+            }
+        }
+
+        function drawSmoothStroke(ctx, st, cssW, cssH) {
+            if (!st || !Array.isArray(st.points) || st.points.length === 0) return;
+            const pts = st.points;
+            ctx.save();
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = st.color || '#6b2d5c';
+            ctx.lineWidth = st.width || 4;
+            if (st.tool === 'highlighter') {
+                ctx.globalCompositeOperation = 'multiply';
+            }
+            ctx.beginPath();
+            const p0x = pts[0].x * cssW;
+            const p0y = pts[0].y * cssH;
+            ctx.moveTo(p0x, p0y);
+            if (pts.length === 1) {
+                ctx.lineTo(p0x + 0.15, p0y + 0.15);
+            } else if (pts.length === 2) {
+                ctx.lineTo(pts[1].x * cssW, pts[1].y * cssH);
+            } else {
+                for (let i = 1; i < pts.length - 1; i++) {
+                    const cx = pts[i].x * cssW;
+                    const cy = pts[i].y * cssH;
+                    const nx = pts[i + 1].x * cssW;
+                    const ny = pts[i + 1].y * cssH;
+                    ctx.quadraticCurveTo(cx, cy, (cx + nx) * 0.5, (cy + ny) * 0.5);
+                }
+                const last = pts[pts.length - 1];
+                ctx.lineTo(last.x * cssW, last.y * cssH);
+            }
+            ctx.stroke();
+            ctx.restore();
+        }
 
         /* ARCHIVIO PERSISTENTE PDF (INDEXEDDB) PER CONSERVARE I PDF TRA GLI AGGIORNAMENTI */
         const PDF_DB_NAME = 'quaderno_studio_pdf_store_v1';
@@ -1453,13 +1549,14 @@
             wrapper.style.background = 'transparent';
             wrapper.style.pointerEvents = 'none';
 
-            const dpr = Math.min(window.devicePixelRatio || 1, 3);
+            const annotDpr = getAnnotDpr();
             const w = Math.max(300, frame.clientWidth || 700);
             const h = Math.max(400, frame.clientHeight || 900);
-            annotCanvas.width = Math.round(w * dpr);
-            annotCanvas.height = Math.round(h * dpr);
+            annotCanvas.width = Math.round(w * annotDpr);
+            annotCanvas.height = Math.round(h * annotDpr);
             annotCanvas.style.width = '100%';
             annotCanvas.style.height = '100%';
+            syncLiveAnnotCanvasSize();
 
             frame.classList.remove('hidden');
             frame.src = url + '#page=' + page;
@@ -1469,6 +1566,7 @@
         }
 
         function openPdfWorkspace(page = 1) {
+            flushAnnotationSave();
             const overlay = document.getElementById('pdf-workspace-overlay');
             overlay.classList.remove('hidden');
             const leftPane = document.getElementById('pdf-left-pane');
@@ -1494,6 +1592,7 @@
         }
 
         function closePdfWorkspace() {
+            flushAnnotationSave();
             document.getElementById('pdf-workspace-overlay').classList.add('hidden');
             renderApp();
         }
@@ -1559,10 +1658,12 @@
             canvas.style.width = cssW + 'px';
             canvas.style.height = cssH + 'px';
 
-            annotCanvas.width = Math.round(cssW * dpr);
-            annotCanvas.height = Math.round(cssH * dpr);
+            const annotDpr = getAnnotDpr();
+            annotCanvas.width = Math.round(cssW * annotDpr);
+            annotCanvas.height = Math.round(cssH * annotDpr);
             annotCanvas.style.width = cssW + 'px';
             annotCanvas.style.height = cssH + 'px';
+            syncLiveAnnotCanvasSize();
 
             const ctx = canvas.getContext('2d');
             ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -1924,7 +2025,7 @@
         function redrawPdfAnnotations(previewStroke = null) {
             const canvas = document.getElementById('pdf-annot-canvas');
             if (!canvas) return;
-            const dpr = Math.min(window.devicePixelRatio || 1, 3);
+            const dpr = getAnnotDpr();
             const cssW = canvas.width / dpr;
             const cssH = canvas.height / dpr;
             const ctx = canvas.getContext('2d');
@@ -1932,51 +2033,39 @@
             ctx.clearRect(0, 0, cssW, cssH);
 
             const s = getActiveSession();
-            const strokes = [...(s.pdfAnnotations[activePdfPage] || [])];
-            if (previewStroke) strokes.push(previewStroke);
+            const strokes = s.pdfAnnotations[activePdfPage] || [];
 
-            strokes.forEach(st => {
-                if (!st || !Array.isArray(st.points) || st.points.length === 0) return;
-                ctx.save();
-                ctx.lineCap = 'round';
-                ctx.lineJoin = 'round';
-                ctx.strokeStyle = st.color || '#6b2d5c';
-                ctx.lineWidth = st.width || 4;
-                if (st.tool === 'highlighter') {
-                    ctx.globalCompositeOperation = 'multiply';
-                }
-                ctx.beginPath();
-                const p0 = st.points[0];
-                ctx.moveTo(p0.x * cssW, p0.y * cssH);
-                if (st.points.length === 1) {
-                    ctx.lineTo(p0.x * cssW + 0.5, p0.y * cssH + 0.5);
-                } else {
-                    for (let i = 1; i < st.points.length; i++) {
-                        ctx.lineTo(st.points[i].x * cssW, st.points[i].y * cssH);
-                    }
-                }
-                ctx.stroke();
-                ctx.restore();
-            });
+            for (let i = 0; i < strokes.length; i++) {
+                drawSmoothStroke(ctx, strokes[i], cssW, cssH);
+            }
+            if (previewStroke) {
+                drawSmoothStroke(ctx, previewStroke, cssW, cssH);
+            }
         }
 
         function eraseAtPoint(pos) {
             const s = getActiveSession();
             const list = s.pdfAnnotations[activePdfPage];
             if (!Array.isArray(list) || list.length === 0) return;
-            const threshold = 0.03;
+            const thresholdSq = 0.03 * 0.03;
             const filtered = list.filter(st => {
                 if (!st || !Array.isArray(st.points)) return false;
-                return !st.points.some(pt => Math.hypot(pt.x - pos.x, pt.y - pos.y) < threshold);
+                for (let i = 0; i < st.points.length; i++) {
+                    const dx = st.points[i].x - pos.x;
+                    const dy = st.points[i].y - pos.y;
+                    if (dx * dx + dy * dy < thresholdSq) return false;
+                }
+                return true;
             });
             if (filtered.length !== list.length) {
                 s.pdfAnnotations[activePdfPage] = filtered;
-                saveState();
+                scheduleAnnotationSave();
                 redrawPdfAnnotations();
             }
         }
 
         function undoPdfStroke() {
+            flushAnnotationSave();
             const s = getActiveSession();
             const list = s.pdfAnnotations[activePdfPage];
             if (Array.isArray(list) && list.length > 0) {
@@ -2076,13 +2165,121 @@
             canvas.style.webkitTouchCallout = 'none';
             canvas.style.webkitUserSelect = 'none';
 
-            const getRelPos = (e) => {
-                const rect = canvas.getBoundingClientRect();
-                const point = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
-                return {
-                    x: Math.max(0, Math.min(1, (point.clientX - rect.left) / Math.max(1, rect.width))),
-                    y: Math.max(0, Math.min(1, (point.clientY - rect.top) / Math.max(1, rect.height)))
-                };
+            getOrCreateLiveAnnotCanvas();
+
+            let activePointerId = null;
+            let cachedRect = null;
+            let liveRafId = null;
+            let penDrawnCount = 0;
+            let pendingErasePos = null;
+            let lastClientX = -9999;
+            let lastClientY = -9999;
+
+            const toRelPos = (clientX, clientY, rect) => ({
+                x: Math.max(0, Math.min(1, (clientX - rect.left) / Math.max(1, rect.width))),
+                y: Math.max(0, Math.min(1, (clientY - rect.top) / Math.max(1, rect.height)))
+            });
+
+            const renderLiveFrame = () => {
+                liveRafId = null;
+
+                if (pdfTool === 'eraser') {
+                    if (pendingErasePos) {
+                        const pos = pendingErasePos;
+                        pendingErasePos = null;
+                        eraseAtPoint(pos);
+                    }
+                    return;
+                }
+
+                if (!currentStroke || currentStroke.points.length === 0) return;
+                const liveCanvas = getOrCreateLiveAnnotCanvas();
+                if (!liveCanvas) return;
+
+                const dpr = getAnnotDpr();
+                const cssW = liveCanvas.width / dpr;
+                const cssH = liveCanvas.height / dpr;
+                const liveCtx = liveCanvas.getContext('2d');
+                if (!liveCtx) return;
+
+                const pts = currentStroke.points;
+
+                if (currentStroke.tool === 'highlighter') {
+                    liveCanvas.style.mixBlendMode = 'multiply';
+                    liveCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                    liveCtx.clearRect(0, 0, cssW, cssH);
+                    liveCtx.save();
+                    liveCtx.lineCap = 'round';
+                    liveCtx.lineJoin = 'round';
+                    liveCtx.strokeStyle = currentStroke.color;
+                    liveCtx.lineWidth = currentStroke.width;
+                    liveCtx.beginPath();
+                    liveCtx.moveTo(pts[0].x * cssW, pts[0].y * cssH);
+                    if (pts.length === 1) {
+                        liveCtx.lineTo(pts[0].x * cssW + 0.15, pts[0].y * cssH + 0.15);
+                    } else if (pts.length === 2) {
+                        liveCtx.lineTo(pts[1].x * cssW, pts[1].y * cssH);
+                    } else {
+                        for (let i = 1; i < pts.length - 1; i++) {
+                            const cx = pts[i].x * cssW;
+                            const cy = pts[i].y * cssH;
+                            const nx = pts[i + 1].x * cssW;
+                            const ny = pts[i + 1].y * cssH;
+                            liveCtx.quadraticCurveTo(cx, cy, (cx + nx) * 0.5, (cy + ny) * 0.5);
+                        }
+                        const last = pts[pts.length - 1];
+                        liveCtx.lineTo(last.x * cssW, last.y * cssH);
+                    }
+                    liveCtx.stroke();
+                    liveCtx.restore();
+                } else {
+                    // Penna: disegno incrementale O(1) solo dei nuovi segmenti curvi sul canvas live
+                    liveCanvas.style.mixBlendMode = 'normal';
+                    liveCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                    liveCtx.save();
+                    liveCtx.lineCap = 'round';
+                    liveCtx.lineJoin = 'round';
+                    liveCtx.strokeStyle = currentStroke.color;
+                    liveCtx.lineWidth = currentStroke.width;
+                    liveCtx.beginPath();
+
+                    if (penDrawnCount === 0 && pts.length === 1) {
+                        const x0 = pts[0].x * cssW;
+                        const y0 = pts[0].y * cssH;
+                        liveCtx.moveTo(x0, y0);
+                        liveCtx.lineTo(x0 + 0.15, y0 + 0.15);
+                        penDrawnCount = 1;
+                    } else {
+                        if (penDrawnCount <= 1 && pts.length >= 2) {
+                            const p0x = pts[0].x * cssW;
+                            const p0y = pts[0].y * cssH;
+                            const p1x = pts[1].x * cssW;
+                            const p1y = pts[1].y * cssH;
+                            liveCtx.moveTo(p0x, p0y);
+                            liveCtx.lineTo((p0x + p1x) * 0.5, (p0y + p1y) * 0.5);
+                            penDrawnCount = 2;
+                        }
+                        for (let i = Math.max(1, penDrawnCount - 1); i < pts.length - 1; i++) {
+                            const prevX = pts[i - 1].x * cssW;
+                            const prevY = pts[i - 1].y * cssH;
+                            const curX = pts[i].x * cssW;
+                            const curY = pts[i].y * cssH;
+                            const nextX = pts[i + 1].x * cssW;
+                            const nextY = pts[i + 1].y * cssH;
+                            liveCtx.moveTo((prevX + curX) * 0.5, (prevY + curY) * 0.5);
+                            liveCtx.quadraticCurveTo(curX, curY, (curX + nextX) * 0.5, (curY + nextY) * 0.5);
+                        }
+                        penDrawnCount = pts.length;
+                    }
+                    liveCtx.stroke();
+                    liveCtx.restore();
+                }
+            };
+
+            const scheduleLiveRender = () => {
+                if (liveRafId === null) {
+                    liveRafId = requestAnimationFrame(renderLiveFrame);
+                }
             };
 
             const startDraw = (e) => {
@@ -2094,81 +2291,156 @@
                 }
                 e.preventDefault();
                 e.stopPropagation();
-                if (e.pointerId !== undefined && canvas.setPointerCapture) {
-                    try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+
+                if (e.pointerId !== undefined) {
+                    if (isDrawingPdf && activePointerId !== null && activePointerId !== e.pointerId) {
+                        return;
+                    }
+                    activePointerId = e.pointerId;
+                    if (canvas.setPointerCapture) {
+                        try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+                    }
                 }
+
+                syncLiveAnnotCanvasSize();
+                clearLiveAnnotCanvas();
+                cachedRect = canvas.getBoundingClientRect();
                 isDrawingPdf = true;
-                const pos = getRelPos(e);
+                penDrawnCount = 0;
+
+                const pt = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+                lastClientX = pt.clientX;
+                lastClientY = pt.clientY;
+                const pos = toRelPos(pt.clientX, pt.clientY, cachedRect);
+
                 if (pdfTool === 'eraser') {
-                    eraseAtPoint(pos);
+                    pendingErasePos = pos;
+                    scheduleLiveRender();
                     return;
                 }
+
                 currentStroke = {
                     tool: pdfTool,
                     color: pdfTool === 'highlighter' ? pdfHighlighterColor : '#6b2d5c',
                     width: pdfTool === 'highlighter' ? pdfStrokeWidth * 3.5 : pdfStrokeWidth,
                     points: [pos]
                 };
-                redrawPdfAnnotations(currentStroke);
+                scheduleLiveRender();
             };
 
             const moveDraw = (e) => {
                 if (!isDrawingPdf || pdfTool === 'none') return;
-                if (!isStylusInput(e)) {
+                if (e.pointerId !== undefined && activePointerId !== null && e.pointerId !== activePointerId) {
+                    return;
+                }
+                if (activePointerId === null && !isStylusInput(e)) {
                     e.preventDefault();
                     e.stopPropagation();
                     return;
                 }
                 e.preventDefault();
                 e.stopPropagation();
-                const pos = getRelPos(e);
+
+                const rect = cachedRect || canvas.getBoundingClientRect();
+
                 if (pdfTool === 'eraser') {
-                    eraseAtPoint(pos);
+                    const pt = (e.touches && e.touches[0]) || (e.changedTouches && e.changedTouches[0]) || e;
+                    pendingErasePos = toRelPos(pt.clientX, pt.clientY, rect);
+                    scheduleLiveRender();
                     return;
                 }
-                if (currentStroke) {
-                    currentStroke.points.push(pos);
-                    redrawPdfAnnotations(currentStroke);
+
+                if (!currentStroke) return;
+
+                const coalesced = (typeof e.getCoalescedEvents === 'function') ? e.getCoalescedEvents() : null;
+                const samples = (coalesced && coalesced.length > 0) ? coalesced : [e];
+                const minDistSq = pdfTool === 'highlighter' ? 4 : 1.2;
+
+                let added = false;
+                for (let i = 0; i < samples.length; i++) {
+                    const s = samples[i];
+                    const pt = (s.touches && s.touches[0]) || (s.changedTouches && s.changedTouches[0]) || s;
+                    const dx = pt.clientX - lastClientX;
+                    const dy = pt.clientY - lastClientY;
+                    if (dx * dx + dy * dy < minDistSq) continue;
+                    lastClientX = pt.clientX;
+                    lastClientY = pt.clientY;
+                    currentStroke.points.push(toRelPos(pt.clientX, pt.clientY, rect));
+                    added = true;
+                }
+
+                if (added) {
+                    scheduleLiveRender();
                 }
             };
 
             const endDraw = (e) => {
                 if (!isDrawingPdf) return;
+                if (e && e.pointerId !== undefined && activePointerId !== null && e.pointerId !== activePointerId) {
+                    return;
+                }
                 isDrawingPdf = false;
+
                 if (e && e.pointerId !== undefined && canvas.releasePointerCapture) {
                     try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
                 }
+                activePointerId = null;
+                cachedRect = null;
+
+                if (liveRafId !== null) {
+                    cancelAnimationFrame(liveRafId);
+                    liveRafId = null;
+                }
+
+                if (pendingErasePos) {
+                    const pos = pendingErasePos;
+                    pendingErasePos = null;
+                    eraseAtPoint(pos);
+                }
+
                 if (currentStroke && currentStroke.points.length > 0) {
                     const s = getActiveSession();
                     if (!s.pdfAnnotations[activePdfPage]) s.pdfAnnotations[activePdfPage] = [];
                     s.pdfAnnotations[activePdfPage].push(currentStroke);
-                    saveState();
+
+                    // Disegna solo il tratto appena completato sul canvas permanente senza ridisegnare l'intera pagina
+                    const dpr = getAnnotDpr();
+                    const cssW = canvas.width / dpr;
+                    const cssH = canvas.height / dpr;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+                        drawSmoothStroke(ctx, currentStroke, cssW, cssH);
+                    }
+                    scheduleAnnotationSave();
                 }
+
                 currentStroke = null;
-                redrawPdfAnnotations();
+                penDrawnCount = 0;
+                clearLiveAnnotCanvas();
             };
 
-            // Eventi Pointer (moderni)
-            canvas.addEventListener('pointerdown', startDraw, { passive: false });
-            canvas.addEventListener('pointermove', moveDraw, { passive: false });
-            canvas.addEventListener('pointerup', endDraw);
-            canvas.addEventListener('pointercancel', endDraw);
+            if ('PointerEvent' in window) {
+                canvas.addEventListener('pointerdown', startDraw, { passive: false });
+                canvas.addEventListener('pointermove', moveDraw, { passive: false });
+                canvas.addEventListener('pointerup', endDraw);
+                canvas.addEventListener('pointercancel', endDraw);
 
-            // Eventi Touch nativi (Safari iPadOS)
-            canvas.addEventListener('touchstart', (e) => {
-                if (!isDrawingPdf) startDraw(e);
-                else { e.preventDefault(); e.stopPropagation(); }
-            }, { passive: false });
-            canvas.addEventListener('touchmove', (e) => {
-                if (isDrawingPdf) moveDraw(e);
-                else { e.preventDefault(); e.stopPropagation(); }
-            }, { passive: false });
-            canvas.addEventListener('touchend', (e) => {
-                if (isDrawingPdf) endDraw(e);
-            });
-            canvas.addEventListener('touchcancel', (e) => {
-                if (isDrawingPdf) endDraw(e);
-            });
+                // Blocca scroll/zoom/Scribble di Safari iPadOS senza duplicare i punti già gestiti da PointerEvent
+                const blockNativeTouchWhenDrawing = (e) => {
+                    if (pdfTool !== 'none') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                };
+                canvas.addEventListener('touchstart', blockNativeTouchWhenDrawing, { passive: false });
+                canvas.addEventListener('touchmove', blockNativeTouchWhenDrawing, { passive: false });
+            } else {
+                canvas.addEventListener('touchstart', startDraw, { passive: false });
+                canvas.addEventListener('touchmove', moveDraw, { passive: false });
+                canvas.addEventListener('touchend', endDraw);
+                canvas.addEventListener('touchcancel', endDraw);
+            }
         }
 
         function setupPdfSwipeNavigation() {
