@@ -134,6 +134,12 @@
                     <span>Salvato</span>
                 </span>
 
+                <!-- Pulsante Sincronizzazione Cloud (iCloud Drive / OneDrive) -->
+                <button type="button" id="btn-cloud-sync" onclick="openCloudSyncModal()" title="Sincronizza con iCloud Drive o OneDrive" class="inline-flex items-center gap-1.5 px-3 py-2 rounded-full bg-[#f6eef4] border plum-border text-xs font-bold text-[#6b2d5c] hover:bg-[#eadbe6] transition">
+                    <i data-lucide="cloud" class="w-4 h-4"></i>
+                    <span id="cloud-sync-btn-label">iCloud / OneDrive</span>
+                </button>
+
                 <!-- Icone Esporta e Importa -->
                 <button type="button" onclick="exportBackup()" title="Esporta Backup" class="w-9 h-9 rounded-full bg-white border plum-border flex items-center justify-center text-[#4a3343] hover:bg-[#f6eef4]">
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-lucide="download" aria-hidden="true" class="lucide lucide-download w-4 h-4"><path d="M12 15V3"></path><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><path d="m7 10 5 5 5-5"></path></svg>
@@ -361,6 +367,138 @@
         <img id="lightbox-img" src="" alt="Immagine ingrandita" class="max-w-full max-h-[90vh] rounded-2xl shadow-2xl">
     </div>
 
+    <!-- FINESTRA MODAL: SINCRONIZZAZIONE ICLOUD DRIVE / ONEDRIVE -->
+    <div id="cloud-sync-modal" class="fixed inset-0 z-[88] hidden bg-[#261822]/50 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+        <div class="bg-white rounded-3xl border plum-border max-w-2xl w-full p-5 sm:p-6 shadow-2xl space-y-4 my-auto">
+            <div class="flex items-start justify-between gap-3 border-b plum-border pb-3">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl plum-soft border plum-border flex items-center justify-center text-[#6b2d5c] shrink-0">
+                        <i data-lucide="cloud" class="w-5 h-5"></i>
+                    </div>
+                    <div>
+                        <h3 class="text-lg sm:text-xl font-extrabold text-[#261822]">Sincronizzazione iCloud Drive &amp; OneDrive</h3>
+                        <p id="cloud-sync-summary" class="text-xs text-[#7c6575] mt-0.5">Pronto per sincronizzare note, scritture, PDF e appunti a penna.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeCloudSyncModal()" class="p-2 rounded-xl text-[#7c6575] hover:bg-[#f6eef4] font-bold">✕</button>
+            </div>
+
+            <!-- Schede metodo di sincronizzazione -->
+            <div class="flex items-center gap-2 bg-[#f6eef4] p-1 rounded-2xl">
+                <button type="button" id="cloud-tab-file" onclick="switchCloudSyncTab('file')" class="flex-1 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white text-[#6b2d5c] shadow-2xs transition">
+                    ☁️ iCloud Drive / OneDrive (Consigliato)
+                </button>
+                <button type="button" id="cloud-tab-onedrive" onclick="switchCloudSyncTab('onedrive')" class="flex-1 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold text-[#7c6575] transition">
+                    🔷 OneDrive Diretto (Account)
+                </button>
+            </div>
+
+            <!-- Messaggio stato operazione cloud -->
+            <div id="cloud-sync-status-msg" class="hidden rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-bold border"></div>
+
+            <!-- PANNELLO 1: FILE UNICO SU ICLOUD DRIVE / ONEDRIVE -->
+            <div id="cloud-panel-file" class="space-y-4">
+                <div class="bg-[#fbf9fa] border plum-border rounded-2xl p-3.5 space-y-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-xs font-extrabold uppercase tracking-wider text-[#6b2d5c]">File di Sincronizzazione Unico</span>
+                        <span id="cloud-linked-file-badge" class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">Nessun file collegato</span>
+                    </div>
+                    <p class="text-xs text-[#4a3343] leading-relaxed">
+                        Salva un solo file <strong>Quaderno_Studio_Sync.json</strong> nella tua cartella <strong>iCloud Drive</strong> o <strong>OneDrive</strong>: contiene tutte le note, le scritture, i PDF caricati, le evidenziazioni e gli appunti con Apple Pencil.
+                    </p>
+                    <div class="flex flex-wrap items-center gap-2 pt-1">
+                        <button type="button" id="btn-link-cloud-file" onclick="linkCloudSyncFile()" class="px-3.5 py-2 rounded-xl bg-white border plum-border text-[#6b2d5c] font-bold text-xs hover:bg-[#f6eef4]">
+                            🔗 Collega file (Auto-Sync)
+                        </button>
+                        <label class="inline-flex items-center gap-1.5 text-xs font-semibold text-[#3d2937] cursor-pointer px-2 py-1">
+                            <input type="checkbox" id="cloud-auto-sync-checkbox" onchange="toggleCloudAutoSync(this.checked)" class="rounded">
+                            <span>Salvataggio automatico sul file collegato</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Azioni principali iCloud / OneDrive -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button type="button" onclick="saveToCloudFile()" class="p-4 rounded-2xl plum-primary font-bold text-sm flex flex-col items-start gap-1 shadow-2xs text-left">
+                        <span class="text-base">☁️ Salva ora su iCloud / OneDrive</span>
+                        <span class="text-[11px] font-medium opacity-90">Su iPad apre "Salva su File" → scegli iCloud Drive o OneDrive</span>
+                    </button>
+
+                    <button type="button" onclick="triggerLoadFromCloudFile()" class="p-4 rounded-2xl bg-white border-2 border-[#6b2d5c] text-[#6b2d5c] font-bold text-sm flex flex-col items-start gap-1 hover:bg-[#f6eef4] text-left">
+                        <span class="text-base">🔄 Carica da iCloud / OneDrive</span>
+                        <span class="text-[11px] font-medium text-[#4a3343]">Ripristina note, PDF e appunti senza duplicati</span>
+                    </button>
+                    <input type="file" id="cloud-sync-file-input" accept=".json,application/json,*/*" onchange="handleCloudSyncFileSelected(event)" class="hidden">
+                </div>
+
+                <!-- Modalità di unione quando si carica dal Cloud -->
+                <div class="flex flex-wrap items-center justify-between gap-2 bg-[#fbf9fa] border plum-border rounded-2xl px-3.5 py-2.5 text-xs">
+                    <span class="font-bold text-[#3d2937]">Quando carichi dal Cloud:</span>
+                    <div class="flex items-center gap-3">
+                        <label class="inline-flex items-center gap-1.5 font-semibold text-[#4a3343] cursor-pointer">
+                            <input type="radio" name="cloud-merge-mode" value="merge" checked>
+                            <span>Unisci senza duplicati</span>
+                        </label>
+                        <label class="inline-flex items-center gap-1.5 font-semibold text-[#4a3343] cursor-pointer">
+                            <input type="radio" name="cloud-merge-mode" value="replace">
+                            <span>Sostituisci con copia Cloud</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="text-[11px] text-[#7c6575] bg-amber-50/70 border border-amber-200 rounded-2xl p-3 leading-relaxed">
+                    <strong>Come non perdere mai nulla su iPad/iPhone:</strong> tocca <strong>"Salva ora su iCloud / OneDrive"</strong> → scegli <strong>"Salva su File"</strong> → seleziona <strong>iCloud Drive</strong> (o <strong>OneDrive</strong>) e sostituisci <em>Quaderno_Studio_Sync.json</em>. Dopo un aggiornamento o su un altro dispositivo, tocca <strong>"Carica da iCloud / OneDrive"</strong> e seleziona quel file!
+                </div>
+            </div>
+
+            <!-- PANNELLO 2: ONEDRIVE DIRETTO (MICROSOFT GRAPH API) -->
+            <div id="cloud-panel-onedrive" class="hidden space-y-3.5">
+                <div class="bg-[#fbf9fa] border plum-border rounded-2xl p-3.5 space-y-2.5">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span class="text-xs font-extrabold uppercase tracking-wider text-[#6b2d5c]">Connessione Microsoft OneDrive API</span>
+                        <span id="onedrive-conn-badge" class="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">Non connesso</span>
+                    </div>
+                    <p class="text-xs text-[#4a3343] leading-relaxed">
+                        Sincronizza direttamente il file <code class="bg-[#f6eef4] px-1.5 py-0.5 rounded">QuadernoStudio/Quaderno_Studio_Sync.json</code> nel tuo account Microsoft OneDrive tramite Microsoft Graph.
+                    </p>
+
+                    <div class="space-y-2 pt-1">
+                        <div>
+                            <label class="block text-[11px] font-bold text-[#6b2d5c] mb-1">Token di accesso OneDrive (Microsoft Graph) oppure Client ID App Azure:</label>
+                            <input type="text" id="onedrive-client-id" placeholder="Client ID App Microsoft (opzionale per login automatico)" class="w-full bg-white border plum-border rounded-xl px-3 py-2 text-xs mb-2">
+                            <input type="password" id="onedrive-access-token" placeholder="Incolla Access Token OneDrive (es. da Graph Explorer)" class="w-full bg-white border plum-border rounded-xl px-3 py-2 text-xs">
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <button type="button" onclick="saveOneDriveCredentials()" class="px-3.5 py-2 rounded-xl plum-soft border plum-border text-xs font-bold">
+                                💾 Salva credenziali
+                            </button>
+                            <button type="button" onclick="startOneDriveOAuthLogin()" class="px-3.5 py-2 rounded-xl bg-sky-50 text-sky-800 border border-sky-200 text-xs font-bold">
+                                🔐 Accedi con Client ID Microsoft
+                            </button>
+                            <button type="button" onclick="disconnectOneDrive()" class="px-3 py-2 rounded-xl bg-rose-50 text-rose-600 text-xs font-bold">
+                                Disconnetti
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <button type="button" onclick="uploadToOneDriveDirect()" class="p-3.5 rounded-2xl plum-primary font-bold text-xs sm:text-sm text-left">
+                        ☁️ Carica su OneDrive ora
+                    </button>
+                    <button type="button" onclick="downloadFromOneDriveDirect()" class="p-3.5 rounded-2xl bg-white border-2 border-[#6b2d5c] text-[#6b2d5c] font-bold text-xs sm:text-sm hover:bg-[#f6eef4] text-left">
+                        ⬇️ Scarica da OneDrive ora
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-between pt-2 border-t plum-border text-xs text-[#7c6575]">
+                <span id="cloud-last-sync-label">Ultima sincronizzazione: mai effettuata</span>
+                <button type="button" onclick="closeCloudSyncModal()" class="px-4 py-2 rounded-xl bg-[#f6eef4] text-[#6b2d5c] font-bold">Chiudi</button>
+            </div>
+        </div>
+    </div>
+
     <!-- LETTORE PDF AFFIANCATO ALLE NOTE -->
     <div id="pdf-workspace-overlay" class="fixed inset-0 z-[60] bg-[#fbf9fa] flex flex-col">
         <!-- Barra comandi PDF -->
@@ -558,6 +696,7 @@
         /* ARCHIVIO PERSISTENTE PDF (INDEXEDDB) PER CONSERVARE I PDF TRA GLI AGGIORNAMENTI */
         const PDF_DB_NAME = 'quaderno_studio_pdf_store_v1';
         const PDF_STORE_NAME = 'pdfs';
+        const CLOUD_STORE_NAME = 'cloud_meta';
 
         function openPdfDatabase() {
             return new Promise((resolve, reject) => {
@@ -565,11 +704,14 @@
                     reject(new Error('IndexedDB non supportato'));
                     return;
                 }
-                const req = indexedDB.open(PDF_DB_NAME, 1);
+                const req = indexedDB.open(PDF_DB_NAME, 2);
                 req.onupgradeneeded = (e) => {
                     const db = e.target.result;
                     if (!db.objectStoreNames.contains(PDF_STORE_NAME)) {
                         db.createObjectStore(PDF_STORE_NAME);
+                    }
+                    if (!db.objectStoreNames.contains(CLOUD_STORE_NAME)) {
+                        db.createObjectStore(CLOUD_STORE_NAME);
                     }
                 };
                 req.onsuccess = () => resolve(req.result);
@@ -727,6 +869,8 @@
                 if (badge) {
                     badge.classList.remove('opacity-60');
                 }
+                saveStateSnapshotToDb();
+                scheduleLinkedCloudAutoSave();
             } catch (e) {
                 console.error('Errore salvataggio stato:', e);
             }
@@ -2622,14 +2766,660 @@
             }
         }
 
+        /* SINCRONIZZAZIONE ICLOUD DRIVE & ONEDRIVE (NOTE + SCRITTURE + PDF + APPUNTI APPLE PENCIL) */
+        let linkedSyncFileHandle = null;
+        let cloudAutoSaveTimer = null;
+        let cloudConfig = {
+            lastSyncAt: null,
+            autoSync: true,
+            linkedFileName: null,
+            onedriveClientId: '',
+            onedriveAccessToken: ''
+        };
+
+        async function saveCloudMeta(key, value) {
+            try {
+                const db = await openPdfDatabase();
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction(CLOUD_STORE_NAME, 'readwrite');
+                    tx.objectStore(CLOUD_STORE_NAME).put(value, key);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.warn('Errore salvataggio metadati cloud:', e);
+            }
+        }
+
+        async function loadCloudMeta(key) {
+            try {
+                const db = await openPdfDatabase();
+                return await new Promise((resolve, reject) => {
+                    const tx = db.transaction(CLOUD_STORE_NAME, 'readonly');
+                    const req = tx.objectStore(CLOUD_STORE_NAME).get(key);
+                    req.onsuccess = () => resolve(req.result ?? null);
+                    req.onerror = () => reject(req.error);
+                });
+            } catch (e) {
+                console.warn('Errore lettura metadati cloud:', e);
+                return null;
+            }
+        }
+
+        async function saveStateSnapshotToDb() {
+            try {
+                await saveCloudMeta('stateSnapshot', {
+                    savedAt: Date.now(),
+                    state: JSON.parse(JSON.stringify(state))
+                });
+            } catch (_) {}
+        }
+
+        async function restoreStateFromIndexedDbIfNeeded() {
+            try {
+                const totalLocalNotes = state.sessions.reduce((acc, s) => acc + (Array.isArray(s.notes) ? s.notes.length : 0), 0);
+                const totalLocalScr = state.sessions.reduce((acc, s) => acc + (Array.isArray(s.scriptures) ? s.scriptures.length : 0), 0);
+                if (totalLocalNotes > 0 || totalLocalScr > 0) return;
+                const snap = await loadCloudMeta('stateSnapshot');
+                if (snap && snap.state && Array.isArray(snap.state.sessions)) {
+                    const snapNotes = snap.state.sessions.reduce((acc, s) => acc + (Array.isArray(s.notes) ? s.notes.length : 0), 0);
+                    const snapScr = snap.state.sessions.reduce((acc, s) => acc + (Array.isArray(s.scriptures) ? s.scriptures.length : 0), 0);
+                    if (snapNotes > 0 || snapScr > 0) {
+                        state = { ...state, ...snap.state };
+                        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                    }
+                }
+            } catch (e) {
+                console.warn('Ripristino snapshot IndexedDB ignorato:', e);
+            }
+        }
+
+        async function initCloudSync() {
+            try {
+                const savedCfg = await loadCloudMeta('cloudConfig');
+                if (savedCfg && typeof savedCfg === 'object') {
+                    cloudConfig = { ...cloudConfig, ...savedCfg };
+                }
+                const savedHandle = await loadCloudMeta('linkedSyncFileHandle');
+                if (savedHandle) {
+                    linkedSyncFileHandle = savedHandle;
+                }
+                // Verifica eventuale token OAuth OneDrive nel hash URL dopo redirect
+                if (window.location.hash && window.location.hash.includes('access_token=')) {
+                    const params = new URLSearchParams(window.location.hash.slice(1));
+                    const token = params.get('access_token');
+                    if (token) {
+                        cloudConfig.onedriveAccessToken = token;
+                        await saveCloudMeta('cloudConfig', cloudConfig);
+                        try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch (_) {}
+                        showToast('Accesso a OneDrive completato con successo!');
+                    }
+                }
+                updateCloudSyncHeaderBadge();
+            } catch (e) {
+                console.warn('Inizializzazione Cloud Sync:', e);
+            }
+        }
+
+        function updateCloudSyncHeaderBadge() {
+            const label = document.getElementById('cloud-sync-btn-label');
+            if (!label) return;
+            if (linkedSyncFileHandle && cloudConfig.autoSync) {
+                label.textContent = 'Sync attiva ✓';
+            } else if (cloudConfig.onedriveAccessToken) {
+                label.textContent = 'OneDrive ✓';
+            } else {
+                label.textContent = 'iCloud / OneDrive';
+            }
+        }
+
+        function setCloudModalStatus(message, type = 'success') {
+            const box = document.getElementById('cloud-sync-status-msg');
+            if (!box) return;
+            box.textContent = message;
+            if (type === 'error') {
+                box.className = 'rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-bold border bg-rose-50 text-rose-700 border-rose-200';
+            } else if (type === 'info') {
+                box.className = 'rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-bold border bg-sky-50 text-sky-800 border-sky-200';
+            } else {
+                box.className = 'rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-bold border bg-emerald-50 text-emerald-800 border-emerald-200';
+            }
+            box.classList.remove('hidden');
+        }
+
+        function switchCloudSyncTab(tab) {
+            const panelFile = document.getElementById('cloud-panel-file');
+            const panelOneDrive = document.getElementById('cloud-panel-onedrive');
+            const tabFile = document.getElementById('cloud-tab-file');
+            const tabOneDrive = document.getElementById('cloud-tab-onedrive');
+            if (!panelFile || !panelOneDrive) return;
+            if (tab === 'onedrive') {
+                panelFile.classList.add('hidden');
+                panelOneDrive.classList.remove('hidden');
+                tabOneDrive.className = 'flex-1 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white text-[#6b2d5c] shadow-2xs transition';
+                tabFile.className = 'flex-1 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold text-[#7c6575] transition';
+            } else {
+                panelOneDrive.classList.add('hidden');
+                panelFile.classList.remove('hidden');
+                tabFile.className = 'flex-1 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-white text-[#6b2d5c] shadow-2xs transition';
+                tabOneDrive.className = 'flex-1 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold text-[#7c6575] transition';
+            }
+        }
+
+        async function openCloudSyncModal() {
+            const modal = document.getElementById('cloud-sync-modal');
+            if (!modal) return;
+            const statusBox = document.getElementById('cloud-sync-status-msg');
+            if (statusBox) statusBox.classList.add('hidden');
+
+            // Calcola riepilogo reale di note, scritture e PDF
+            let notesTotal = 0, scrTotal = 0, pdfTotal = 0;
+            for (const s of state.sessions) {
+                notesTotal += Array.isArray(s.notes) ? s.notes.length : 0;
+                scrTotal += Array.isArray(s.scriptures) ? s.scriptures.length : 0;
+                const stored = await loadPdfBinaryForSession(s.id);
+                if (stored && stored.buffer) pdfTotal++;
+            }
+            const summaryEl = document.getElementById('cloud-sync-summary');
+            if (summaryEl) {
+                summaryEl.textContent = `Pronti per il cloud: ${notesTotal} note, ${scrTotal} scritture e ${pdfTotal} PDF con evidenziazioni e appunti.`;
+            }
+
+            const linkedBadge = document.getElementById('cloud-linked-file-badge');
+            if (linkedBadge) {
+                if (linkedSyncFileHandle) {
+                    linkedBadge.textContent = `Collegato: ${linkedSyncFileHandle.name || cloudConfig.linkedFileName || 'Quaderno_Studio_Sync.json'}`;
+                    linkedBadge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800';
+                } else {
+                    linkedBadge.textContent = 'Modalità manuale / App File iPad';
+                    linkedBadge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600';
+                }
+            }
+
+            const autoCb = document.getElementById('cloud-auto-sync-checkbox');
+            if (autoCb) autoCb.checked = !!cloudConfig.autoSync;
+
+            const lastSyncEl = document.getElementById('cloud-last-sync-label');
+            if (lastSyncEl) {
+                lastSyncEl.textContent = cloudConfig.lastSyncAt
+                    ? 'Ultima sincronizzazione: ' + new Date(cloudConfig.lastSyncAt).toLocaleString('it-IT')
+                    : 'Ultima sincronizzazione: mai effettuata';
+            }
+
+            const odClientEl = document.getElementById('onedrive-client-id');
+            const odTokenEl = document.getElementById('onedrive-access-token');
+            const odBadge = document.getElementById('onedrive-conn-badge');
+            if (odClientEl) odClientEl.value = cloudConfig.onedriveClientId || '';
+            if (odTokenEl) odTokenEl.value = cloudConfig.onedriveAccessToken || '';
+            if (odBadge) {
+                if (cloudConfig.onedriveAccessToken) {
+                    odBadge.textContent = 'Connesso ✓';
+                    odBadge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800';
+                } else {
+                    odBadge.textContent = 'Non connesso';
+                    odBadge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600';
+                }
+            }
+
+            modal.classList.remove('hidden');
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function closeCloudSyncModal() {
+            const modal = document.getElementById('cloud-sync-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        async function buildFullSyncPayload() {
+            const pdfsPayload = {};
+            for (const s of state.sessions) {
+                const stored = await loadPdfBinaryForSession(s.id);
+                if (stored && stored.buffer) {
+                    pdfsPayload[s.id] = {
+                        name: stored.name || (s.pdfMeta && s.pdfMeta.name) || 'Documento.pdf',
+                        base64: arrayBufferToBase64(stored.buffer)
+                    };
+                }
+            }
+            return {
+                syncVersion: 2,
+                exportedAt: new Date().toISOString(),
+                app: 'Quaderno per lo studio',
+                state: state,
+                pdfs: pdfsPayload
+            };
+        }
+
+        async function applySyncedPayload(parsed, mode = 'merge') {
+            const sourceState = (parsed && parsed.state && Array.isArray(parsed.state.sessions)) ? parsed.state : parsed;
+            let notesAdded = 0, notesUpdated = 0, scrAdded = 0, pdfsRestored = 0;
+
+            if (mode === 'replace' && sourceState && Array.isArray(sourceState.sessions)) {
+                state = {
+                    ...state,
+                    ...sourceState,
+                    sessions: JSON.parse(JSON.stringify(sourceState.sessions))
+                };
+                state.sessions.forEach(s => {
+                    notesAdded += Array.isArray(s.notes) ? s.notes.length : 0;
+                    scrAdded += Array.isArray(s.scriptures) ? s.scriptures.length : 0;
+                });
+            } else if (sourceState && Array.isArray(sourceState.sessions)) {
+                sourceState.sessions.forEach(impSess => {
+                    let target = state.sessions.find(x => x.id === impSess.id || x.name.toLowerCase() === String(impSess.name || '').toLowerCase());
+                    if (!target) {
+                        target = {
+                            id: impSess.id || ('sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5)),
+                            name: impSess.name || 'Sessione Sincronizzata',
+                            lucideIcon: impSess.lucideIcon || 'notebook-pen',
+                            isBase: !!impSess.isBase,
+                            notes: [],
+                            scriptures: [],
+                            pdfMeta: impSess.pdfMeta || null,
+                            pdfAnnotations: impSess.pdfAnnotations || {},
+                            pdfImages: impSess.pdfImages || {}
+                        };
+                        state.sessions.push(target);
+                    } else {
+                        if (impSess.pdfMeta) target.pdfMeta = impSess.pdfMeta;
+                        if (impSess.pdfAnnotations && typeof impSess.pdfAnnotations === 'object') {
+                            if (!target.pdfAnnotations) target.pdfAnnotations = {};
+                            Object.entries(impSess.pdfAnnotations).forEach(([pg, strokes]) => {
+                                if (!Array.isArray(strokes)) return;
+                                const existing = Array.isArray(target.pdfAnnotations[pg]) ? target.pdfAnnotations[pg] : [];
+                                const seen = new Set(existing.map(st => JSON.stringify(st)));
+                                strokes.forEach(st => {
+                                    const sig = JSON.stringify(st);
+                                    if (!seen.has(sig)) {
+                                        existing.push(st);
+                                        seen.add(sig);
+                                    }
+                                });
+                                target.pdfAnnotations[pg] = existing;
+                            });
+                        }
+                        if (impSess.pdfImages && typeof impSess.pdfImages === 'object') {
+                            if (!target.pdfImages) target.pdfImages = {};
+                            Object.entries(impSess.pdfImages).forEach(([pg, imgs]) => {
+                                if (!Array.isArray(imgs)) return;
+                                const existing = Array.isArray(target.pdfImages[pg]) ? target.pdfImages[pg] : [];
+                                imgs.forEach(im => {
+                                    if (!existing.some(e => e.id === im.id)) existing.push(im);
+                                });
+                                target.pdfImages[pg] = existing;
+                            });
+                        }
+                    }
+
+                    if (Array.isArray(impSess.notes)) {
+                        impSess.notes.forEach(n => {
+                            const html = extractImportedNoteHtml(n);
+                            const title = n.title || n.heading || n.name || 'Nota';
+                            const existingNote = target.notes.find(x =>
+                                (n.id && x.id === n.id) ||
+                                (x.title === title && x.html === html)
+                            );
+                            if (existingNote) {
+                                existingNote.title = title;
+                                if (html) existingNote.html = html;
+                                if (n.pdfPage !== undefined) existingNote.pdfPage = n.pdfPage;
+                                if (n.fontSize) existingNote.fontSize = n.fontSize;
+                                if (n.image) existingNote.image = n.image;
+                                notesUpdated++;
+                            } else {
+                                target.notes.push({
+                                    id: n.id || ('note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+                                    title: title,
+                                    html: html,
+                                    fontSize: n.fontSize || 17,
+                                    pdfPage: n.pdfPage || null,
+                                    collapsed: !!n.collapsed,
+                                    image: n.image || null,
+                                    isQuickNote: !!n.isQuickNote
+                                });
+                                notesAdded++;
+                            }
+                        });
+                    }
+
+                    if (Array.isArray(impSess.scriptures)) {
+                        impSess.scriptures.forEach(scr => {
+                            const ref = scr.ref || scr.reference || 'Scrittura';
+                            const text = scr.text || scr.content || '';
+                            const exists = target.scriptures.find(x => (scr.id && x.id === scr.id) || (x.ref === ref && x.text === text));
+                            if (!exists) {
+                                target.scriptures.push({
+                                    id: scr.id || ('scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6)),
+                                    ref: ref,
+                                    text: text,
+                                    pdfPage: scr.pdfPage || null
+                                });
+                                scrAdded++;
+                            }
+                        });
+                    }
+                });
+            }
+
+            if (parsed && parsed.pdfs && typeof parsed.pdfs === 'object') {
+                for (const [sessId, pdfEntry] of Object.entries(parsed.pdfs)) {
+                    if (pdfEntry && pdfEntry.base64) {
+                        const buf = base64ToArrayBuffer(pdfEntry.base64);
+                        await savePdfBinaryForSession(sessId, buf, pdfEntry.name || 'Documento.pdf');
+                        pdfsRestored++;
+                    }
+                }
+            }
+
+            cloudConfig.lastSyncAt = new Date().toISOString();
+            await saveCloudMeta('cloudConfig', cloudConfig);
+            saveState();
+            await restoreSessionPdfFromStorage(state.activeSessionId, false);
+            renderApp();
+            updateCloudSyncHeaderBadge();
+            return { notesAdded, notesUpdated, scrAdded, pdfsRestored };
+        }
+
+        async function linkCloudSyncFile() {
+            if (!('showSaveFilePicker' in window)) {
+                setCloudModalStatus('Su iPad/Safari usa il pulsante "Salva ora su iCloud / OneDrive" qui sotto per salvare direttamente nell\'App File (iCloud Drive o OneDrive).', 'info');
+                return;
+            }
+            try {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: 'Quaderno_Studio_Sync.json',
+                    types: [{
+                        description: 'File Sincronizzazione Quaderno Studio',
+                        accept: { 'application/json': ['.json'] }
+                    }]
+                });
+                linkedSyncFileHandle = handle;
+                cloudConfig.linkedFileName = handle.name || 'Quaderno_Studio_Sync.json';
+                await saveCloudMeta('linkedSyncFileHandle', handle);
+                await saveCloudMeta('cloudConfig', cloudConfig);
+                await writeToLinkedCloudFile(false);
+                updateCloudSyncHeaderBadge();
+                await openCloudSyncModal();
+                setCloudModalStatus(`File "${cloudConfig.linkedFileName}" collegato e sincronizzato! Ora ogni modifica si salva in automatico.`, 'success');
+            } catch (err) {
+                if (err && err.name === 'AbortError') return;
+                setCloudModalStatus('Questo browser non consente il collegamento diretto al file: usa "Salva ora su iCloud / OneDrive" qui sotto!', 'info');
+            }
+        }
+
+        async function writeToLinkedCloudFile(silent = false) {
+            if (!linkedSyncFileHandle) return false;
+            try {
+                if (linkedSyncFileHandle.queryPermission) {
+                    let perm = await linkedSyncFileHandle.queryPermission({ mode: 'readwrite' });
+                    if (perm !== 'granted' && !silent && linkedSyncFileHandle.requestPermission) {
+                        perm = await linkedSyncFileHandle.requestPermission({ mode: 'readwrite' });
+                    }
+                    if (perm !== 'granted') return false;
+                }
+                const payload = await buildFullSyncPayload();
+                const writable = await linkedSyncFileHandle.createWritable();
+                await writable.write(JSON.stringify(payload, null, 2));
+                await writable.close();
+                cloudConfig.lastSyncAt = new Date().toISOString();
+                await saveCloudMeta('cloudConfig', cloudConfig);
+                updateCloudSyncHeaderBadge();
+                return true;
+            } catch (err) {
+                console.warn('Scrittura automatica file collegato non riuscita:', err);
+                return false;
+            }
+        }
+
+        function scheduleLinkedCloudAutoSave() {
+            if (!linkedSyncFileHandle || !cloudConfig.autoSync) return;
+            clearTimeout(cloudAutoSaveTimer);
+            cloudAutoSaveTimer = setTimeout(() => {
+                writeToLinkedCloudFile(true);
+            }, 2500);
+        }
+
+        async function toggleCloudAutoSync(enabled) {
+            cloudConfig.autoSync = !!enabled;
+            await saveCloudMeta('cloudConfig', cloudConfig);
+            updateCloudSyncHeaderBadge();
+        }
+
+        async function saveToCloudFile() {
+            try {
+                setCloudModalStatus('Preparazione pacchetto completo (note, scritture, PDF e appunti)...', 'info');
+                // 1. Se c'è un file collegato (Desktop iCloud/OneDrive), salva direttamente lì
+                if (linkedSyncFileHandle) {
+                    const ok = await writeToLinkedCloudFile(false);
+                    if (ok) {
+                        const lastSyncEl = document.getElementById('cloud-last-sync-label');
+                        if (lastSyncEl) lastSyncEl.textContent = 'Ultima sincronizzazione: ' + new Date(cloudConfig.lastSyncAt).toLocaleString('it-IT');
+                        setCloudModalStatus('Sincronizzazione completata nel file collegato su iCloud / OneDrive!', 'success');
+                        showToast('Quaderno sincronizzato su iCloud / OneDrive!');
+                        return;
+                    }
+                }
+
+                const payload = await buildFullSyncPayload();
+                const jsonStr = JSON.stringify(payload, null, 2);
+                const fileName = 'Quaderno_Studio_Sync.json';
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+
+                // 2. Su iPad / iPhone usa la scheda di condivisione nativa per "Salva su File" (iCloud Drive / OneDrive)
+                if (navigator.share && typeof File !== 'undefined') {
+                    try {
+                        const syncFile = new File([blob], fileName, { type: 'application/json' });
+                        if (!navigator.canShare || navigator.canShare({ files: [syncFile] })) {
+                            await navigator.share({
+                                files: [syncFile],
+                                title: 'Quaderno per lo studio — Sync',
+                                text: 'Salva su File → iCloud Drive o OneDrive'
+                            });
+                            cloudConfig.lastSyncAt = new Date().toISOString();
+                            await saveCloudMeta('cloudConfig', cloudConfig);
+                            const lastSyncEl = document.getElementById('cloud-last-sync-label');
+                            if (lastSyncEl) lastSyncEl.textContent = 'Ultima sincronizzazione: ' + new Date(cloudConfig.lastSyncAt).toLocaleString('it-IT');
+                            setCloudModalStatus('File inviato ad App File (iCloud Drive / OneDrive)!', 'success');
+                            return;
+                        }
+                    } catch (shareErr) {
+                        if (shareErr && shareErr.name === 'AbortError') {
+                            setCloudModalStatus('Salvataggio annullato.', 'info');
+                            return;
+                        }
+                    }
+                }
+
+                // 3. Fallback universale: download del file unico Quaderno_Studio_Sync.json
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                a.click();
+                URL.revokeObjectURL(url);
+
+                cloudConfig.lastSyncAt = new Date().toISOString();
+                await saveCloudMeta('cloudConfig', cloudConfig);
+                const lastSyncEl = document.getElementById('cloud-last-sync-label');
+                if (lastSyncEl) lastSyncEl.textContent = 'Ultima sincronizzazione: ' + new Date(cloudConfig.lastSyncAt).toLocaleString('it-IT');
+                setCloudModalStatus('File "Quaderno_Studio_Sync.json" salvato! Mettilo nella cartella iCloud Drive o OneDrive.', 'success');
+            } catch (err) {
+                console.error('Errore salvataggio cloud:', err);
+                setCloudModalStatus('Errore durante la creazione del file di sincronizzazione.', 'error');
+            }
+        }
+
+        function getSelectedCloudMergeMode() {
+            const checked = document.querySelector('input[name="cloud-merge-mode"]:checked');
+            return checked ? checked.value : 'merge';
+        }
+
+        async function triggerLoadFromCloudFile() {
+            // Se c'è già un file collegato su desktop, prova a leggerlo direttamente
+            if (linkedSyncFileHandle) {
+                try {
+                    if (linkedSyncFileHandle.queryPermission) {
+                        let perm = await linkedSyncFileHandle.queryPermission({ mode: 'read' });
+                        if (perm !== 'granted' && linkedSyncFileHandle.requestPermission) {
+                            perm = await linkedSyncFileHandle.requestPermission({ mode: 'read' });
+                        }
+                        if (perm === 'granted') {
+                            const file = await linkedSyncFileHandle.getFile();
+                            const text = await file.text();
+                            const parsed = JSON.parse(text);
+                            const res = await applySyncedPayload(parsed, getSelectedCloudMergeMode());
+                            setCloudModalStatus(`Sincronizzato dal file collegato: ${res.notesAdded} note nuove, ${res.notesUpdated} aggiornate, ${res.scrAdded} scritture, ${res.pdfsRestored} PDF ripristinati!`, 'success');
+                            return;
+                        }
+                    }
+                } catch (_) {}
+            }
+            const input = document.getElementById('cloud-sync-file-input');
+            if (input) input.click();
+        }
+
+        function handleCloudSyncFileSelected(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = async (e) => {
+                try {
+                    const parsed = JSON.parse(e.target.result);
+                    const res = await applySyncedPayload(parsed, getSelectedCloudMergeMode());
+                    const lastSyncEl = document.getElementById('cloud-last-sync-label');
+                    if (lastSyncEl) lastSyncEl.textContent = 'Ultima sincronizzazione: ' + new Date(cloudConfig.lastSyncAt).toLocaleString('it-IT');
+                    setCloudModalStatus(`Sincronizzazione completata! ${res.notesAdded} note nuove, ${res.notesUpdated} aggiornate, ${res.scrAdded} scritture e ${res.pdfsRestored} PDF ripristinati.`, 'success');
+                    showToast(`Sincronizzazione completata: ${res.notesAdded + res.notesUpdated} note e ${res.pdfsRestored} PDF pronti!`);
+                } catch (err) {
+                    console.error('Errore caricamento file sync:', err);
+                    setCloudModalStatus('File non valido: seleziona il file Quaderno_Studio_Sync.json salvato su iCloud o OneDrive.', 'error');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        /* ONEDRIVE DIRETTO (MICROSOFT GRAPH API) */
+        async function saveOneDriveCredentials() {
+            const cid = (document.getElementById('onedrive-client-id')?.value || '').trim();
+            const tok = (document.getElementById('onedrive-access-token')?.value || '').trim();
+            cloudConfig.onedriveClientId = cid;
+            cloudConfig.onedriveAccessToken = tok;
+            await saveCloudMeta('cloudConfig', cloudConfig);
+            updateCloudSyncHeaderBadge();
+            const odBadge = document.getElementById('onedrive-conn-badge');
+            if (odBadge) {
+                if (tok) {
+                    odBadge.textContent = 'Connesso ✓';
+                    odBadge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800';
+                } else {
+                    odBadge.textContent = 'Non connesso';
+                    odBadge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600';
+                }
+            }
+            setCloudModalStatus(tok ? 'Credenziali OneDrive salvate! Ora puoi caricare o scaricare direttamente.' : 'Client ID salvato.', 'success');
+        }
+
+        function startOneDriveOAuthLogin() {
+            const cid = (document.getElementById('onedrive-client-id')?.value || cloudConfig.onedriveClientId || '').trim();
+            if (!cid) {
+                setCloudModalStatus('Inserisci prima il tuo Client ID App Microsoft (o incolla un Access Token OneDrive), oppure usa la scheda "iCloud Drive / OneDrive (Consigliato)" che non richiede configurazioni.', 'info');
+                return;
+            }
+            cloudConfig.onedriveClientId = cid;
+            saveCloudMeta('cloudConfig', cloudConfig);
+            const redirectUri = window.location.origin + window.location.pathname;
+            const scope = encodeURIComponent('Files.ReadWrite User.Read');
+            const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${encodeURIComponent(cid)}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${scope}`;
+            window.open(authUrl, '_blank');
+            setCloudModalStatus('Finestra di accesso Microsoft aperta: completa il login per collegare OneDrive.', 'info');
+        }
+
+        async function disconnectOneDrive() {
+            cloudConfig.onedriveAccessToken = '';
+            await saveCloudMeta('cloudConfig', cloudConfig);
+            const odTokenEl = document.getElementById('onedrive-access-token');
+            if (odTokenEl) odTokenEl.value = '';
+            updateCloudSyncHeaderBadge();
+            const odBadge = document.getElementById('onedrive-conn-badge');
+            if (odBadge) {
+                odBadge.textContent = 'Non connesso';
+                odBadge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600';
+            }
+            setCloudModalStatus('Account OneDrive disconnesso.', 'info');
+        }
+
+        async function uploadToOneDriveDirect() {
+            const token = (document.getElementById('onedrive-access-token')?.value || cloudConfig.onedriveAccessToken || '').trim();
+            if (!token) {
+                setCloudModalStatus('Inserisci prima un Access Token OneDrive oppure usa la scheda "iCloud Drive / OneDrive (Consigliato)".', 'error');
+                return;
+            }
+            try {
+                setCloudModalStatus('Caricamento su OneDrive in corso (note, scritture, PDF e appunti)...', 'info');
+                const payload = await buildFullSyncPayload();
+                const res = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/QuadernoStudio/Quaderno_Studio_Sync.json:/content', {
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': 'Bearer ' + token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) {
+                    throw new Error(`Errore OneDrive (${res.status}): verifica che il token sia valido e non scaduto.`);
+                }
+                cloudConfig.onedriveAccessToken = token;
+                cloudConfig.lastSyncAt = new Date().toISOString();
+                await saveCloudMeta('cloudConfig', cloudConfig);
+                updateCloudSyncHeaderBadge();
+                const lastSyncEl = document.getElementById('cloud-last-sync-label');
+                if (lastSyncEl) lastSyncEl.textContent = 'Ultima sincronizzazione: ' + new Date(cloudConfig.lastSyncAt).toLocaleString('it-IT');
+                setCloudModalStatus('Quaderno salvato con successo su OneDrive (/QuadernoStudio/Quaderno_Studio_Sync.json)!', 'success');
+                showToast('Quaderno sincronizzato su OneDrive!');
+            } catch (err) {
+                setCloudModalStatus(err.message || 'Errore durante il caricamento su OneDrive.', 'error');
+            }
+        }
+
+        async function downloadFromOneDriveDirect() {
+            const token = (document.getElementById('onedrive-access-token')?.value || cloudConfig.onedriveAccessToken || '').trim();
+            if (!token) {
+                setCloudModalStatus('Inserisci prima un Access Token OneDrive oppure usa la scheda "iCloud Drive / OneDrive (Consigliato)".', 'error');
+                return;
+            }
+            try {
+                setCloudModalStatus('Download da OneDrive in corso...', 'info');
+                const res = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/QuadernoStudio/Quaderno_Studio_Sync.json:/content', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+                if (!res.ok) {
+                    throw new Error(`File non trovato o token scaduto (codice ${res.status}).`);
+                }
+                const parsed = await res.json();
+                const stats = await applySyncedPayload(parsed, getSelectedCloudMergeMode());
+                const lastSyncEl = document.getElementById('cloud-last-sync-label');
+                if (lastSyncEl) lastSyncEl.textContent = 'Ultima sincronizzazione: ' + new Date(cloudConfig.lastSyncAt).toLocaleString('it-IT');
+                setCloudModalStatus(`Scaricato da OneDrive! ${stats.notesAdded} note nuove, ${stats.notesUpdated} aggiornate, ${stats.scrAdded} scritture e ${stats.pdfsRestored} PDF ripristinati.`, 'success');
+                showToast('Quaderno ripristinato da OneDrive!');
+            } catch (err) {
+                setCloudModalStatus(err.message || 'Errore durante il download da OneDrive.', 'error');
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', async () => {
             loadState();
+            await restoreStateFromIndexedDbIfNeeded();
             const pdfOverlay = document.getElementById('pdf-workspace-overlay');
             if (pdfOverlay) pdfOverlay.classList.add('hidden');
             setupPdfAnnotCanvas();
             setupPdfSwipeNavigation();
             setupPdfResizer();
             enablePencilClicksOnPdfToolbar();
+            await initCloudSync();
             await restoreSessionPdfFromStorage(state.activeSessionId, false);
             renderApp();
         });
