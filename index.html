@@ -333,14 +333,18 @@
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <button type="button" onclick="uploadToOneDriveDirect()" class="p-3.5 rounded-2xl plum-primary font-bold text-xs sm:text-sm text-left">☁️ Carica su OneDrive ora</button>
-                    <button type="button" onclick="downloadFromOneDriveDirect()" class="p-3.5 rounded-2xl bg-white border-2 border-[#6b2d5c] text-[#6b2d5c] font-bold text-xs sm:text-sm hover:bg-[#f6eef4] text-left">⬇️ Scarica da OneDrive ora</button>
+                    <button type="button" onclick="downloadFromOneDriveDirect()" class="p-3.5 rounded-2xl bg-white border-2 border-[#6b2d5c] text-[#6b2d5c] font-bold text-xs sm:text-sm hover:bg-[#f6eef4] text-left">🔄 Scarica da OneDrive ora</button>
                 </div>
             </div>
 
-            <div class="flex items-center justify-between pt-2 border-t plum-border text-xs text-[#7c6575]">
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-2 border-t plum-border text-xs text-[#7c6575]">
                 <span id="cloud-last-sync-label">Ultima sincronizzazione: mai effettuata</span>
-                <button type="button" onclick="closeCloudSyncModal()" class="px-4 py-2 rounded-xl bg-[#f6eef4] text-[#6b2d5c] font-bold">Chiudi</button>
+                <div class="flex items-center gap-2">
+                    <button type="button" onclick="runIsolatedPdfPagePersistenceTestUI()" class="px-3 py-2 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 font-bold hover:bg-emerald-100">🧪 Verifica Pagine PDF</button>
+                    <button type="button" onclick="closeCloudSyncModal()" class="px-4 py-2 rounded-xl bg-[#f6eef4] text-[#6b2d5c] font-bold">Chiudi</button>
+                </div>
             </div>
+            <div id="pdf-links-selftest-output" class="hidden rounded-2xl border plum-border bg-[#fbf9fa] p-3 text-xs text-[#261822] space-y-1 max-h-56 overflow-y-auto"></div>
         </div>
     </div>
 
@@ -2948,7 +2952,9 @@
             activeSessionId: 'torre',
             weekOffset: 0,
             studyMode: 'preparazione',
-            sessions: []
+            sessions: [],
+            pdfPageLinks: {},
+            clearedPdfPageNotes: {}
         };
 
         let sessionModalMode = 'create';
@@ -3004,6 +3010,230 @@
             return state.sessions.find(s => s.id === state.activeSessionId) || state.sessions[0];
         }
 
+        /* MEMORIZZAZIONE PERMANENTE COLLEGAMENTI NOTE <-> PAGINE PDF */
+        const NOTE_PDF_LINKS_REGISTRY_KEY = 'note_pdf_links_registry_v2';
+
+        function computeStableHash(str) {
+            const input = String(str || 'doc').trim().toLowerCase();
+            let h = 2166136261;
+            for (let i = 0; i < input.length; i++) {
+                h ^= input.charCodeAt(i);
+                h = Math.imul(h, 16777619);
+            }
+            return (h >>> 0).toString(36);
+        }
+
+        function generateStablePdfId(sessionId, fileName) {
+            const safeSess = String(sessionId || 'sess').replace(/[^a-z0-9_-]/gi, '').slice(0, 24) || 'sess';
+            return `pdf_${safeSess}_${computeStableHash(fileName || 'documento.pdf')}`;
+        }
+
+        function htmlToPlainText(html) {
+            if (!html) return '';
+            try {
+                const div = document.createElement('div');
+                div.innerHTML = String(html);
+                return (div.textContent || div.innerText || '').replace(/\s+/g, ' ').trim();
+            } catch (_) {
+                return String(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+            }
+        }
+
+        function parsePdfPageInputString(rawValue) {
+            if (rawValue === null || rawValue === undefined) {
+                return { pdfPage: null, pageNumber: null, pdfPages: [] };
+            }
+            if (Array.isArray(rawValue)) {
+                const nums = [];
+                rawValue.forEach(item => {
+                    const parsed = parsePdfPageInputString(item);
+                    parsed.pdfPages.forEach(p => {
+                        if (!nums.includes(p)) nums.push(p);
+                    });
+                });
+                const primary = nums.length > 0 ? nums[0] : null;
+                return { pdfPage: primary, pageNumber: primary, pdfPages: nums };
+            }
+            if (typeof rawValue === 'number') {
+                const n = Math.floor(rawValue);
+                if (Number.isFinite(n) && n >= 1) {
+                    return { pdfPage: n, pageNumber: n, pdfPages: [n] };
+                }
+                return { pdfPage: null, pageNumber: null, pdfPages: [] };
+            }
+            const str = String(rawValue).trim();
+            if (!str || str === '-') {
+                return { pdfPage: null, pageNumber: null, pdfPages: [] };
+            }
+            const matches = str.match(/\d+/g) || [];
+            const nums = [];
+            matches.forEach(tok => {
+                const n = parseInt(tok, 10);
+                if (Number.isFinite(n) && n >= 1 && !nums.includes(n)) {
+                    nums.push(n);
+                }
+            });
+            const primary = nums.length > 0 ? nums[0] : null;
+            return { pdfPage: primary, pageNumber: primary, pdfPages: nums };
+        }
+
+        function extractAllPageNumbersFromNote(rawNote) {
+            if (!rawNote || typeof rawNote !== 'object') {
+                return { pdfPage: null, pageNumber: null, pdfPages: [] };
+            }
+            const collected = [];
+            const pushParsed = (val) => {
+                const p = parsePdfPageInputString(val);
+                p.pdfPages.forEach(num => {
+                    if (!collected.includes(num)) collected.push(num);
+                });
+            };
+            // Priorità ai campi canonici, poi compatibilità completa con vecchi backup
+            pushParsed(rawNote.pdfPage);
+            pushParsed(rawNote.pageNumber);
+            pushParsed(rawNote.pdfPages);
+            pushParsed(rawNote.pages);
+            pushParsed(rawNote.linkedPages);
+            pushParsed(rawNote.extraPages);
+            pushParsed(rawNote.pdfPageNumber);
+            pushParsed(rawNote.linkedPage);
+            pushParsed(rawNote.linkedPdfPage);
+            pushParsed(rawNote.page);
+            pushParsed(rawNote.pdf_page);
+            pushParsed(rawNote.pagina);
+            pushParsed(rawNote.paginaPdf);
+            if (rawNote.pdfLink && typeof rawNote.pdfLink === 'object') {
+                pushParsed(rawNote.pdfLink.pageNumber);
+                pushParsed(rawNote.pdfLink.pdfPage);
+                pushParsed(rawNote.pdfLink.page);
+                pushParsed(rawNote.pdfLink.pdfPages);
+            }
+            const primary = collected.length > 0 ? collected[0] : null;
+            return { pdfPage: primary, pageNumber: primary, pdfPages: collected };
+        }
+
+        function getNoteAssociatedPages(note) {
+            return extractAllPageNumbersFromNote(note).pdfPages;
+        }
+
+        function formatNotePdfPagesDisplay(note) {
+            const pages = getNoteAssociatedPages(note);
+            return pages.length > 0 ? pages.join(', ') : '';
+        }
+
+        function normalizeNoteRecord(note, session) {
+            if (!note || typeof note !== 'object') return note;
+            const sessId = (session && session.id) || note.sessionId || 'torre';
+            const stableId = note.id || note.noteId || ('note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5));
+            note.id = stableId;
+            note.noteId = stableId;
+            note.sessionId = sessId;
+
+            const parsedPages = extractAllPageNumbersFromNote(note);
+            note.pdfPage = parsedPages.pdfPage;
+            note.pageNumber = parsedPages.pageNumber;
+            note.pdfPages = parsedPages.pdfPages;
+
+            const sessionPdfId = session && session.pdfMeta && session.pdfMeta.pdfId ? session.pdfMeta.pdfId : null;
+            if (note.pdfId) {
+                note.pdfId = String(note.pdfId);
+            } else if (note.pdfPage && sessionPdfId) {
+                note.pdfId = sessionPdfId;
+            } else if (!('pdfId' in note)) {
+                note.pdfId = null;
+            }
+            return note;
+        }
+
+        function collectAllNotePdfLinksFromState(targetState) {
+            const links = [];
+            if (!targetState || !Array.isArray(targetState.sessions)) return links;
+            targetState.sessions.forEach(s => {
+                const sessPdfId = (s.pdfMeta && s.pdfMeta.pdfId) || null;
+                const sessPdfName = (s.pdfMeta && s.pdfMeta.name) || null;
+                (s.notes || []).forEach(n => {
+                    const pages = extractAllPageNumbersFromNote(n);
+                    if (pages.pdfPage !== null) {
+                        links.push({
+                            noteId: n.id || n.noteId,
+                            sessionId: s.id,
+                            pdfId: n.pdfId || sessPdfId || null,
+                            pdfName: sessPdfName,
+                            pageNumber: pages.pageNumber,
+                            pdfPage: pages.pdfPage,
+                            pdfPages: [...pages.pdfPages],
+                            title: n.title || '',
+                            content: htmlToPlainText(n.html || '')
+                        });
+                    }
+                });
+            });
+            return links;
+        }
+
+        function normalizeAllSessionsAndNoteLinks(targetState) {
+            if (!targetState || !Array.isArray(targetState.sessions)) return;
+            if (!targetState.pdfPageLinks || typeof targetState.pdfPageLinks !== 'object') {
+                targetState.pdfPageLinks = {};
+            }
+            if (!targetState.clearedPdfPageNotes || typeof targetState.clearedPdfPageNotes !== 'object') {
+                targetState.clearedPdfPageNotes = {};
+            }
+
+            const existingNoteIds = new Set();
+
+            targetState.sessions.forEach(s => {
+                if (!Array.isArray(s.notes)) s.notes = [];
+                if (!Array.isArray(s.scriptures)) s.scriptures = [];
+                if (!s.pdfAnnotations || typeof s.pdfAnnotations !== 'object') s.pdfAnnotations = {};
+                if (!s.pdfImages || typeof s.pdfImages !== 'object') s.pdfImages = {};
+
+                if (s.pdfMeta && typeof s.pdfMeta === 'object') {
+                    if (!s.pdfMeta.pdfId) {
+                        s.pdfMeta.pdfId = generateStablePdfId(s.id, s.pdfMeta.name || 'Documento.pdf');
+                    }
+                    s.pdfMeta.sessionId = s.id;
+                }
+
+                s.notes.forEach(n => {
+                    normalizeNoteRecord(n, s);
+                    existingNoteIds.add(n.id);
+
+                    const regEntry = targetState.pdfPageLinks[n.id];
+                    const wasCleared = !!targetState.clearedPdfPageNotes[n.id];
+
+                    // Se la nota ha perso il numero pagina ma il registro permanente lo conserva (e non è stato cancellato apposta), recuperalo
+                    if (n.pdfPage === null && !wasCleared && regEntry) {
+                        const recovered = extractAllPageNumbersFromNote(regEntry);
+                        if (recovered.pdfPage !== null) {
+                            n.pdfPage = recovered.pdfPage;
+                            n.pageNumber = recovered.pageNumber;
+                            n.pdfPages = recovered.pdfPages;
+                            if (!n.pdfId && regEntry.pdfId) n.pdfId = regEntry.pdfId;
+                        }
+                    }
+
+                    // Aggiorna il registro permanente a partire dalla nota normalizzata
+                    if (n.pdfPage !== null) {
+                        delete targetState.clearedPdfPageNotes[n.id];
+                        targetState.pdfPageLinks[n.id] = {
+                            noteId: n.id,
+                            sessionId: s.id,
+                            pdfId: n.pdfId || (s.pdfMeta && s.pdfMeta.pdfId) || null,
+                            pdfName: (s.pdfMeta && s.pdfMeta.name) || (regEntry && regEntry.pdfName) || null,
+                            pageNumber: n.pdfPage,
+                            pdfPage: n.pdfPage,
+                            pdfPages: [...n.pdfPages],
+                            title: n.title || '',
+                            updatedAt: new Date().toISOString()
+                        };
+                    } else if (wasCleared) {
+                        delete targetState.pdfPageLinks[n.id];
+                    }
+                });
+            });
+        }
+
         function ensureAllDefaultSessions() {
             if (!Array.isArray(state.sessions)) state.sessions = [];
             DEFAULT_SESSIONS.forEach(def => {
@@ -3025,12 +3255,7 @@
                     if (!exists.lucideIcon) exists.lucideIcon = def.lucideIcon;
                 }
             });
-            state.sessions.forEach(s => {
-                if (!Array.isArray(s.notes)) s.notes = [];
-                if (!Array.isArray(s.scriptures)) s.scriptures = [];
-                if (!s.pdfAnnotations || typeof s.pdfAnnotations !== 'object') s.pdfAnnotations = {};
-                if (!s.pdfImages || typeof s.pdfImages !== 'object') s.pdfImages = {};
-            });
+            normalizeAllSessionsAndNoteLinks(state);
             if (!state.sessions.some(s => s.id === state.activeSessionId)) {
                 state.activeSessionId = state.sessions[0] ? state.sessions[0].id : 'torre';
             }
@@ -3052,6 +3277,7 @@
         }
 
         function saveState() {
+            normalizeAllSessionsAndNoteLinks(state);
             try {
                 localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
                 const badge = document.getElementById('save-status-badge');
@@ -3063,6 +3289,7 @@
                 console.warn('Errore salvataggio localStorage:', e);
             }
             saveStateSnapshotToIndexedDb();
+            saveNotePdfLinksRegistryToIndexedDb();
             scheduleAutoCloudSync();
         }
 
@@ -3102,6 +3329,102 @@
             } catch (_) {}
         }
 
+        async function saveNotePdfLinksRegistryToIndexedDb() {
+            try {
+                const db = await openPdfDatabase();
+                const registryPayload = {
+                    version: 2,
+                    updatedAt: new Date().toISOString(),
+                    linksByNoteId: JSON.parse(JSON.stringify(state.pdfPageLinks || {})),
+                    clearedByNoteId: JSON.parse(JSON.stringify(state.clearedPdfPageNotes || {})),
+                    pdfMetaBySession: {}
+                };
+                (state.sessions || []).forEach(s => {
+                    if (s.pdfMeta && s.pdfMeta.pdfId) {
+                        registryPayload.pdfMetaBySession[s.id] = {
+                            pdfId: s.pdfMeta.pdfId,
+                            name: s.pdfMeta.name || 'Documento.pdf',
+                            sessionId: s.id
+                        };
+                    }
+                });
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction(CLOUD_STORE_NAME, 'readwrite');
+                    tx.objectStore(CLOUD_STORE_NAME).put(registryPayload, NOTE_PDF_LINKS_REGISTRY_KEY);
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (_) {}
+        }
+
+        async function reconcilePersistentLinksFromIndexedDb() {
+            try {
+                const db = await openPdfDatabase();
+                const reg = await new Promise((resolve, reject) => {
+                    const tx = db.transaction(CLOUD_STORE_NAME, 'readonly');
+                    const req = tx.objectStore(CLOUD_STORE_NAME).get(NOTE_PDF_LINKS_REGISTRY_KEY);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => reject(req.error);
+                });
+
+                let changed = false;
+
+                // 1. Verifica che i pdfMeta di ogni sessione conservino il pdfId salvato in IndexedDB
+                for (const s of state.sessions) {
+                    const storedPdf = await loadPdfBinaryForSession(s.id);
+                    const regMeta = reg && reg.pdfMetaBySession ? reg.pdfMetaBySession[s.id] : null;
+                    if (storedPdf && storedPdf.buffer) {
+                        const stablePdfId = storedPdf.pdfId || (s.pdfMeta && s.pdfMeta.pdfId) || (regMeta && regMeta.pdfId) || generateStablePdfId(s.id, storedPdf.name || 'Documento.pdf');
+                        if (!s.pdfMeta || s.pdfMeta.pdfId !== stablePdfId) {
+                            s.pdfMeta = {
+                                ...(s.pdfMeta || {}),
+                                pdfId: stablePdfId,
+                                name: (s.pdfMeta && s.pdfMeta.name) || storedPdf.name || 'Documento.pdf',
+                                sessionId: s.id
+                            };
+                            changed = true;
+                        }
+                    } else if (regMeta && regMeta.pdfId && s.pdfMeta && !s.pdfMeta.pdfId) {
+                        s.pdfMeta.pdfId = regMeta.pdfId;
+                        changed = true;
+                    }
+                }
+
+                // 2. Recupera eventuali numeri di pagina PDF persi dopo un aggiornamento
+                if (reg && reg.linksByNoteId && typeof reg.linksByNoteId === 'object') {
+                    const regCleared = reg.clearedByNoteId || {};
+                    state.sessions.forEach(s => {
+                        (s.notes || []).forEach(n => {
+                            normalizeNoteRecord(n, s);
+                            const isCleared = !!(state.clearedPdfPageNotes && state.clearedPdfPageNotes[n.id]) || !!regCleared[n.id];
+                            const savedLink = reg.linksByNoteId[n.id];
+                            if (n.pdfPage === null && !isCleared && savedLink) {
+                                const recovered = extractAllPageNumbersFromNote(savedLink);
+                                if (recovered.pdfPage !== null) {
+                                    n.pdfPage = recovered.pdfPage;
+                                    n.pageNumber = recovered.pageNumber;
+                                    n.pdfPages = recovered.pdfPages;
+                                    n.pdfId = n.pdfId || savedLink.pdfId || (s.pdfMeta && s.pdfMeta.pdfId) || null;
+                                    changed = true;
+                                }
+                            } else if (n.pdfPage !== null && !n.pdfId && savedLink && savedLink.pdfId) {
+                                n.pdfId = savedLink.pdfId;
+                                changed = true;
+                            }
+                        });
+                    });
+                }
+
+                normalizeAllSessionsAndNoteLinks(state);
+                if (changed) {
+                    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+                }
+                await saveNotePdfLinksRegistryToIndexedDb();
+            } catch (e) {
+                console.warn('Errore riconciliazione collegamenti PDF:', e);
+            }
+        }
+
         async function restoreStateFromIndexedDbIfNeeded() {
             try {
                 const hasLocal = !!localStorage.getItem(STORAGE_KEY);
@@ -3121,17 +3444,29 @@
             } catch (_) {}
         }
 
-        async function savePdfBinaryForSession(sessionId, arrayBuffer, fileName) {
+        async function savePdfBinaryForSession(sessionId, arrayBuffer, fileName, explicitPdfId = null) {
             try {
                 const db = await openPdfDatabase();
+                const existing = await loadPdfBinaryForSession(sessionId);
+                const resolvedPdfId = explicitPdfId
+                    || (existing && existing.name === fileName && existing.pdfId ? existing.pdfId : null)
+                    || generateStablePdfId(sessionId, fileName || 'Documento.pdf');
                 await new Promise((resolve, reject) => {
                     const tx = db.transaction(PDF_STORE_NAME, 'readwrite');
-                    tx.objectStore(PDF_STORE_NAME).put({ buffer: arrayBuffer, name: fileName || 'Documento.pdf' }, sessionId);
+                    tx.objectStore(PDF_STORE_NAME).put({
+                        pdfId: resolvedPdfId,
+                        sessionId: sessionId,
+                        buffer: arrayBuffer,
+                        name: fileName || 'Documento.pdf',
+                        savedAt: new Date().toISOString()
+                    }, sessionId);
                     tx.oncomplete = () => resolve();
                     tx.onerror = () => reject(tx.error);
                 });
+                return resolvedPdfId;
             } catch (e) {
                 console.warn('Errore salvataggio PDF in IndexedDB:', e);
+                return explicitPdfId || generateStablePdfId(sessionId, fileName || 'Documento.pdf');
             }
         }
 
@@ -3158,8 +3493,18 @@
             }
             activePdfBytes = record.buffer;
             const s = state.sessions.find(x => x.id === sessionId);
-            if (s && !s.pdfMeta) {
-                s.pdfMeta = { name: record.name || 'Documento.pdf' };
+            if (s) {
+                const stablePdfId = record.pdfId || (s.pdfMeta && s.pdfMeta.pdfId) || generateStablePdfId(sessionId, record.name || 'Documento.pdf');
+                s.pdfMeta = {
+                    ...(s.pdfMeta || {}),
+                    pdfId: stablePdfId,
+                    sessionId: s.id,
+                    name: (s.pdfMeta && s.pdfMeta.name) || record.name || 'Documento.pdf'
+                };
+                (s.notes || []).forEach(n => {
+                    normalizeNoteRecord(n, s);
+                    if (n.pdfPage && !n.pdfId) n.pdfId = stablePdfId;
+                });
             }
             if (window.pdfjsLib) {
                 try {
@@ -3278,12 +3623,20 @@
             const s = getActiveSession();
             const isQuick = state.studyMode === 'adunanza';
             const isSpeechSession = s.id === 'discorsi';
+            const parsedLink = parsePdfPageInputString(pdfPageLink);
+            const noteId = 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
+            const currentPdfId = (s.pdfMeta && s.pdfMeta.pdfId) || null;
             const note = {
-                id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+                id: noteId,
+                noteId: noteId,
+                sessionId: s.id,
+                pdfId: parsedLink.pdfPage ? currentPdfId : null,
                 title: isQuick ? '⚡ Appunto rapido (Adunanza)' : (isSpeechSession ? 'Discorso #' + (s.notes.length + 1) : 'Nota #' + (s.notes.length + 1)),
                 html: '',
                 fontSize: 17,
-                pdfPage: pdfPageLink,
+                pdfPage: parsedLink.pdfPage,
+                pageNumber: parsedLink.pageNumber,
+                pdfPages: parsedLink.pdfPages,
                 collapsed: false,
                 image: null,
                 isQuickNote: isQuick,
@@ -3331,16 +3684,53 @@
             }
         }
 
-        function setNotePdfPage(noteId, val) {
+        function setNotePdfPage(noteId, val, shouldRender = true) {
             const s = getActiveSession();
             const n = s.notes.find(x => x.id === noteId);
             if (!n) return;
-            const num = parseInt(val, 10);
-            n.pdfPage = num > 0 ? num : null;
+            const parsed = parsePdfPageInputString(val);
+            n.id = n.id || noteId;
+            n.noteId = n.id;
+            n.sessionId = s.id;
+            n.pdfPage = parsed.pdfPage;
+            n.pageNumber = parsed.pageNumber;
+            n.pdfPages = parsed.pdfPages;
+
+            if (!state.clearedPdfPageNotes || typeof state.clearedPdfPageNotes !== 'object') {
+                state.clearedPdfPageNotes = {};
+            }
+
+            if (parsed.pdfPage !== null) {
+                delete state.clearedPdfPageNotes[n.id];
+                const sessionPdfId = (s.pdfMeta && s.pdfMeta.pdfId) || null;
+                if (sessionPdfId) {
+                    n.pdfId = sessionPdfId;
+                }
+            } else {
+                const rawTrimmed = String(val === null || val === undefined ? '' : val).trim();
+                if (rawTrimmed === '' || rawTrimmed === '-') {
+                    state.clearedPdfPageNotes[n.id] = true;
+                    if (state.pdfPageLinks) delete state.pdfPageLinks[n.id];
+                }
+            }
+
             saveState();
-            renderApp();
-            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
-                renderPdfSideNotes();
+
+            // Aggiorna subito eventuale pulsante "Vai" già presente senza interrompere la digitazione
+            document.querySelectorAll(`[data-note-goto-btn="${n.id}"]`).forEach(btn => {
+                if (n.pdfPage) {
+                    btn.classList.remove('hidden');
+                    btn.onclick = () => openPdfWorkspace(n.pdfPage);
+                } else {
+                    btn.classList.add('hidden');
+                }
+            });
+
+            if (shouldRender) {
+                renderApp();
+                if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                    renderPdfSideNotes();
+                }
             }
         }
 
@@ -3366,7 +3756,7 @@
         }
 
         function attachImageToNote(noteId, event) {
-            const file = event.target.files[0];
+            const file = event.target.files && event.target.files[0];
             if (!file) return;
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -3374,6 +3764,7 @@
                 const n = s.notes.find(x => x.id === noteId);
                 if (n) {
                     n.image = e.target.result;
+                    n.collapsed = false;
                     saveState();
                     renderApp();
                     if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
@@ -3388,13 +3779,12 @@
         function removeNoteImage(noteId) {
             const s = getActiveSession();
             const n = s.notes.find(x => x.id === noteId);
-            if (n) {
-                n.image = null;
-                saveState();
-                renderApp();
-                if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
-                    renderPdfSideNotes();
-                }
+            if (!n) return;
+            n.image = null;
+            saveState();
+            renderApp();
+            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                renderPdfSideNotes();
             }
         }
 
@@ -3415,6 +3805,12 @@
         function deleteNote(noteId) {
             const s = getActiveSession();
             s.notes = s.notes.filter(x => x.id !== noteId);
+            if (state.pdfPageLinks && state.pdfPageLinks[noteId]) {
+                delete state.pdfPageLinks[noteId];
+            }
+            if (state.clearedPdfPageNotes) {
+                state.clearedPdfPageNotes[noteId] = true;
+            }
             saveState();
             renderApp();
             if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
@@ -3428,6 +3824,7 @@
         }
 
         function renderNoteCardHtml(n, idx, total) {
+            const activeSess = getActiveSession();
             const locked = state.studyMode === 'adunanza' && !n.isQuickNote;
             const fontSize = n.fontSize || 17;
             if (!n.handwriting) {
@@ -3436,6 +3833,8 @@
             const hwVisible = !!n.handwriting.visible;
             const hwHeight = n.handwriting.height || 260;
             const hwStrokesCount = Array.isArray(n.handwriting.strokes) ? n.handwriting.strokes.length : 0;
+            const pageDisplayVal = formatNotePdfPagesDisplay(n);
+            const hasSessionPdf = !!(activePdfBytes || (activeSess && activeSess.pdfMeta));
             return `
                 <div class="bg-white rounded-3xl border ${n.isQuickNote ? 'border-amber-300 bg-amber-50/30' : 'plum-border'} p-4 shadow-2xs space-y-3">
                     <div class="flex flex-wrap items-start justify-between gap-2">
@@ -3453,10 +3852,13 @@
                         <div class="flex flex-wrap items-center gap-1.5">
                             <div class="flex items-center gap-1 bg-[#f6eef4] px-2 py-1 rounded-xl text-xs font-bold text-[#6b2d5c]">
                                 <span>Pag. PDF:</span>
-                                <input type="number" min="1" value="${n.pdfPage || ''}" placeholder="-" onchange="setNotePdfPage('${n.id}', this.value)"
-                                    class="w-11 text-center bg-white border plum-border rounded-md py-0.5 text-xs font-bold">
-                                ${n.pdfPage && activePdfBytes ? `
-                                    <button type="button" onclick="openPdfWorkspace(${n.pdfPage})" class="ml-1 px-2 py-0.5 rounded-md plum-primary text-[11px]">Vai</button>
+                                <input type="text" inputmode="numeric" value="${escapeHtml(pageDisplayVal)}" placeholder="-"
+                                    title="Numero pagina PDF (puoi inserire anche più pagine separate da virgola, es. 5, 6)"
+                                    oninput="setNotePdfPage('${n.id}', this.value, false)"
+                                    onchange="setNotePdfPage('${n.id}', this.value, true)"
+                                    class="w-12 text-center bg-white border plum-border rounded-md py-0.5 text-xs font-bold">
+                                ${hasSessionPdf ? `
+                                    <button type="button" data-note-goto-btn="${n.id}" onclick="openPdfWorkspace(${n.pdfPage || 1})" class="${n.pdfPage ? '' : 'hidden '}ml-1 px-2 py-0.5 rounded-md plum-primary text-[11px]">Vai</button>
                                 ` : ''}
                             </div>
 
@@ -3883,9 +4285,24 @@
             try {
                 const buf = await file.arrayBuffer();
                 const s = getActiveSession();
-                s.pdfMeta = { name: file.name };
+                const existingSamePdfId = (s.pdfMeta && s.pdfMeta.name === file.name && s.pdfMeta.pdfId)
+                    ? s.pdfMeta.pdfId
+                    : null;
+                const stablePdfId = await savePdfBinaryForSession(s.id, buf, file.name, existingSamePdfId);
+                s.pdfMeta = {
+                    ...(s.pdfMeta || {}),
+                    pdfId: stablePdfId,
+                    sessionId: s.id,
+                    name: file.name
+                };
                 activePdfBytes = buf;
-                await savePdfBinaryForSession(s.id, buf, file.name);
+                // Associa il pdfId alle note già collegate a una pagina PDF nella sessione, senza mai cancellare i numeri di pagina
+                (s.notes || []).forEach(n => {
+                    normalizeNoteRecord(n, s);
+                    if (n.pdfPage && !n.pdfId) {
+                        n.pdfId = stablePdfId;
+                    }
+                });
                 saveState();
                 await restoreSessionPdfFromStorage(s.id, true);
                 renderApp();
@@ -3907,7 +4324,8 @@
             }
             document.getElementById('pdf-doc-title').textContent = (s.pdfMeta && s.pdfMeta.name) || 'Documento.pdf';
             document.getElementById('pdf-workspace-overlay').classList.remove('hidden');
-            activePdfPage = Math.max(1, Math.min(activePdfTotalPages, targetPage || 1));
+            const parsedTarget = Math.max(1, parseInt(targetPage, 10) || 1);
+            activePdfPage = activePdfDoc ? Math.min(activePdfTotalPages, parsedTarget) : parsedTarget;
             renderPdfSideNotes();
             await renderCurrentPdfPage();
         }
@@ -4366,7 +4784,7 @@
             if (!container) return;
             const s = getActiveSession();
             const list = pdfNotesFilter === 'page'
-                ? s.notes.filter(n => Number(n.pdfPage) === Number(activePdfPage))
+                ? s.notes.filter(n => getNoteAssociatedPages(n).includes(Number(activePdfPage)))
                 : s.notes;
             if (list.length === 0) {
                 container.innerHTML = `
@@ -4422,67 +4840,370 @@
             el.textContent = msg;
         }
 
-        async function buildFullSyncPayload() {
+        function arrayBufferToBase64Safe(buffer) {
+            const bytes = new Uint8Array(buffer);
+            const chunkSize = 0x8000;
+            const chunks = [];
+            for (let i = 0; i < bytes.byteLength; i += chunkSize) {
+                const slice = bytes.subarray(i, Math.min(i + chunkSize, bytes.byteLength));
+                chunks.push(String.fromCharCode.apply(null, slice));
+            }
+            return btoa(chunks.join(''));
+        }
+
+        function base64ToArrayBufferSafe(base64) {
+            const binStr = atob(base64);
+            const bytes = new Uint8Array(binStr.length);
+            for (let i = 0; i < binStr.length; i++) {
+                bytes[i] = binStr.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        async function buildSyncPayloadFromSource(sourceState, pdfLoaderFn) {
+            normalizeAllSessionsAndNoteLinks(sourceState);
+            const stateCopy = JSON.parse(JSON.stringify(sourceState));
             const pdfBlobs = {};
-            for (const s of state.sessions) {
-                const rec = await loadPdfBinaryForSession(s.id);
+
+            for (const s of stateCopy.sessions) {
+                const rec = await pdfLoaderFn(s.id);
                 if (rec && rec.buffer) {
-                    const bytes = new Uint8Array(rec.buffer);
-                    let bin = '';
-                    for (let i = 0; i < bytes.byteLength; i++) bin += String.fromCharCode(bytes[i]);
-                    pdfBlobs[s.id] = { name: rec.name || 'Documento.pdf', base64: btoa(bin) };
+                    const stablePdfId = rec.pdfId || (s.pdfMeta && s.pdfMeta.pdfId) || generateStablePdfId(s.id, rec.name || 'Documento.pdf');
+                    const pdfName = rec.name || (s.pdfMeta && s.pdfMeta.name) || 'Documento.pdf';
+                    s.pdfMeta = {
+                        ...(s.pdfMeta || {}),
+                        pdfId: stablePdfId,
+                        sessionId: s.id,
+                        name: pdfName
+                    };
+                    (s.notes || []).forEach(n => {
+                        normalizeNoteRecord(n, s);
+                        if (n.pdfPage && !n.pdfId) n.pdfId = stablePdfId;
+                    });
+                    pdfBlobs[s.id] = {
+                        pdfId: stablePdfId,
+                        sessionId: s.id,
+                        name: pdfName,
+                        base64: arrayBufferToBase64Safe(rec.buffer)
+                    };
                 }
             }
+
+            normalizeAllSessionsAndNoteLinks(stateCopy);
+            const notePdfLinks = collectAllNotePdfLinksFromState(stateCopy);
+
             return {
                 version: 'quaderno_sync_v1',
+                schemaVersion: 2,
                 exportedAt: new Date().toISOString(),
-                state,
-                pdfBlobs
+                state: stateCopy,
+                pdfBlobs,
+                notePdfLinks
+            };
+        }
+
+        async function buildFullSyncPayload() {
+            return await buildSyncPayloadFromSource(state, loadPdfBinaryForSession);
+        }
+
+        function verifyBackupIntegrityBeforeExport(sourceState, serializedJson) {
+            const expectedLinks = collectAllNotePdfLinksFromState(sourceState);
+            const errors = [];
+            let parsed = null;
+            try {
+                parsed = JSON.parse(serializedJson);
+            } catch (e) {
+                return { ok: false, totalLinks: expectedLinks.length, errors: ['JSON del backup non valido.'] };
+            }
+
+            if (!parsed || !parsed.state || !Array.isArray(parsed.state.sessions)) {
+                return { ok: false, totalLinks: expectedLinks.length, errors: ['Struttura sessioni assente nel backup.'] };
+            }
+            if (!Array.isArray(parsed.notePdfLinks)) {
+                errors.push('Elenco notePdfLinks mancante nel backup.');
+            }
+
+            const exportedSessionsById = new Map(parsed.state.sessions.map(s => [s.id, s]));
+            const exportedManifestByNoteId = new Map((parsed.notePdfLinks || []).map(l => [l.noteId, l]));
+
+            for (const exp of expectedLinks) {
+                const sess = exportedSessionsById.get(exp.sessionId);
+                if (!sess) {
+                    errors.push(`Sessione "${exp.sessionId}" mancante nel backup.`);
+                    continue;
+                }
+                const note = (sess.notes || []).find(n => (n.id || n.noteId) === exp.noteId);
+                if (!note) {
+                    errors.push(`Nota "${exp.title || exp.noteId}" mancante nel backup.`);
+                    continue;
+                }
+                const exportedPages = extractAllPageNumbersFromNote(note);
+                if (exportedPages.pdfPage !== exp.pageNumber || note.pageNumber !== exp.pageNumber || JSON.stringify(exportedPages.pdfPages) !== JSON.stringify(exp.pdfPages)) {
+                    errors.push(`Pagina PDF non corrispondente per la nota "${exp.title || exp.noteId}" (attesa: ${exp.pdfPages.join(', ')}, trovata: ${exportedPages.pdfPages.join(', ') || 'vuota'}).`);
+                }
+                if (exp.pdfId && note.pdfId !== exp.pdfId) {
+                    errors.push(`pdfId non corrispondente per la nota "${exp.title || exp.noteId}".`);
+                }
+                const manifestEntry = exportedManifestByNoteId.get(exp.noteId);
+                if (!manifestEntry || manifestEntry.pageNumber !== exp.pageNumber || JSON.stringify(manifestEntry.pdfPages) !== JSON.stringify(exp.pdfPages)) {
+                    errors.push(`Voce notePdfLinks non valida per la nota "${exp.title || exp.noteId}".`);
+                }
+            }
+
+            return {
+                ok: errors.length === 0,
+                totalLinks: expectedLinks.length,
+                errors
+            };
+        }
+
+        function resolveImportedNotePdfLink(rawNote, sessionObj, manifestByNoteId, manifestBySessionTitle) {
+            const noteId = rawNote.id || rawNote.noteId || null;
+            const fromNote = extractAllPageNumbersFromNote(rawNote);
+            let pdfPage = fromNote.pdfPage;
+            let pdfPages = [...fromNote.pdfPages];
+            let pdfId = rawNote.pdfId || null;
+
+            const byId = noteId ? manifestByNoteId.get(noteId) : null;
+            if (byId) {
+                const fromManifest = extractAllPageNumbersFromNote(byId);
+                if (pdfPage === null && fromManifest.pdfPage !== null) {
+                    pdfPage = fromManifest.pdfPage;
+                    pdfPages = [...fromManifest.pdfPages];
+                } else {
+                    fromManifest.pdfPages.forEach(p => { if (!pdfPages.includes(p)) pdfPages.push(p); });
+                }
+                if (!pdfId && byId.pdfId) pdfId = byId.pdfId;
+            }
+
+            if (pdfPage === null && sessionObj) {
+                const fallbackKey = `${sessionObj.id}::${String(rawNote.title || rawNote.heading || '').trim().toLowerCase()}`;
+                const byTitle = manifestBySessionTitle.get(fallbackKey);
+                if (byTitle) {
+                    const fromTitle = extractAllPageNumbersFromNote(byTitle);
+                    if (fromTitle.pdfPage !== null) {
+                        pdfPage = fromTitle.pdfPage;
+                        pdfPages = [...fromTitle.pdfPages];
+                    }
+                    if (!pdfId && byTitle.pdfId) pdfId = byTitle.pdfId;
+                }
+            }
+
+            if (!pdfId && pdfPage !== null && sessionObj && sessionObj.pdfMeta && sessionObj.pdfMeta.pdfId) {
+                pdfId = sessionObj.pdfMeta.pdfId;
+            }
+
+            return {
+                pdfId: pdfId || null,
+                pdfPage: pdfPage,
+                pageNumber: pdfPage,
+                pdfPages: pdfPages
+            };
+        }
+
+        async function restoreBackupIntoState(targetState, payload, mode = 'merge', pdfSaverFn = null) {
+            if (!payload || typeof payload !== 'object') {
+                return { restoredNotes: 0, restoredScriptures: 0, restoredPdfLinks: 0, restoredPdfs: 0 };
+            }
+
+            let restoredNotes = 0;
+            let restoredScriptures = 0;
+            let restoredPdfs = 0;
+
+            // 1. RIPRISTINO PDF (mantenendo gli ID originali)
+            const restoredPdfMetaBySession = {};
+            const pdfSources = payload.pdfBlobs || payload.pdfs || null;
+            if (pdfSources && typeof pdfSources === 'object') {
+                const entries = Array.isArray(pdfSources)
+                    ? pdfSources.map(item => [item.sessionId || 'torre', item])
+                    : Object.entries(pdfSources);
+
+                for (const [sessId, entry] of entries) {
+                    if (!entry) continue;
+                    const pdfName = entry.name || 'Documento.pdf';
+                    const originalPdfId = entry.pdfId || generateStablePdfId(sessId, pdfName);
+                    if (entry.base64 && typeof pdfSaverFn === 'function') {
+                        const buf = base64ToArrayBufferSafe(entry.base64);
+                        await pdfSaverFn(sessId, buf, pdfName, originalPdfId);
+                        restoredPdfs++;
+                    }
+                    restoredPdfMetaBySession[sessId] = {
+                        pdfId: originalPdfId,
+                        sessionId: sessId,
+                        name: pdfName
+                    };
+                }
+            }
+
+            // 2. INDICE COLLEGAMENTI DAL BACKUP (nuovi + vecchi formati)
+            const incomingState = payload.state || payload;
+            const manifestByNoteId = new Map();
+            const manifestBySessionTitle = new Map();
+
+            const registerManifestLink = (entry) => {
+                if (!entry || typeof entry !== 'object') return;
+                const parsed = extractAllPageNumbersFromNote(entry);
+                if (parsed.pdfPage === null) return;
+                if (entry.noteId) manifestByNoteId.set(entry.noteId, entry);
+                if (entry.id) manifestByNoteId.set(entry.id, entry);
+                if (entry.sessionId && entry.title) {
+                    const key = `${entry.sessionId}::${String(entry.title).trim().toLowerCase()}`;
+                    if (!manifestBySessionTitle.has(key)) manifestBySessionTitle.set(key, entry);
+                }
+            };
+
+            if (Array.isArray(payload.notePdfLinks)) {
+                payload.notePdfLinks.forEach(registerManifestLink);
+            }
+            if (incomingState && incomingState.pdfPageLinks && typeof incomingState.pdfPageLinks === 'object') {
+                Object.values(incomingState.pdfPageLinks).forEach(registerManifestLink);
+            }
+
+            // 3. RIPRISTINO SESSIONI + 4. RIPRISTINO NOTE E PAGINE PDF ASSOCIATE
+            if (!Array.isArray(targetState.sessions)) targetState.sessions = [];
+            if (!targetState.pdfPageLinks || typeof targetState.pdfPageLinks !== 'object') targetState.pdfPageLinks = {};
+            if (!targetState.clearedPdfPageNotes || typeof targetState.clearedPdfPageNotes !== 'object') targetState.clearedPdfPageNotes = {};
+
+            const srcSessions = Array.isArray(incomingState.sessions) ? incomingState.sessions : null;
+
+            if (srcSessions) {
+                if (mode === 'replace') {
+                    targetState.sessions = [];
+                    targetState.pdfPageLinks = {};
+                    targetState.clearedPdfPageNotes = {};
+                }
+
+                srcSessions.forEach(rawSess => {
+                    if (!rawSess || typeof rawSess !== 'object') return;
+                    const sessCopy = JSON.parse(JSON.stringify(rawSess));
+                    const sessId = sessCopy.id || ('sess_' + Date.now());
+                    sessCopy.id = sessId;
+
+                    // Ripristina/conserva pdfMeta con pdfId originale
+                    if (restoredPdfMetaBySession[sessId]) {
+                        sessCopy.pdfMeta = {
+                            ...(sessCopy.pdfMeta || {}),
+                            ...restoredPdfMetaBySession[sessId]
+                        };
+                    } else if (sessCopy.pdfMeta && !sessCopy.pdfMeta.pdfId) {
+                        sessCopy.pdfMeta.pdfId = generateStablePdfId(sessId, sessCopy.pdfMeta.name || 'Documento.pdf');
+                        sessCopy.pdfMeta.sessionId = sessId;
+                    }
+
+                    let targetSess = targetState.sessions.find(s => s.id === sessId);
+                    if (!targetSess) {
+                        targetSess = {
+                            id: sessId,
+                            name: sessCopy.name || 'Sessione',
+                            lucideIcon: sessCopy.lucideIcon || 'folder',
+                            isBase: !!sessCopy.isBase,
+                            notes: [],
+                            scriptures: [],
+                            pdfMeta: sessCopy.pdfMeta || null,
+                            pdfAnnotations: sessCopy.pdfAnnotations || {},
+                            pdfImages: sessCopy.pdfImages || {}
+                        };
+                        targetState.sessions.push(targetSess);
+                    } else {
+                        if (sessCopy.pdfMeta) {
+                            targetSess.pdfMeta = {
+                                ...(targetSess.pdfMeta || {}),
+                                ...sessCopy.pdfMeta,
+                                pdfId: sessCopy.pdfMeta.pdfId || (targetSess.pdfMeta && targetSess.pdfMeta.pdfId) || generateStablePdfId(sessId, sessCopy.pdfMeta.name || 'Documento.pdf')
+                            };
+                        }
+                        if (sessCopy.pdfAnnotations) {
+                            targetSess.pdfAnnotations = { ...(targetSess.pdfAnnotations || {}), ...sessCopy.pdfAnnotations };
+                        }
+                        if (sessCopy.pdfImages) {
+                            targetSess.pdfImages = { ...(targetSess.pdfImages || {}), ...sessCopy.pdfImages };
+                        }
+                    }
+
+                    // Ripristina tutte le note nell'ordine originale senza perdere mai i numeri di pagina
+                    const incomingNotes = Array.isArray(sessCopy.notes) ? sessCopy.notes : [];
+                    incomingNotes.forEach(rawNote => {
+                        if (!rawNote || typeof rawNote !== 'object') return;
+                        const resolvedLink = resolveImportedNotePdfLink(rawNote, targetSess, manifestByNoteId, manifestBySessionTitle);
+                        const origId = rawNote.id || rawNote.noteId || ('note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5));
+                        const normalizedHtml = typeof rawNote.html === 'string' && rawNote.html.length > 0
+                            ? rawNote.html
+                            : extractImportedNoteHtml(rawNote);
+
+                        const existingNote = targetSess.notes.find(en => en.id === origId || (en.noteId && en.noteId === origId));
+                        if (existingNote) {
+                            // In modalità unione, ripristina SEMPRE il collegamento PDF se presente nel backup (senza mai sovrascrivere con vuoto/trattino)
+                            if (resolvedLink.pdfPage !== null) {
+                                existingNote.pdfPage = resolvedLink.pdfPage;
+                                existingNote.pageNumber = resolvedLink.pageNumber;
+                                existingNote.pdfPages = [...resolvedLink.pdfPages];
+                                if (resolvedLink.pdfId) existingNote.pdfId = resolvedLink.pdfId;
+                                existingNote.sessionId = targetSess.id;
+                                delete targetState.clearedPdfPageNotes[existingNote.id];
+                            }
+                            if (!existingNote.html && normalizedHtml) existingNote.html = normalizedHtml;
+                        } else {
+                            const restoredNote = {
+                                ...rawNote,
+                                id: origId,
+                                noteId: origId,
+                                sessionId: targetSess.id,
+                                pdfId: resolvedLink.pdfId,
+                                title: rawNote.title || rawNote.heading || 'Nota importata',
+                                html: normalizedHtml,
+                                fontSize: rawNote.fontSize || 17,
+                                pdfPage: resolvedLink.pdfPage,
+                                pageNumber: resolvedLink.pageNumber,
+                                pdfPages: [...resolvedLink.pdfPages],
+                                collapsed: !!rawNote.collapsed,
+                                image: rawNote.image || null,
+                                isQuickNote: !!rawNote.isQuickNote,
+                                handwriting: rawNote.handwriting || { visible: false, height: 260, strokes: [] }
+                            };
+                            targetSess.notes.push(restoredNote);
+                            if (resolvedLink.pdfPage !== null) {
+                                delete targetState.clearedPdfPageNotes[origId];
+                            }
+                            restoredNotes++;
+                        }
+                    });
+
+                    // Ripristina le scritture della sessione
+                    const existingScrIds = new Set((targetSess.scriptures || []).map(sc => sc.id));
+                    (sessCopy.scriptures || []).forEach(sc => {
+                        const scId = sc.id || ('scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5));
+                        if (!existingScrIds.has(scId)) {
+                            targetSess.scriptures.push({
+                                id: scId,
+                                ref: sc.ref || sc.reference || 'Scrittura',
+                                text: sc.text || sc.content || '',
+                                pdfPage: parsePdfPageInputString(sc.pdfPage || sc.pageNumber || sc.page).pdfPage
+                            });
+                            existingScrIds.add(scId);
+                            restoredScriptures++;
+                        }
+                    });
+                });
+            }
+
+            normalizeAllSessionsAndNoteLinks(targetState);
+            const finalLinks = collectAllNotePdfLinksFromState(targetState);
+            return {
+                restoredNotes,
+                restoredScriptures,
+                restoredPdfLinks: finalLinks.length,
+                restoredPdfs
             };
         }
 
         async function applySyncPayload(payload, mode = 'merge') {
-            if (!payload || typeof payload !== 'object') return;
-            const incomingState = payload.state || payload;
-            if (Array.isArray(incomingState.sessions)) {
-                if (mode === 'replace') {
-                    state.sessions = incomingState.sessions;
-                } else {
-                    incomingState.sessions.forEach(inc => {
-                        const existing = state.sessions.find(s => s.id === inc.id);
-                        if (!existing) {
-                            state.sessions.push(inc);
-                        } else {
-                            const existingNoteIds = new Set(existing.notes.map(n => n.id));
-                            (inc.notes || []).forEach(n => {
-                                if (!existingNoteIds.has(n.id)) existing.notes.push(n);
-                            });
-                            const existingScrIds = new Set(existing.scriptures.map(sc => sc.id));
-                            (inc.scriptures || []).forEach(sc => {
-                                if (!existingScrIds.has(sc.id)) existing.scriptures.push(sc);
-                            });
-                            if (inc.pdfAnnotations) {
-                                existing.pdfAnnotations = { ...(existing.pdfAnnotations || {}), ...inc.pdfAnnotations };
-                            }
-                            if (inc.pdfMeta && !existing.pdfMeta) existing.pdfMeta = inc.pdfMeta;
-                        }
-                    });
-                }
-                ensureAllDefaultSessions();
-            }
-            if (payload.pdfBlobs) {
-                for (const [sessId, entry] of Object.entries(payload.pdfBlobs)) {
-                    if (entry && entry.base64) {
-                        const binStr = atob(entry.base64);
-                        const bytes = new Uint8Array(binStr.length);
-                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
-                        await savePdfBinaryForSession(sessId, bytes.buffer, entry.name || 'Documento.pdf');
-                    }
-                }
-            }
+            if (!payload || typeof payload !== 'object') return { restoredNotes: 0, restoredScriptures: 0, restoredPdfLinks: 0, restoredPdfs: 0 };
+            const stats = await restoreBackupIntoState(state, payload, mode, savePdfBinaryForSession);
+            ensureAllDefaultSessions();
             saveState();
             await restoreSessionPdfFromStorage(state.activeSessionId, false);
             renderApp();
+            return stats;
         }
 
         async function linkCloudSyncFile() {
@@ -4514,6 +5235,13 @@
             try {
                 const payload = await buildFullSyncPayload();
                 const jsonStr = JSON.stringify(payload);
+                const check = verifyBackupIntegrityBeforeExport(state, jsonStr);
+                if (!check.ok) {
+                    if (!silent) {
+                        setCloudStatusMessage('Verifica backup fallita: ' + check.errors[0], true);
+                    }
+                    return false;
+                }
                 if (linkedCloudFileHandle) {
                     const writable = await linkedCloudFileHandle.createWritable();
                     await writable.write(jsonStr);
@@ -4531,10 +5259,12 @@
                 const lbl = document.getElementById('cloud-last-sync-label');
                 if (lbl) lbl.textContent = 'Ultima sincronizzazione: ' + nowStr;
                 if (!silent) {
-                    setCloudStatusMessage('File di sincronizzazione creato! Salvalo nella cartella iCloud Drive o OneDrive.');
+                    setCloudStatusMessage(`Backup verificato (${check.totalLinks} collegamenti nota–pagina PDF inclusi)! Salvalo nella cartella iCloud Drive o OneDrive.`);
                 }
+                return true;
             } catch (e) {
                 if (!silent) setCloudStatusMessage('Errore durante la creazione del file Cloud.', true);
+                return false;
             }
         }
 
@@ -4551,8 +5281,8 @@
                     const parsed = JSON.parse(e.target.result);
                     const modeEl = document.querySelector('input[name="cloud-merge-mode"]:checked');
                     const mode = modeEl ? modeEl.value : 'merge';
-                    await applySyncPayload(parsed, mode);
-                    setCloudStatusMessage('Sincronizzazione completata! Note, scritture e PDF ripristinati.');
+                    const stats = await applySyncPayload(parsed, mode);
+                    setCloudStatusMessage(`Sincronizzazione completata! Ripristinati ${stats.restoredPdfs} PDF e ${stats.restoredPdfLinks} collegamenti nota–pagina PDF.`);
                 } catch (err) {
                     setCloudStatusMessage('File JSON non valido.', true);
                 }
@@ -4596,13 +5326,19 @@
             }
             try {
                 const payload = await buildFullSyncPayload();
+                const jsonStr = JSON.stringify(payload);
+                const check = verifyBackupIntegrityBeforeExport(state, jsonStr);
+                if (!check.ok) {
+                    setCloudStatusMessage('Verifica backup fallita prima dell\'upload: ' + check.errors[0], true);
+                    return;
+                }
                 const res = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/QuadernoStudio/Quaderno_Studio_Sync.json:/content', {
                     method: 'PUT',
                     headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: jsonStr
                 });
                 if (!res.ok) throw new Error('Errore HTTP ' + res.status);
-                setCloudStatusMessage('Backup caricato con successo su OneDrive (/QuadernoStudio/Quaderno_Studio_Sync.json)!');
+                setCloudStatusMessage(`Backup verificato e caricato su OneDrive (${check.totalLinks} collegamenti nota–pagina PDF inclusi)!`);
             } catch (e) {
                 setCloudStatusMessage('Impossibile caricare su OneDrive: verifica il token di accesso.', true);
             }
@@ -4676,14 +5412,21 @@
 
         async function exportBackup() {
             const payload = await buildFullSyncPayload();
-            const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+            const jsonStr = JSON.stringify(payload, null, 2);
+            const check = verifyBackupIntegrityBeforeExport(state, jsonStr);
+            if (!check.ok) {
+                showToast('Backup annullato — verifica collegamenti PDF non superata: ' + check.errors[0], true);
+                return false;
+            }
+            const blob = new Blob([jsonStr], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'Quaderno_Studio_Backup_' + new Date().toISOString().slice(0, 10) + '.json';
             a.click();
             URL.revokeObjectURL(url);
-            showToast('Backup completo esportato con successo!');
+            showToast(`Backup completato e verificato! Inclusi ${check.totalLinks} collegamenti nota–pagina PDF.`);
+            return true;
         }
 
         function extractImportedNoteHtml(rawNote) {
@@ -4713,90 +5456,68 @@
             reader.onload = async (e) => {
                 try {
                     const parsed = JSON.parse(e.target.result);
-                    if (parsed && parsed.version === 'quaderno_sync_v1') {
-                        await applySyncPayload(parsed, 'merge');
-                        showToast('Backup sincronizzato ripristinato!');
+                    const hasStructuredSessions = Array.isArray(parsed && parsed.sessions)
+                        || (parsed && parsed.state && Array.isArray(parsed.state.sessions));
+
+                    if (parsed && (parsed.version === 'quaderno_sync_v1' || hasStructuredSessions)) {
+                        const stats = await applySyncPayload(parsed, 'merge');
+                        showToast(`Backup ripristinato! ${stats.restoredPdfLinks} collegamenti nota–pagina PDF e ${stats.restoredPdfs} PDF recuperati.`);
                         return;
                     }
 
                     let importedNotes = 0;
                     let importedScriptures = 0;
-                    const srcSessions = Array.isArray(parsed.sessions) ? parsed.sessions : (parsed.state && Array.isArray(parsed.state.sessions) ? parsed.state.sessions : null);
-
-                    if (srcSessions) {
-                        srcSessions.forEach(src => {
-                            const target = state.sessions.find(s => s.id === src.id) || state.sessions[0];
-                            if (Array.isArray(src.notes)) {
-                                src.notes.forEach(n => {
-                                    target.notes.push({
-                                        id: n.id || ('note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5)),
-                                        title: n.title || n.heading || 'Nota importata',
-                                        html: extractImportedNoteHtml(n),
-                                        fontSize: n.fontSize || 17,
-                                        pdfPage: n.pdfPage || null,
-                                        collapsed: false,
-                                        image: n.image || null,
-                                        isQuickNote: !!n.isQuickNote,
-                                        handwriting: n.handwriting || { visible: false, height: 260, strokes: [] }
-                                    });
-                                    importedNotes++;
-                                });
-                            }
-                            if (Array.isArray(src.scriptures)) {
-                                src.scriptures.forEach(sc => {
-                                    target.scriptures.push({
-                                        id: sc.id || ('scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5)),
-                                        ref: sc.ref || sc.reference || 'Scrittura',
-                                        text: sc.text || sc.content || '',
-                                        pdfPage: sc.pdfPage || null
-                                    });
-                                    importedScriptures++;
-                                });
-                            }
-                        });
-                    } else {
-                        const visited = new Set();
-                        const deepScanObject = (obj) => {
-                            if (!obj || typeof obj !== 'object' || visited.has(obj)) return;
-                            visited.add(obj);
-                            if (Array.isArray(obj)) {
-                                obj.forEach(item => deepScanObject(item));
-                                return;
-                            }
-                            const htmlBody = extractImportedNoteHtml(obj);
-                            if ((obj.title || obj.heading) && htmlBody) {
-                                state.sessions[0].notes.push({
-                                    id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
-                                    title: obj.title || obj.heading,
-                                    html: htmlBody,
-                                    fontSize: 17,
-                                    pdfPage: obj.pdfPage || null,
-                                    collapsed: false,
-                                    image: obj.image || null,
-                                    isQuickNote: false,
-                                    handwriting: { visible: false, height: 260, strokes: [] }
-                                });
-                                importedNotes++;
-                                return;
-                            }
-                            if (obj.ref && obj.text) {
-                                state.sessions[0].scriptures.push({
-                                    id: 'scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
-                                    ref: obj.ref,
-                                    text: obj.text,
-                                    pdfPage: obj.pdfPage || null
-                                });
-                                importedScriptures++;
-                                return;
-                            }
-                            Object.values(obj).forEach(v => deepScanObject(v));
-                        };
-                        deepScanObject(parsed);
-                    }
+                    let importedLinks = 0;
+                    const visited = new Set();
+                    const deepScanObject = (obj) => {
+                        if (!obj || typeof obj !== 'object' || visited.has(obj)) return;
+                        visited.add(obj);
+                        if (Array.isArray(obj)) {
+                            obj.forEach(item => deepScanObject(item));
+                            return;
+                        }
+                        const htmlBody = extractImportedNoteHtml(obj);
+                        if ((obj.title || obj.heading) && htmlBody) {
+                            const pages = extractAllPageNumbersFromNote(obj);
+                            const nId = obj.id || obj.noteId || ('note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5));
+                            const targetSess = state.sessions.find(s => s.id === obj.sessionId) || state.sessions[0];
+                            targetSess.notes.push({
+                                id: nId,
+                                noteId: nId,
+                                sessionId: targetSess.id,
+                                pdfId: obj.pdfId || (targetSess.pdfMeta && targetSess.pdfMeta.pdfId) || null,
+                                title: obj.title || obj.heading,
+                                html: htmlBody,
+                                fontSize: obj.fontSize || 17,
+                                pdfPage: pages.pdfPage,
+                                pageNumber: pages.pageNumber,
+                                pdfPages: pages.pdfPages,
+                                collapsed: false,
+                                image: obj.image || null,
+                                isQuickNote: false,
+                                handwriting: { visible: false, height: 260, strokes: [] }
+                            });
+                            importedNotes++;
+                            if (pages.pdfPage !== null) importedLinks++;
+                            return;
+                        }
+                        if (obj.ref && obj.text) {
+                            state.sessions[0].scriptures.push({
+                                id: obj.id || ('scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5)),
+                                ref: obj.ref,
+                                text: obj.text,
+                                pdfPage: parsePdfPageInputString(obj.pdfPage || obj.pageNumber || obj.page).pdfPage
+                            });
+                            importedScriptures++;
+                            return;
+                        }
+                        Object.values(obj).forEach(v => deepScanObject(v));
+                    };
+                    deepScanObject(parsed);
 
                     saveState();
                     renderApp();
-                    showToast(`Importate ${importedNotes} note e ${importedScriptures} scritture!`);
+                    showToast(`Importate ${importedNotes} note (${importedLinks} collegate a pagine PDF) e ${importedScriptures} scritture!`);
                 } catch (err) {
                     console.error('Errore importazione backup:', err);
                     showToast('Errore durante la lettura del file di backup.', true);
@@ -4804,6 +5525,162 @@
             };
             reader.readAsText(file);
             event.target.value = '';
+        }
+
+        /* TEST ISOLATO OBBLIGATORIO (8 PASSI SENZA TOCCARE I DATI REALI DELL'UTENTE) */
+        async function runIsolatedPdfPagePersistenceTest() {
+            const steps = [];
+            const recordStep = (ok, label) => steps.push({ ok, label });
+
+            try {
+                // Ambiente di prova separato in memoria (non tocca state, localStorage o IndexedDB reali)
+                const sandboxPdfStore = new Map();
+                const sandboxLoadPdf = async (sessId) => sandboxPdfStore.get(sessId) || null;
+                const sandboxSavePdf = async (sessId, buffer, name, pdfId) => {
+                    sandboxPdfStore.set(sessId, { pdfId, sessionId: sessId, buffer, name });
+                    return pdfId;
+                };
+
+                // Passo 1: Carica un PDF di prova con ID permanente
+                const testPdfName = 'Torre_di_Guardia_Test.pdf';
+                const testPdfId = generateStablePdfId('torre', testPdfName);
+                const dummyPdfBytes = new TextEncoder().encode('%PDF-1.4\n%Test Quaderno\n').buffer;
+                await sandboxSavePdf('torre', dummyPdfBytes, testPdfName, testPdfId);
+
+                const sandboxState = {
+                    view: 'session',
+                    activeSessionId: 'torre',
+                    weekOffset: 0,
+                    studyMode: 'preparazione',
+                    pdfPageLinks: {},
+                    clearedPdfPageNotes: {},
+                    sessions: [{
+                        id: 'torre',
+                        name: 'Torre di Guardia',
+                        lucideIcon: 'book-open',
+                        isBase: true,
+                        pdfMeta: { pdfId: testPdfId, sessionId: 'torre', name: testPdfName },
+                        notes: [],
+                        scriptures: [],
+                        pdfAnnotations: {},
+                        pdfImages: {}
+                    }]
+                };
+                recordStep(!!sandboxPdfStore.get('torre') && sandboxState.sessions[0].pdfMeta.pdfId === testPdfId, `1. PDF di prova caricato con ID permanente (${testPdfId}).`);
+
+                // Passo 2 & 3: Crea tre note e collegale alle pagine 3, 5 e 8
+                const expectedPages = [
+                    { id: 'test-nota-001', title: 'Nota 1 — Paragrafo iniziale', html: 'Commento pagina 3', page: 3 },
+                    { id: 'test-nota-002', title: 'Nota 2 — Punto centrale', html: 'Commento pagina 5', page: 5 },
+                    { id: 'test-nota-003', title: 'Nota 3 — Applicazione', html: 'Commento pagina 8', page: 8 }
+                ];
+                expectedPages.forEach(item => {
+                    const parsed = parsePdfPageInputString(item.page);
+                    sandboxState.sessions[0].notes.push({
+                        id: item.id,
+                        noteId: item.id,
+                        sessionId: 'torre',
+                        pdfId: testPdfId,
+                        title: item.title,
+                        html: item.html,
+                        fontSize: 17,
+                        pdfPage: parsed.pdfPage,
+                        pageNumber: parsed.pageNumber,
+                        pdfPages: parsed.pdfPages,
+                        collapsed: false,
+                        image: null,
+                        isQuickNote: false,
+                        handwriting: { visible: false, height: 260, strokes: [] }
+                    });
+                });
+                normalizeAllSessionsAndNoteLinks(sandboxState);
+                const linkedOk = sandboxState.sessions[0].notes.map(n => n.pdfPage).join(',') === '3,5,8';
+                recordStep(linkedOk, '2-3. Tre note create e collegate stabilmente alle pagine 3, 5 e 8.');
+
+                // Passo 4 & 5: Esporta il backup e verifica che contenga 3, 5 e 8 associati alle note corrette
+                const exportedPayload = await buildSyncPayloadFromSource(sandboxState, sandboxLoadPdf);
+                const exportedJson = JSON.stringify(exportedPayload);
+                const verification = verifyBackupIntegrityBeforeExport(sandboxState, exportedJson);
+                const reparsedExport = JSON.parse(exportedJson);
+                const exportPages = (reparsedExport.notePdfLinks || []).map(l => `${l.noteId}:${l.pageNumber}`).join(' | ');
+                recordStep(verification.ok && verification.totalLinks === 3, `4-5. Backup esportato e verificato (${exportPages}).`);
+
+                // Passo 6 & 7: Importa il backup in un ambiente di prova separato e vuoto
+                const isolatedRestoreStore = new Map();
+                const isolatedRestoreState = { sessions: [], pdfPageLinks: {}, clearedPdfPageNotes: {} };
+                await restoreBackupIntoState(
+                    isolatedRestoreState,
+                    reparsedExport,
+                    'replace',
+                    async (sessId, buffer, name, pdfId) => {
+                        isolatedRestoreStore.set(sessId, { pdfId, sessionId: sessId, buffer, name });
+                        return pdfId;
+                    }
+                );
+                const restoredSess = isolatedRestoreState.sessions.find(s => s.id === 'torre');
+                const restoredPagesList = restoredSess ? restoredSess.notes.map(n => n.pdfPage).join(',') : '';
+                const restoredPdfIdOk = restoredSess && restoredSess.pdfMeta && restoredSess.pdfMeta.pdfId === testPdfId && isolatedRestoreStore.has('torre');
+                const allNotesKeepPdfId = restoredSess && restoredSess.notes.every(n => n.pdfId === testPdfId && n.pageNumber === n.pdfPage);
+                recordStep(restoredPagesList === '3,5,8' && restoredPdfIdOk && allNotesKeepPdfId, `6-7. Ripristino isolato riuscito: pagine [${restoredPagesList}] e pdfId originale confermati.`);
+
+                // Passo 8: Simula un aggiornamento del progetto + recupero vecchio backup + merge su note esistenti senza pagina
+                const simulatedPostUpdateState = JSON.parse(JSON.stringify(isolatedRestoreState));
+                // Simula il vecchio difetto: note presenti dopo aggiornamento ma con pdfPage azzerato in memoria temporanea
+                simulatedPostUpdateState.sessions[0].notes.forEach(n => { n.pdfPage = null; n.pageNumber = null; n.pdfPages = []; });
+                normalizeAllSessionsAndNoteLinks(simulatedPostUpdateState);
+                const recoveredAfterUpdate = simulatedPostUpdateState.sessions[0].notes.map(n => n.pdfPage).join(',') === '3,5,8';
+
+                // Verifica anche importazione in modalità merge di un vecchio backup (con campi legacy page / pageNumber)
+                const legacyState = {
+                    sessions: [{
+                        id: 'torre',
+                        name: 'Torre di Guardia',
+                        notes: [
+                            { id: 'test-nota-001', title: 'Nota 1', html: 'Commento pagina 3', pdfPage: null },
+                            { id: 'test-nota-002', title: 'Nota 2', html: 'Commento pagina 5', pdfPage: null },
+                            { id: 'test-nota-003', title: 'Nota 3', html: 'Commento pagina 8', pdfPage: null }
+                        ],
+                        scriptures: []
+                    }],
+                    pdfPageLinks: {},
+                    clearedPdfPageNotes: {}
+                };
+                const legacyBackup = {
+                    sessions: [{
+                        id: 'torre',
+                        name: 'Torre di Guardia',
+                        notes: [
+                            { id: 'test-nota-001', title: 'Nota 1', content: 'Commento pagina 3', pageNumber: 3 },
+                            { id: 'test-nota-002', title: 'Nota 2', content: 'Commento pagina 5', page: '5' },
+                            { id: 'test-nota-003', title: 'Nota 3', content: 'Commento pagina 8', pdf_page: 8 }
+                        ]
+                    }]
+                };
+                await restoreBackupIntoState(legacyState, legacyBackup, 'merge', null);
+                const legacyRecovered = legacyState.sessions[0].notes.map(n => n.pdfPage).join(',') === '3,5,8';
+
+                recordStep(recoveredAfterUpdate && legacyRecovered, '8. Persistenza dopo aggiornamento e recupero vecchi backup (3, 5, 8) verificati.');
+
+                const allPassed = steps.every(s => s.ok);
+                return { ok: allPassed, steps };
+            } catch (err) {
+                recordStep(false, 'Errore imprevisto nel test isolato: ' + (err && err.message ? err.message : String(err)));
+                return { ok: false, steps };
+            }
+        }
+
+        async function runIsolatedPdfPagePersistenceTestUI() {
+            const box = document.getElementById('pdf-links-selftest-output');
+            if (!box) return;
+            box.classList.remove('hidden');
+            box.innerHTML = '<p class="font-bold text-[#6b2d5c]">Esecuzione verifica isolata (8 passi) in corso...</p>';
+            const res = await runIsolatedPdfPagePersistenceTest();
+            box.innerHTML = `
+                <p class="font-extrabold ${res.ok ? 'text-emerald-700' : 'text-rose-700'}">
+                    ${res.ok ? '✓ TUTTI GLI 8 PASSI SUPERATI (nessun dato reale modificato)' : '⚠️ Alcuni controlli non sono stati superati'}
+                </p>
+                ${res.steps.map(s => `<p class="${s.ok ? 'text-emerald-800' : 'text-rose-700'}">${s.ok ? '✓' : '✕'} ${escapeHtml(s.label)}</p>`).join('')}
+            `;
         }
 
         /* RENDERING INTERFACCIA PRINCIPALE */
@@ -5006,6 +5883,7 @@
         window.addEventListener('DOMContentLoaded', async () => {
             loadState();
             await restoreStateFromIndexedDbIfNeeded();
+            await reconcilePersistentLinksFromIndexedDb();
             await loadBibleFromIndexedDb();
             await loadSavedSidePanelEpub();
             const pdfOverlay = document.getElementById('pdf-workspace-overlay');
