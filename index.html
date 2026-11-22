@@ -257,9 +257,6 @@
                 </label>
             </div>
         </div>
-
-        <!-- Barra Pillole Sessioni -->
-        <div id="sessions-nav-bar" class="max-w-7xl mx-auto mt-3 flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5"></div>
     </header>
 
     <!-- BANNER NOTIFICA RAPIDA -->
@@ -634,9 +631,6 @@
                     <input type="file" accept="image/*" onchange="addPdfOverlayImage(event)" class="hidden">
                 </label>
 
-                <button type="button" onclick="togglePdfScripturesDrawer()" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-100 text-amber-900">
-                    📖 Scritture
-                </button>
                 <button type="button" onclick="toggleBibleSidePanel()" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-200 text-amber-950">
                     <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
                     <span>Bibbia</span>
@@ -645,14 +639,6 @@
                     📋 Incolla Prep.
                 </button>
             </div>
-        </div>
-
-        <div id="pdf-scriptures-drawer" class="hidden bg-amber-50 border-b border-amber-200 px-4 py-3 shrink-0">
-            <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 mb-2">
-                <span class="font-bold text-sm text-amber-900">📖 Scritture della sessione (clicca per aprire grande)</span>
-                <button type="button" onclick="togglePdfScripturesDrawer()" class="text-xs font-bold text-amber-800 underline">Chiudi</button>
-            </div>
-            <div id="pdf-scriptures-chips" class="max-w-7xl mx-auto flex flex-wrap gap-2"></div>
         </div>
 
         <div id="pdf-split-container" class="flex-1 flex overflow-hidden">
@@ -4271,12 +4257,12 @@
                 }
             });
         }
-
-        /* SCRITTURE DELLA SESSIONE */
+        /* SCRITTURE DELLA SESSIONE (dati interni conservati per retrocompatibilità e backup) */
         function addScripture() {
             const refEl = document.getElementById('new-scr-ref');
             const pageEl = document.getElementById('new-scr-page');
             const textEl = document.getElementById('new-scr-text');
+            if (!refEl || !pageEl || !textEl) return;
             const ref = refEl.value.trim();
             if (!ref) return;
             const s = getActiveSession();
@@ -5061,6 +5047,7 @@
         function togglePdfScripturesDrawer() {
             const drawer = document.getElementById('pdf-scriptures-drawer');
             const chips = document.getElementById('pdf-scriptures-chips');
+            if (!drawer || !chips) return;
             drawer.classList.toggle('hidden');
             if (!drawer.classList.contains('hidden')) {
                 const s = getActiveSession();
@@ -6009,26 +5996,6 @@
                 }
             }
 
-            const navBar = document.getElementById('sessions-nav-bar');
-            if (navBar) {
-                const homeActive = state.view === 'home';
-                navBar.innerHTML = `
-                    <button type="button" onclick="goHome()" class="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold border transition ${homeActive ? 'plum-primary border-[#6b2d5c]' : 'bg-white text-[#3d2937] plum-border hover:bg-[#f6eef4]'}">
-                        <i data-lucide="home" class="w-3.5 h-3.5 ${homeActive ? 'text-white' : 'text-[#6b2d5c]'}"></i>
-                        <span>Home Page</span>
-                    </button>
-                    ${state.sessions.map(s => {
-                        const isAct = state.view === 'session' && state.activeSessionId === s.id;
-                        return `
-                            <button type="button" onclick="openSession('${s.id}')" class="shrink-0 inline-flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-bold border transition ${isAct ? 'plum-primary border-[#6b2d5c]' : 'bg-white text-[#3d2937] plum-border hover:bg-[#f6eef4]'}">
-                                <i data-lucide="${s.lucideIcon || 'folder'}" class="w-3.5 h-3.5 ${isAct ? 'text-white' : 'text-[#6b2d5c]'}"></i>
-                                <span>${escapeHtml(s.name)}</span>
-                            </button>
-                        `;
-                    }).join('')}
-                `;
-            }
-
             const main = document.getElementById('main-content');
             if (!main) return;
 
@@ -6088,7 +6055,11 @@
                     <div class="space-y-6">
                         <div class="bg-white rounded-3xl border plum-border p-4 sm:p-5 shadow-2xs flex flex-wrap items-center justify-between gap-3">
                             <div class="flex items-center gap-3">
-                                <div class="w-11 h-11 rounded-2xl plum-soft border plum-border flex items-center justify-center text-[#6b2d5c]">
+                                <button type="button" onclick="goHome()" title="Torna alla Home Page" class="inline-flex items-center gap-1 px-3 py-2 rounded-2xl bg-[#f6eef4] border plum-border text-xs font-extrabold text-[#6b2d5c] hover:bg-[#eadbe6] transition shrink-0">
+                                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                                    <span>Home</span>
+                                </button>
+                                <div class="w-11 h-11 rounded-2xl plum-soft border plum-border flex items-center justify-center text-[#6b2d5c] shrink-0">
                                     <i data-lucide="${s.lucideIcon || 'folder'}" class="w-5 h-5"></i>
                                 </div>
                                 <div>
@@ -6122,44 +6093,6 @@
                                 <button type="button" onclick="addNoteInCurrentSession(null)" class="px-4 py-2.5 rounded-2xl plum-primary font-bold text-xs sm:text-sm shadow-2xs">
                                     + Aggiungi Nota
                                 </button>
-                            </div>
-                        </div>
-
-                        <!-- Sezione Scritture della Sessione -->
-                        <div class="bg-white rounded-3xl border plum-border p-4 sm:p-5 space-y-3 shadow-2xs">
-                            <div class="flex flex-wrap items-center justify-between gap-2">
-                                <h3 class="text-base sm:text-lg font-extrabold text-[#261822]">📖 Scritture da Leggere (clicca per aprire grande)</h3>
-                                <button type="button" onclick="openBibleModal()" class="px-3 py-1.5 rounded-xl bg-amber-100 border border-amber-300 text-xs font-extrabold text-amber-950">
-                                    📖 Scegli dalla Bibbia
-                                </button>
-                            </div>
-
-                            <div class="grid grid-cols-1 sm:grid-cols-4 gap-2">
-                                <input type="text" id="new-scr-ref" placeholder="Es. 2 Timoteo 3:16" class="bg-[#fbf9fa] border plum-border rounded-xl px-3 py-2 text-sm font-bold">
-                                <input type="number" id="new-scr-page" min="1" placeholder="Pag. PDF (opz.)" class="bg-[#fbf9fa] border plum-border rounded-xl px-3 py-2 text-sm font-bold">
-                                <input type="text" id="new-scr-text" placeholder="Testo della scrittura..." class="sm:col-span-2 bg-[#fbf9fa] border plum-border rounded-xl px-3 py-2 text-sm">
-                            </div>
-                            <div class="flex justify-end">
-                                <button type="button" onclick="addScripture()" class="px-4 py-2 rounded-xl plum-primary font-bold text-xs sm:text-sm">
-                                    + Salva Scrittura
-                                </button>
-                            </div>
-
-                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
-                                ${s.scriptures.length === 0
-                                    ? '<p class="text-xs text-[#7c6575] col-span-full">Nessuna scrittura inserita. Aggiungila qui sopra o sceglila dal pulsante <strong>📖 Bibbia</strong>.</p>'
-                                    : s.scriptures.map(scr => `
-                                        <div class="bg-[#fbf9fa] border plum-border rounded-2xl p-3 flex items-center justify-between gap-2">
-                                            <div onclick="openScriptureModal('${scr.id}')" class="min-w-0 flex-1 cursor-pointer">
-                                                <div class="flex items-center gap-1.5">
-                                                    <span class="font-extrabold text-sm text-[#6b2d5c] truncate">${escapeHtml(scr.ref)}</span>
-                                                    ${scr.pdfPage ? `<span class="text-[10px] font-bold px-1.5 py-0.5 rounded bg-white border plum-border">Pag. ${scr.pdfPage}</span>` : ''}
-                                                </div>
-                                                <p class="text-xs text-[#4a3343] truncate mt-0.5">${escapeHtml(scr.text)}</p>
-                                            </div>
-                                            <button type="button" onclick="deleteScripture('${scr.id}')" class="px-2 py-1 rounded-lg bg-rose-50 text-rose-600 text-xs font-bold shrink-0">✕</button>
-                                        </div>
-                                    `).join('')}
                             </div>
                         </div>
 
