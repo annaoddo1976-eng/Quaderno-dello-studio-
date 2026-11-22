@@ -38,8 +38,11 @@
             min-height: 90px;
             outline: none;
             line-height: 1.6;
-            word-wrap: break-word;
+            word-break: normal;
+            overflow-wrap: break-word;
             white-space: pre-wrap;
+            min-width: 0;
+            max-width: 100%;
         }
         .note-editor:empty:before {
             content: attr(data-placeholder);
@@ -47,8 +50,33 @@
             pointer-events: none;
             display: block;
         }
+        .note-title-editable {
+            white-space: pre-wrap;
+            word-break: normal;
+            overflow-wrap: break-word;
+            min-width: 0;
+            width: 100%;
+        }
+        /* Nella colonna laterale del PDF il titolo usa sempre l'intera larghezza sopra i controlli */
+        #pdf-side-notes-list .note-card-header {
+            flex-direction: column;
+            align-items: stretch;
+        }
+        #pdf-side-notes-list .note-title-row {
+            flex: 0 0 auto !important;
+            width: 100%;
+            max-width: 100%;
+        }
+        #pdf-side-notes-list .note-card-actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        #pdf-workspace-overlay {
+            height: 100dvh;
+            max-height: 100dvh;
+        }
         #pdf-workspace-overlay button,
         #pdf-workspace-overlay label,
         #pdf-workspace-overlay select,
@@ -58,20 +86,89 @@
             user-select: none;
             cursor: pointer;
         }
+        #pdf-split-container {
+            display: flex;
+            flex: 1 1 0%;
+            min-height: 0;
+            min-width: 0;
+            width: 100%;
+            overflow: hidden;
+            position: relative;
+        }
+        #pdf-split-container.layout-stacked {
+            flex-direction: column;
+        }
+        #pdf-left-pane {
+            display: block;
+            min-width: 0;
+            min-height: 0;
+            overflow: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            position: relative;
+            z-index: 0;
+        }
+        #pdf-right-pane {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 0%;
+            min-width: 0;
+            min-height: 0;
+            overflow: hidden;
+            position: relative;
+            z-index: 0;
+        }
+        #pdf-side-notes-list {
+            flex: 1 1 0%;
+            min-height: 0;
+            min-width: 0;
+            overflow-y: auto;
+            overflow-x: hidden;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+        }
         #pdf-resizer {
-            width: 18px;
+            width: 12px;
+            flex: 0 0 12px;
             cursor: col-resize;
             touch-action: none;
             user-select: none;
             background: #eadbe6;
+            border-left: 1px solid #dcc4d6;
+            border-right: 1px solid #dcc4d6;
             display: flex;
             align-items: center;
             justify-content: center;
-            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
             transition: background 0.15s;
+        }
+        #pdf-resizer-handle {
+            width: 4px;
+            height: 36px;
+            border-radius: 9999px;
+            background: rgba(107, 45, 92, 0.45);
+        }
+        #pdf-split-container.layout-stacked #pdf-resizer {
+            width: 100%;
+            height: 14px;
+            flex: 0 0 14px;
+            cursor: row-resize;
+            border-left: 0;
+            border-right: 0;
+            border-top: 1px solid #dcc4d6;
+            border-bottom: 1px solid #dcc4d6;
+        }
+        #pdf-split-container.layout-stacked #pdf-resizer-handle {
+            width: 42px;
+            height: 4px;
         }
         #pdf-resizer:hover, #pdf-resizer.dragging {
             background: #6b2d5c;
+        }
+        #pdf-resizer:hover #pdf-resizer-handle,
+        #pdf-resizer.dragging #pdf-resizer-handle {
+            background: rgba(255, 255, 255, 0.9);
         }
         .overlay-img-box {
             position: absolute;
@@ -83,13 +180,14 @@
             background: rgba(255,255,255,0.1);
         }
         #pdf-canvas-wrapper {
+            margin: 0 auto;
             will-change: transform, opacity;
             backface-visibility: hidden;
         }
         #pdf-flip-hint {
             position: sticky;
-            top: 12px;
-            z-index: 40;
+            top: 8px;
+            z-index: 20;
             pointer-events: none;
             transition: opacity 0.15s ease;
         }
@@ -483,7 +581,7 @@
 
     <!-- LETTORE PDF AFFIANCATO ALLE NOTE -->
     <div id="pdf-workspace-overlay" class="fixed inset-0 z-[60] hidden bg-[#fbf9fa] flex flex-col">
-        <div class="bg-white border-b plum-border px-3 py-2 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+        <div class="bg-white border-b plum-border px-3 py-2 flex flex-wrap items-center justify-between gap-2 shadow-2xs shrink-0 max-h-[34vh] overflow-y-auto">
             <div class="flex items-center gap-2">
                 <button type="button" onclick="closePdfWorkspace()" class="px-3 py-2 rounded-xl plum-primary font-bold text-sm">
                     ← Chiudi PDF
@@ -500,6 +598,7 @@
                 <span class="mx-1 text-[#d7bfd0]">|</span>
                 <button type="button" onclick="changePdfZoom(-0.15)" class="px-2 py-1 rounded-lg bg-white font-bold text-xs">−</button>
                 <button type="button" onclick="changePdfZoom(0.15)" class="px-2 py-1 rounded-lg bg-white font-bold text-xs">+</button>
+                <button type="button" onclick="fitPdfZoomToPane()" title="Adatta il PDF allo spazio visibile" class="px-2 py-1 rounded-lg bg-white font-bold text-[11px] text-[#6b2d5c]">Adatta</button>
             </div>
 
             <div class="flex flex-wrap items-center gap-1.5">
@@ -526,6 +625,10 @@
                     Solo Apple Pencil ✓
                 </button>
 
+                <button type="button" id="btn-pdf-layout-toggle" onclick="togglePdfLayoutPreference()" title="Cambia disposizione PDF e Note (Affiancati o Sopra/Sotto)" class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-[#f6eef4] text-[#6b2d5c] border plum-border">
+                    ⇳ Sopra/Sotto
+                </button>
+
                 <label class="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-sky-100 text-sky-800 cursor-pointer">
                     + Foto PDF
                     <input type="file" accept="image/*" onchange="addPdfOverlayImage(event)" class="hidden">
@@ -544,7 +647,7 @@
             </div>
         </div>
 
-        <div id="pdf-scriptures-drawer" class="hidden bg-amber-50 border-b border-amber-200 px-4 py-3">
+        <div id="pdf-scriptures-drawer" class="hidden bg-amber-50 border-b border-amber-200 px-4 py-3 shrink-0">
             <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-2 mb-2">
                 <span class="font-bold text-sm text-amber-900">📖 Scritture della sessione (clicca per aprire grande)</span>
                 <button type="button" onclick="togglePdfScripturesDrawer()" class="text-xs font-bold text-amber-800 underline">Chiudi</button>
@@ -553,22 +656,22 @@
         </div>
 
         <div id="pdf-split-container" class="flex-1 flex overflow-hidden">
-            <div id="pdf-left-pane" style="flex: 0 0 56%;" class="overflow-auto bg-slate-200/70 p-4 flex flex-col items-center relative">
-                <div id="pdf-flip-hint" class="hidden px-3 py-1 rounded-full bg-[#261822]/85 text-white text-xs font-bold shadow-md"></div>
+            <div id="pdf-left-pane" style="flex: 0 0 56%;" class="bg-slate-200/70 p-2 sm:p-4">
+                <div id="pdf-flip-hint" class="hidden w-fit mx-auto mb-2 px-3 py-1 rounded-full bg-[#261822]/85 text-white text-xs font-bold shadow-md"></div>
                 <div id="pdf-canvas-wrapper" class="relative bg-white shadow-lg rounded-lg overflow-hidden">
                     <canvas id="pdf-render-canvas" class="block"></canvas>
-                    <iframe id="pdf-fallback-frame" class="hidden w-[80vw] max-w-3xl h-[80vh] border-0"></iframe>
+                    <iframe id="pdf-fallback-frame" class="hidden w-full h-[70vh] border-0"></iframe>
                     <canvas id="pdf-annot-canvas" class="absolute inset-0 pointer-events-none"></canvas>
                     <div id="pdf-images-layer" class="absolute inset-0 pointer-events-none"></div>
                 </div>
             </div>
 
-            <div id="pdf-resizer" title="Trascina per ridimensionare">
-                <div class="w-1 h-10 rounded-full bg-white/80"></div>
+            <div id="pdf-resizer" title="Trascina per ridimensionare" aria-label="Barra divisoria ridimensionabile tra PDF e Note">
+                <div id="pdf-resizer-handle"></div>
             </div>
 
-            <div class="flex-1 flex flex-col overflow-hidden bg-[#fbf9fa] min-w-[260px]">
-                <div class="bg-white border-b plum-border px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+            <div id="pdf-right-pane" class="bg-[#fbf9fa]">
+                <div class="bg-white border-b plum-border px-3 py-2 flex flex-wrap items-center justify-between gap-2 shrink-0">
                     <div class="flex items-center gap-1 bg-[#f6eef4] p-1 rounded-lg">
                         <button type="button" id="filter-page-notes" onclick="setPdfNotesFilter('page')" class="px-2.5 py-1 rounded-md text-xs font-bold bg-white text-[#6b2d5c] shadow-2xs">Note Pagina</button>
                         <button type="button" id="filter-all-notes" onclick="setPdfNotesFilter('all')" class="px-2.5 py-1 rounded-md text-xs font-bold text-[#7c6575]">Tutte le Note</button>
@@ -577,7 +680,7 @@
                         + Nota Pag. <span id="btn-add-note-page-num">1</span>
                     </button>
                 </div>
-                <div id="pdf-side-notes-list" class="flex-1 overflow-y-auto p-3 space-y-3"></div>
+                <div id="pdf-side-notes-list" class="p-3 space-y-3"></div>
             </div>
         </div>
     </div>
@@ -2972,6 +3075,13 @@
         let pdfStrokeWidth = 4;
         let pencilOnlyMode = true;
         let pdfNotesFilter = 'page';
+        let pdfSplitRatioLandscape = 56;
+        let pdfSplitRatioPortrait = 54;
+        let pdfStackRatioPortrait = 54;
+        let pdfLayoutPreference = 'auto'; // 'auto' | 'side' | 'stacked'
+        let currentPdfLayoutMode = 'side'; // 'side' | 'stacked'
+        let pdfUserManualZoom = false;
+        let pdfLayoutResizeTimer = null;
 
         function escapeHtml(str) {
             return String(str || '')
@@ -3836,20 +3946,19 @@
             const pageDisplayVal = formatNotePdfPagesDisplay(n);
             const hasSessionPdf = !!(activePdfBytes || (activeSess && activeSess.pdfMeta));
             return `
-                <div class="bg-white rounded-3xl border ${n.isQuickNote ? 'border-amber-300 bg-amber-50/30' : 'plum-border'} p-4 shadow-2xs space-y-3">
-                    <div class="flex flex-wrap items-start justify-between gap-2">
-                        <div class="flex items-start gap-2 flex-1 min-w-0 max-w-full">
+                <div class="bg-white rounded-3xl border ${n.isQuickNote ? 'border-amber-300 bg-amber-50/30' : 'plum-border'} p-3.5 sm:p-4 shadow-2xs space-y-3 min-w-0 max-w-full overflow-hidden">
+                    <div class="note-card-header flex flex-wrap items-start justify-between gap-2 min-w-0">
+                        <div class="note-title-row flex items-start gap-2 min-w-0" style="flex: 1 1 200px; max-width: 100%;">
                             <button type="button" onclick="toggleNoteCollapse('${n.id}')" class="w-7 h-7 mt-0.5 rounded-lg bg-[#f6eef4] text-[#6b2d5c] font-bold text-xs flex items-center justify-center shrink-0">
                                 ${n.collapsed ? '▶' : '▼'}
                             </button>
                             <div contenteditable="true"
                                  oninput="updateNoteTitle('${n.id}', this.innerText)"
                                  data-placeholder="Titolo nota..."
-                                 style="overflow-wrap: anywhere; word-break: break-word;"
-                                 class="font-extrabold text-base text-[#261822] bg-transparent border-b border-transparent focus:border-[#6b2d5c] outline-none flex-1 min-w-0 whitespace-pre-wrap leading-snug">${escapeHtml(n.title)}</div>
+                                 class="note-title-editable font-extrabold text-base text-[#261822] bg-transparent border-b border-transparent focus:border-[#6b2d5c] outline-none flex-1 min-w-0 leading-snug">${escapeHtml(n.title)}</div>
                         </div>
 
-                        <div class="flex flex-wrap items-center gap-1.5">
+                        <div class="note-card-actions flex flex-wrap items-center gap-1.5 max-w-full">
                             <div class="flex items-center gap-1 bg-[#f6eef4] px-2 py-1 rounded-xl text-xs font-bold text-[#6b2d5c]">
                                 <span>Pag. PDF:</span>
                                 <input type="text" inputmode="numeric" value="${escapeHtml(pageDisplayVal)}" placeholder="-"
@@ -4326,7 +4435,11 @@
             document.getElementById('pdf-workspace-overlay').classList.remove('hidden');
             const parsedTarget = Math.max(1, parseInt(targetPage, 10) || 1);
             activePdfPage = activePdfDoc ? Math.min(activePdfTotalPages, parsedTarget) : parsedTarget;
+            pdfUserManualZoom = false;
+            applyPdfSplitLayout(false);
             renderPdfSideNotes();
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            applyPdfSplitLayout(false);
             await renderCurrentPdfPage();
         }
 
@@ -4352,7 +4465,132 @@
         }
 
         async function changePdfZoom(delta) {
-            activePdfZoom = Math.max(0.6, Math.min(2.6, Number((activePdfZoom + delta).toFixed(2))));
+            pdfUserManualZoom = true;
+            activePdfZoom = Math.max(0.45, Math.min(2.6, Number((activePdfZoom + delta).toFixed(2))));
+            await renderCurrentPdfPage();
+        }
+
+        function isPortraitViewport() {
+            return window.innerHeight > window.innerWidth;
+        }
+
+        function getPdfLayoutConstraints(containerWidth, containerHeight) {
+            const portrait = isPortraitViewport();
+            const resizerSideW = 12;
+            const resizerStackH = 14;
+            // In verticale servono almeno 280px per le note e 320px per il PDF per restare entrambi leggibili affiancati
+            const minRightSidePx = portrait ? 280 : 280;
+            const minLeftSidePx = portrait ? 320 : 320;
+            const canFitSideBySide = containerWidth >= (minLeftSidePx + minRightSidePx + resizerSideW);
+            const minTopStackPx = Math.min(180, Math.max(130, Math.floor(containerHeight * 0.28)));
+            const minBottomStackPx = Math.min(180, Math.max(130, Math.floor(containerHeight * 0.28)));
+            return {
+                portrait,
+                resizerSideW,
+                resizerStackH,
+                minLeftSidePx,
+                minRightSidePx,
+                canFitSideBySide,
+                minTopStackPx,
+                minBottomStackPx
+            };
+        }
+
+        function applyPdfSplitLayout(reRenderPdf = false) {
+            const overlay = document.getElementById('pdf-workspace-overlay');
+            const container = document.getElementById('pdf-split-container');
+            const leftPane = document.getElementById('pdf-left-pane');
+            const rightPane = document.getElementById('pdf-right-pane');
+            const toggleBtn = document.getElementById('btn-pdf-layout-toggle');
+            if (!overlay || overlay.classList.contains('hidden') || !container || !leftPane || !rightPane) return;
+
+            const rect = container.getBoundingClientRect();
+            const w = Math.max(1, rect.width || window.innerWidth);
+            const h = Math.max(1, rect.height || window.innerHeight);
+            const c = getPdfLayoutConstraints(w, h);
+
+            // In landscape resta sempre affiancato invariato; in portrait usa affiancato se c'è spazio, altrimenti passa automaticamente a impilato
+            let targetMode = 'side';
+            if (!c.canFitSideBySide) {
+                targetMode = 'stacked';
+            } else if (c.portrait && pdfLayoutPreference === 'stacked') {
+                targetMode = 'stacked';
+            } else if (!c.portrait && pdfLayoutPreference === 'stacked') {
+                // In orizzontale mantieni sempre la vista affiancata standard
+                targetMode = 'side';
+            } else {
+                targetMode = 'side';
+            }
+
+            currentPdfLayoutMode = targetMode;
+
+            if (targetMode === 'stacked') {
+                container.classList.add('layout-stacked');
+                const maxTopPx = Math.max(c.minTopStackPx, h - c.resizerStackH - c.minBottomStackPx);
+                const desiredTopPx = Math.round((pdfStackRatioPortrait / 100) * h);
+                const clampedTopPx = Math.max(c.minTopStackPx, Math.min(maxTopPx, desiredTopPx));
+                leftPane.style.flex = `0 0 ${clampedTopPx}px`;
+                leftPane.style.width = '100%';
+                leftPane.style.minWidth = '0px';
+                rightPane.style.flex = '1 1 0%';
+                rightPane.style.width = '100%';
+                rightPane.style.minWidth = '0px';
+                rightPane.style.minHeight = `${c.minBottomStackPx}px`;
+            } else {
+                container.classList.remove('layout-stacked');
+                const ratio = c.portrait ? pdfSplitRatioPortrait : pdfSplitRatioLandscape;
+                const maxLeftPx = Math.max(c.minLeftSidePx, w - c.resizerSideW - c.minRightSidePx);
+                const desiredLeftPx = Math.round((ratio / 100) * w);
+                const clampedLeftPx = Math.max(c.minLeftSidePx, Math.min(maxLeftPx, desiredLeftPx));
+                leftPane.style.flex = `0 0 ${clampedLeftPx}px`;
+                leftPane.style.width = '';
+                leftPane.style.minWidth = `${c.minLeftSidePx}px`;
+                rightPane.style.flex = '1 1 0%';
+                rightPane.style.width = '';
+                rightPane.style.minWidth = `${c.minRightSidePx}px`;
+                rightPane.style.minHeight = '0px';
+            }
+
+            if (toggleBtn) {
+                if (!c.portrait) {
+                    toggleBtn.classList.add('hidden');
+                } else {
+                    toggleBtn.classList.remove('hidden');
+                    if (!c.canFitSideBySide) {
+                        toggleBtn.textContent = '⇳ Vista Verticale';
+                        toggleBtn.disabled = true;
+                        toggleBtn.classList.add('opacity-60');
+                    } else {
+                        toggleBtn.disabled = false;
+                        toggleBtn.classList.remove('opacity-60');
+                        toggleBtn.textContent = targetMode === 'stacked' ? '⬌ Affianca' : '⇳ Sopra/Sotto';
+                    }
+                }
+            }
+
+            if (reRenderPdf && activePdfDoc) {
+                renderCurrentPdfPage();
+            }
+        }
+
+        async function togglePdfLayoutPreference() {
+            const container = document.getElementById('pdf-split-container');
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            const c = getPdfLayoutConstraints(rect.width || window.innerWidth, rect.height || window.innerHeight);
+            if (!c.canFitSideBySide) {
+                showToast('Schermo troppo stretto per due colonne affiancate: resta attiva la vista verticale PDF sopra / Note sotto.');
+                return;
+            }
+            pdfLayoutPreference = currentPdfLayoutMode === 'stacked' ? 'side' : 'stacked';
+            pdfUserManualZoom = false;
+            applyPdfSplitLayout(false);
+            await new Promise(resolve => requestAnimationFrame(resolve));
+            await renderCurrentPdfPage();
+        }
+
+        async function fitPdfZoomToPane() {
+            pdfUserManualZoom = false;
             await renderCurrentPdfPage();
         }
 
@@ -4364,6 +4602,7 @@
             if (totalLabel) totalLabel.textContent = '/ ' + activePdfTotalPages;
             if (addNotePageLabel) addNotePageLabel.textContent = activePdfPage;
 
+            const leftPane = document.getElementById('pdf-left-pane');
             const wrapper = document.getElementById('pdf-canvas-wrapper');
             const fallbackFrame = document.getElementById('pdf-fallback-frame');
             const renderCanvas = document.getElementById('pdf-render-canvas');
@@ -4372,6 +4611,8 @@
             if (!activePdfDoc) {
                 if (activePdfBytes) {
                     wrapper.classList.remove('hidden');
+                    wrapper.style.width = '100%';
+                    wrapper.style.height = 'auto';
                     fallbackFrame.classList.remove('hidden');
                     const blob = new Blob([activePdfBytes], { type: 'application/pdf' });
                     fallbackFrame.src = URL.createObjectURL(blob);
@@ -4387,6 +4628,23 @@
                     try { activePdfRenderTask.cancel(); } catch (_) {}
                 }
                 const page = await activePdfDoc.getPage(activePdfPage);
+                const portrait = isPortraitViewport();
+
+                // In verticale (o in vista impilata), se l'utente non ha zoomato manualmente, adatta la pagina alla larghezza visibile così la barra divisoria non copre mai il PDF
+                if (!pdfUserManualZoom && leftPane) {
+                    const baseViewport = page.getViewport({ scale: 1 });
+                    const paneStyles = window.getComputedStyle(leftPane);
+                    const padX = (parseFloat(paneStyles.paddingLeft) || 0) + (parseFloat(paneStyles.paddingRight) || 0);
+                    const availWidth = Math.max(160, leftPane.clientWidth - padX - 8);
+                    const fitScale = Math.max(0.45, Math.min(2.2, Number((availWidth / Math.max(1, baseViewport.width)).toFixed(3))));
+                    if (portrait || currentPdfLayoutMode === 'stacked') {
+                        activePdfZoom = fitScale;
+                    } else {
+                        // In modalità orizzontale mantiene il comportamento standard (1.25) senza uscire dal pannello se stretto
+                        activePdfZoom = Math.min(1.25, fitScale < 1.25 ? fitScale : 1.25);
+                    }
+                }
+
                 const viewport = page.getViewport({ scale: activePdfZoom });
                 const dpr = getAnnotDpr();
 
@@ -4681,22 +4939,66 @@
             resizer.dataset.bound = '1';
 
             let dragging = false;
+            let activePtrId = null;
+
             resizer.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
                 dragging = true;
+                activePtrId = e.pointerId;
                 resizer.classList.add('dragging');
                 try { resizer.setPointerCapture(e.pointerId); } catch (_) {}
             });
+
             window.addEventListener('pointermove', (e) => {
                 if (!dragging) return;
+                if (activePtrId !== null && e.pointerId !== activePtrId) return;
                 const rect = container.getBoundingClientRect();
-                const pct = Math.max(25, Math.min(78, ((e.clientX - rect.left) / rect.width) * 100));
-                leftPane.style.flex = `0 0 ${pct}%`;
+                const c = getPdfLayoutConstraints(rect.width, rect.height);
+
+                if (currentPdfLayoutMode === 'stacked') {
+                    const maxTopPx = Math.max(c.minTopStackPx, rect.height - c.resizerStackH - c.minBottomStackPx);
+                    const newTopPx = Math.max(c.minTopStackPx, Math.min(maxTopPx, e.clientY - rect.top));
+                    pdfStackRatioPortrait = (newTopPx / Math.max(1, rect.height)) * 100;
+                    leftPane.style.flex = `0 0 ${Math.round(newTopPx)}px`;
+                } else {
+                    const maxLeftPx = Math.max(c.minLeftSidePx, rect.width - c.resizerSideW - c.minRightSidePx);
+                    const newLeftPx = Math.max(c.minLeftSidePx, Math.min(maxLeftPx, e.clientX - rect.left));
+                    const pct = (newLeftPx / Math.max(1, rect.width)) * 100;
+                    if (c.portrait) {
+                        pdfSplitRatioPortrait = pct;
+                    } else {
+                        pdfSplitRatioLandscape = pct;
+                    }
+                    leftPane.style.flex = `0 0 ${Math.round(newLeftPx)}px`;
+                }
             });
-            window.addEventListener('pointerup', () => {
+
+            const finishDrag = () => {
                 if (!dragging) return;
                 dragging = false;
+                activePtrId = null;
                 resizer.classList.remove('dragging');
-            });
+                // Se non è stato scelto uno zoom manuale, adatta subito il PDF alla nuova larghezza della colonna
+                if (!pdfUserManualZoom && activePdfDoc) {
+                    renderCurrentPdfPage();
+                }
+            };
+
+            window.addEventListener('pointerup', finishDrag);
+            window.addEventListener('pointercancel', finishDrag);
+
+            const handleViewportChange = () => {
+                const overlay = document.getElementById('pdf-workspace-overlay');
+                if (!overlay || overlay.classList.contains('hidden')) return;
+                clearTimeout(pdfLayoutResizeTimer);
+                pdfLayoutResizeTimer = setTimeout(() => {
+                    pdfUserManualZoom = false;
+                    applyPdfSplitLayout(true);
+                }, 120);
+            };
+
+            window.addEventListener('resize', handleViewportChange);
+            window.addEventListener('orientationchange', handleViewportChange);
         }
 
         function enablePencilClicksOnPdfToolbar() {
