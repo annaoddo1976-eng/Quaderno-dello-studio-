@@ -383,6 +383,23 @@
             </div>
 
             <div class="flex-1 overflow-y-auto p-4 space-y-4">
+                <div id="bible-progress-bar" class="hidden bg-[#f6eef4] border plum-border rounded-2xl px-4 py-3 text-xs font-bold text-[#6b2d5c] flex items-center justify-between gap-2">
+                    <span id="bible-progress-text">Analisi struttura EPUB in corso...</span>
+                    <span id="bible-progress-pct" class="px-2 py-0.5 rounded-lg bg-white border plum-border">0%</span>
+                </div>
+
+                <div id="bible-reparse-notice" class="hidden bg-amber-50 border border-amber-300 rounded-2xl px-4 py-3 text-xs text-amber-950 font-semibold">
+                    ⚠️ Questa Bibbia era stata indicizzata con la versione precedente del lettore. Ricarica una volta il tuo file <strong>.epub</strong> per applicare il nuovo riconoscimento corretto di tutti i 66 libri, capitoli e versetti.
+                </div>
+
+                <div id="bible-verification-bar" class="hidden bg-emerald-50 border border-emerald-200 rounded-2xl px-3.5 py-2.5 space-y-2">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                        <span id="bible-verification-summary" class="text-xs font-extrabold text-emerald-900"></span>
+                        <button type="button" onclick="toggleBibleDiagnosticsDetails('modal')" class="text-[11px] font-bold text-[#6b2d5c] underline">Dettagli verifica</button>
+                    </div>
+                    <div id="bible-verification-details" class="hidden text-[11px] text-[#3d2937] bg-white border plum-border rounded-xl p-2.5 space-y-1.5 leading-relaxed"></div>
+                </div>
+
                 <div id="bible-empty-state" class="max-w-xl mx-auto my-8 bg-[#fbf9fa] border plum-border rounded-3xl p-6 text-center space-y-3">
                     <div class="w-14 h-14 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-2xl mx-auto">📖</div>
                     <h4 class="text-lg font-extrabold text-[#261822]">Aggiungi la tua Bibbia una sola volta</h4>
@@ -602,8 +619,31 @@
                 <button type="button" onclick="changeSideBibleFontSize(15)" title="Ingrandisci caratteri" class="px-2 py-1 rounded-lg bg-white text-[#261822] font-extrabold text-xs shadow-2xs">A+</button>
             </div>
 
-            <div id="bible-epub-chapter-label" class="w-full text-[11px] font-bold text-[#6b2d5c] bg-[#fbf9fa] border plum-border rounded-xl px-2.5 py-1 truncate">
-                Capitolo 1
+            <!-- Selezione separata Libro / Capitolo / Versetto (quando l'EPUB contiene la Bibbia) -->
+            <div id="bible-side-bcv-bar" class="hidden w-full grid grid-cols-12 gap-1.5 pt-1">
+                <select id="side-bible-book-select" onchange="onSideBibleBookChange(this.value)" aria-label="Libro biblico" class="col-span-6 bg-[#fbf9fa] border plum-border rounded-xl px-2 py-1.5 text-xs font-bold text-[#261822] focus:outline-none focus:border-[#6b2d5c]"></select>
+                <select id="side-bible-chapter-select" onchange="onSideBibleChapterChange(this.value)" aria-label="Capitolo biblico" class="col-span-3 bg-[#fbf9fa] border plum-border rounded-xl px-2 py-1.5 text-xs font-bold text-[#261822] focus:outline-none focus:border-[#6b2d5c]"></select>
+                <select id="side-bible-verse-select" onchange="onSideBibleVerseChange(this.value)" aria-label="Versetto biblico" class="col-span-3 bg-[#fbf9fa] border plum-border rounded-xl px-2 py-1.5 text-xs font-bold text-[#261822] focus:outline-none focus:border-[#6b2d5c]"></select>
+            </div>
+
+            <div class="w-full flex items-center justify-between gap-2">
+                <div id="bible-epub-chapter-label" class="flex-1 text-[11px] font-bold text-[#6b2d5c] bg-[#fbf9fa] border plum-border rounded-xl px-2.5 py-1 truncate">
+                    Capitolo 1
+                </div>
+                <button type="button" id="bible-side-verify-badge" onclick="toggleBibleDiagnosticsDetails('side')" class="hidden shrink-0 px-2 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-[10px] font-extrabold text-emerald-800">
+                    Verifica
+                </button>
+            </div>
+
+            <div id="bible-side-verify-details" class="hidden w-full text-[11px] text-[#3d2937] bg-[#fbf9fa] border plum-border rounded-xl p-2.5 space-y-1 leading-relaxed max-h-40 overflow-y-auto"></div>
+
+            <!-- Azioni rapide sul versetto selezionato -->
+            <div id="bible-side-verse-actions" class="hidden w-full bg-amber-50 border border-amber-300 rounded-xl px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-1.5">
+                <span id="bible-side-selected-ref" class="text-[11px] font-extrabold text-[#6b2d5c]"></span>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="insertSideBibleVerseIntoNote()" class="px-2.5 py-1 rounded-lg plum-primary text-[11px] font-bold">+ Nota</button>
+                    <button type="button" onclick="saveSideBibleVerseToScriptures()" class="px-2.5 py-1 rounded-lg bg-amber-300 text-[#261822] text-[11px] font-extrabold">+ Scritture</button>
+                </div>
             </div>
         </div>
 
@@ -626,16 +666,17 @@
 
         <!-- Area di lettura scorrevole EPUB -->
         <div id="bible-epub-reader-area" class="hidden flex-1 min-h-0 relative bg-white overflow-hidden">
-            <div id="bible-epub-loading-overlay" class="hidden absolute inset-0 z-10 bg-white/90 flex flex-col items-center justify-center gap-2 p-6 text-center">
-                <span class="text-sm font-extrabold text-[#6b2d5c]">Apertura EPUB in corso...</span>
-                <span class="text-xs text-[#7c6575]">Il file viene salvato sul dispositivo per i prossimi accessi.</span>
+            <div id="bible-epub-loading-overlay" class="hidden absolute inset-0 z-10 bg-white/95 flex flex-col items-center justify-center gap-2 p-6 text-center">
+                <span id="bible-epub-loading-title" class="text-sm font-extrabold text-[#6b2d5c]">Analisi struttura EPUB in corso...</span>
+                <span id="bible-epub-loading-sub" class="text-xs text-[#7c6575]">Riconoscimento libri, capitoli e versetti dal tuo file EPUB.</span>
             </div>
+            <div id="bible-side-structured-reader" class="hidden w-full h-full overflow-y-auto p-4 pb-16 space-y-2 text-[#261822] leading-relaxed" style="-webkit-overflow-scrolling: touch; font-size: 17px;"></div>
             <div id="bible-epub-viewer" class="w-full h-full"></div>
         </div>
     </aside>
 
     <script>
-        /* PANNELLO LATERALE BIBBIA (LETTORE EPUB CON EPUB.JS + INDEXEDDB) */
+        /* PANNELLO LATERALE BIBBIA (LETTORE EPUB STRUTTURATO + FALLBACK EPUB.JS + INDEXEDDB) */
         const SIDE_EPUB_BINARY_KEY = 'side_panel_epub_binary';
         const SIDE_EPUB_META_KEY = 'side_panel_epub_meta';
 
@@ -651,7 +692,11 @@
             currentSpineIndex: 0,
             totalSpineItems: 0,
             pendingBuffer: null,
-            isRendered: false
+            isRendered: false,
+            mode: 'none', // 'structured' | 'epubjs' | 'none'
+            bookIdx: 0,
+            chapterIdx: 0,
+            verseNum: null
         };
 
         async function saveSidePanelEpubBinary(arrayBuffer, fileName) {
@@ -684,7 +729,10 @@
                             bookTitle: sideBibleState.bookTitle,
                             fontSizePct: sideBibleState.fontSizePct,
                             lastCfi: sideBibleState.lastCfi,
-                            currentSpineIndex: sideBibleState.currentSpineIndex
+                            currentSpineIndex: sideBibleState.currentSpineIndex,
+                            bookIdx: sideBibleState.bookIdx,
+                            chapterIdx: sideBibleState.chapterIdx,
+                            verseNum: sideBibleState.verseNum
                         }, SIDE_EPUB_META_KEY);
                         tx.oncomplete = () => resolve();
                         tx.onerror = () => reject(tx.error);
@@ -718,6 +766,9 @@
                     sideBibleState.lastCfi = metaRec.lastCfi || null;
                     sideBibleState.currentSpineIndex = metaRec.currentSpineIndex || 0;
                     sideBibleState.bookTitle = metaRec.bookTitle || '';
+                    if (typeof metaRec.bookIdx === 'number') sideBibleState.bookIdx = metaRec.bookIdx;
+                    if (typeof metaRec.chapterIdx === 'number') sideBibleState.chapterIdx = metaRec.chapterIdx;
+                    if (metaRec.verseNum) sideBibleState.verseNum = metaRec.verseNum;
                 }
 
                 if (binRec && binRec.buffer) {
@@ -731,6 +782,11 @@
                     if (statusEl) {
                         statusEl.textContent = 'EPUB salvato pronto: ' + sideBibleState.fileName;
                     }
+                } else if (bibleData && bibleData.type === 'epub' && bibleData.parserVersion === BIBLE_PARSER_VERSION && bibleData.books.length > 0) {
+                    sideBibleState.fileName = bibleData.fileName || 'Bibbia.epub';
+                    sideBibleState.bookTitle = bibleData.fileName || 'Bibbia';
+                    const subtitleEl = document.getElementById('bible-epub-header-subtitle');
+                    if (subtitleEl) subtitleEl.textContent = `${sideBibleState.fileName} (${bibleData.books.length} libri)`;
                 }
             } catch (e) {
                 console.warn('Errore ripristino EPUB da IndexedDB:', e);
@@ -758,6 +814,11 @@
             const labelEl = document.getElementById('bible-epub-fontsize-label');
             if (labelEl) labelEl.textContent = pct + '%';
 
+            const structuredEl = document.getElementById('bible-side-structured-reader');
+            if (structuredEl) {
+                structuredEl.style.fontSize = Math.round(17 * (pct / 100)) + 'px';
+            }
+
             if (!sideBibleRendition) return;
             try {
                 sideBibleRendition.themes.fontSize(pct + '%');
@@ -783,6 +844,20 @@
             const labelEl = document.getElementById('bible-epub-chapter-label');
             const prevBtn = document.getElementById('bible-epub-prev-btn');
             const nextBtn = document.getElementById('bible-epub-next-btn');
+
+            if (sideBibleState.mode === 'structured' && bibleData && bibleData.books && bibleData.books.length > 0) {
+                const bIdx = Math.max(0, Math.min(bibleData.books.length - 1, sideBibleState.bookIdx || 0));
+                const book = bibleData.books[bIdx];
+                const cIdx = Math.max(0, Math.min(book.chapters.length - 1, sideBibleState.chapterIdx || 0));
+                const ch = book.chapters[cIdx];
+                if (labelEl && ch) {
+                    labelEl.textContent = `${book.name} — Capitolo ${ch.num} di ${book.chapters.length} (${ch.verses.length} versetti)`;
+                }
+                if (prevBtn) prevBtn.disabled = (bIdx === 0 && cIdx === 0);
+                if (nextBtn) nextBtn.disabled = (bIdx === bibleData.books.length - 1 && cIdx === book.chapters.length - 1);
+                return;
+            }
+
             const spineItems = (sideBibleBook && sideBibleBook.spine && sideBibleBook.spine.spineItems) || [];
             const total = spineItems.length || sideBibleState.totalSpineItems || 0;
             const idx = Math.max(0, Math.min(Math.max(0, total - 1), sideBibleState.currentSpineIndex || 0));
@@ -799,23 +874,231 @@
             if (nextBtn) nextBtn.disabled = total > 0 && idx >= total - 1;
         }
 
+        function renderSideBibleStructuredUI(scrollToVerse = false) {
+            if (!bibleData || bibleData.type !== 'epub' || !Array.isArray(bibleData.books) || bibleData.books.length === 0) {
+                return false;
+            }
+
+            const emptyBox = document.getElementById('bible-epub-empty-box');
+            const readerArea = document.getElementById('bible-epub-reader-area');
+            const toolbar = document.getElementById('bible-epub-toolbar');
+            const bcvBar = document.getElementById('bible-side-bcv-bar');
+            const structuredEl = document.getElementById('bible-side-structured-reader');
+            const epubJsEl = document.getElementById('bible-epub-viewer');
+            const subtitleEl = document.getElementById('bible-epub-header-subtitle');
+
+            sideBibleState.mode = 'structured';
+            sideBibleState.isRendered = true;
+
+            if (emptyBox) emptyBox.classList.add('hidden');
+            if (toolbar) toolbar.classList.remove('hidden');
+            if (readerArea) readerArea.classList.remove('hidden');
+            if (bcvBar) bcvBar.classList.remove('hidden');
+            if (structuredEl) structuredEl.classList.remove('hidden');
+            if (epubJsEl) epubJsEl.classList.add('hidden');
+
+            const bookIdx = Math.max(0, Math.min(bibleData.books.length - 1, sideBibleState.bookIdx || 0));
+            sideBibleState.bookIdx = bookIdx;
+            const book = bibleData.books[bookIdx];
+
+            const chapIdx = Math.max(0, Math.min(book.chapters.length - 1, sideBibleState.chapterIdx || 0));
+            sideBibleState.chapterIdx = chapIdx;
+            const chapter = book.chapters[chapIdx];
+
+            if (subtitleEl) {
+                subtitleEl.textContent = `${bibleData.fileName || 'Bibbia.epub'} • ${bibleData.books.length}/66 libri`;
+            }
+
+            // Popola selettori separati Libro / Capitolo / Versetto
+            const bookSel = document.getElementById('side-bible-book-select');
+            const chapSel = document.getElementById('side-bible-chapter-select');
+            const verseSel = document.getElementById('side-bible-verse-select');
+
+            if (bookSel) {
+                bookSel.innerHTML = bibleData.books.map((b, i) =>
+                    `<option value="${i}" ${i === bookIdx ? 'selected' : ''}>${escapeHtml(b.name)} (${b.chapters.length})</option>`
+                ).join('');
+            }
+            if (chapSel) {
+                chapSel.innerHTML = book.chapters.map((ch, i) =>
+                    `<option value="${i}" ${i === chapIdx ? 'selected' : ''}>Cap. ${ch.num}</option>`
+                ).join('');
+            }
+            if (verseSel && chapter) {
+                verseSel.innerHTML = `<option value="">Versetto...</option>` + chapter.verses.map(v =>
+                    `<option value="${v.num}" ${Number(sideBibleState.verseNum) === Number(v.num) ? 'selected' : ''}>v. ${v.num}</option>`
+                ).join('');
+            }
+
+            // Renderizza il testo autentico del capitolo estratto dall'EPUB
+            if (structuredEl && chapter) {
+                const superHtml = chapter.superscription
+                    ? `<p class="italic text-[#6b2d5c] text-[0.92em] bg-[#fbf9fa] border plum-border rounded-xl px-3 py-2 mb-2">${escapeHtml(chapter.superscription)}</p>`
+                    : '';
+                const versesHtml = chapter.verses.map(v => {
+                    const isSel = Number(sideBibleState.verseNum) === Number(v.num);
+                    return `
+                        <p id="side-bible-v-${v.num}" onclick="selectSideBibleVerse(${v.num})"
+                           class="px-2.5 py-1.5 rounded-xl cursor-pointer transition ${isSel ? 'bg-amber-100 border border-amber-300 font-semibold' : 'hover:bg-[#fbf9fa]'}">
+                            <sup class="font-extrabold text-[#6b2d5c] mr-1 select-none">${v.num}</sup>${escapeHtml(v.text)}
+                        </p>
+                    `;
+                }).join('');
+
+                structuredEl.innerHTML = `
+                    <div class="pb-2 mb-2 border-b plum-border flex items-baseline justify-between gap-2">
+                        <h3 class="text-lg font-extrabold text-[#6b2d5c]">${escapeHtml(book.name)} ${chapter.num}</h3>
+                        <span class="text-[11px] font-bold text-[#7c6575]">${chapter.verses.length} versetti</span>
+                    </div>
+                    ${superHtml}
+                    <div class="space-y-1">${versesHtml}</div>
+                `;
+                if (!scrollToVerse) {
+                    structuredEl.scrollTop = 0;
+                }
+            }
+
+            updateSideBibleSelectedVerseBar();
+            updateSideBibleChapterInfo();
+            applySideBibleFontSizeToRendition();
+            renderBibleVerificationUI();
+
+            if (scrollToVerse && sideBibleState.verseNum) {
+                setTimeout(() => {
+                    const target = document.getElementById('side-bible-v-' + sideBibleState.verseNum);
+                    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 40);
+            }
+            return true;
+        }
+
+        function onSideBibleBookChange(val) {
+            sideBibleState.bookIdx = parseInt(val, 10) || 0;
+            sideBibleState.chapterIdx = 0;
+            sideBibleState.verseNum = null;
+            renderSideBibleStructuredUI(false);
+            persistSideBibleMeta();
+        }
+
+        function onSideBibleChapterChange(val) {
+            sideBibleState.chapterIdx = parseInt(val, 10) || 0;
+            sideBibleState.verseNum = null;
+            renderSideBibleStructuredUI(false);
+            persistSideBibleMeta();
+        }
+
+        function onSideBibleVerseChange(val) {
+            sideBibleState.verseNum = val ? parseInt(val, 10) : null;
+            renderSideBibleStructuredUI(true);
+            persistSideBibleMeta();
+        }
+
+        function selectSideBibleVerse(vNum) {
+            sideBibleState.verseNum = vNum;
+            renderSideBibleStructuredUI(false);
+            persistSideBibleMeta();
+        }
+
+        function getSideBibleSelectedPassage() {
+            if (!bibleData || !bibleData.books || !bibleData.books.length) return null;
+            const book = bibleData.books[sideBibleState.bookIdx];
+            if (!book) return null;
+            const chapter = book.chapters[sideBibleState.chapterIdx];
+            if (!chapter) return null;
+            const verse = chapter.verses.find(v => Number(v.num) === Number(sideBibleState.verseNum));
+            if (!verse) return null;
+            return {
+                ref: `${book.name} ${chapter.num}:${verse.num}`,
+                text: verse.text
+            };
+        }
+
+        function updateSideBibleSelectedVerseBar() {
+            const box = document.getElementById('bible-side-verse-actions');
+            const refEl = document.getElementById('bible-side-selected-ref');
+            const passage = getSideBibleSelectedPassage();
+            if (!box || !refEl) return;
+            if (!passage) {
+                box.classList.add('hidden');
+                return;
+            }
+            box.classList.remove('hidden');
+            refEl.textContent = '📖 ' + passage.ref;
+        }
+
+        function insertSideBibleVerseIntoNote() {
+            const passage = getSideBibleSelectedPassage();
+            if (!passage) return;
+            insertBiblePassageIntoActiveNote(passage);
+        }
+
+        function saveSideBibleVerseToScriptures() {
+            const passage = getSideBibleSelectedPassage();
+            if (!passage) return;
+            saveBiblePassageToActiveScriptures(passage);
+        }
+
         async function renderSidePanelEpubFromBuffer(arrayBuffer, fileName, restoreTargetCfi = null) {
             const emptyBox = document.getElementById('bible-epub-empty-box');
             const readerArea = document.getElementById('bible-epub-reader-area');
             const toolbar = document.getElementById('bible-epub-toolbar');
+            const bcvBar = document.getElementById('bible-side-bcv-bar');
+            const structuredEl = document.getElementById('bible-side-structured-reader');
+            const epubJsEl = document.getElementById('bible-epub-viewer');
             const loadingOverlay = document.getElementById('bible-epub-loading-overlay');
-            const viewerEl = document.getElementById('bible-epub-viewer');
+            const loadingTitle = document.getElementById('bible-epub-loading-title');
+            const loadingSub = document.getElementById('bible-epub-loading-sub');
             const subtitleEl = document.getElementById('bible-epub-header-subtitle');
-
-            if (typeof window.ePub !== 'function') {
-                showToast('Libreria epub.js non disponibile. Verifica la connessione internet e riprova.', true);
-                return;
-            }
 
             if (emptyBox) emptyBox.classList.add('hidden');
             if (toolbar) toolbar.classList.remove('hidden');
             if (readerArea) readerArea.classList.remove('hidden');
             if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+
+            try {
+                // 1. Prova prima il parser strutturale Bibbia v2 (66 libri, capitoli e versetti reali)
+                let parsedBible = null;
+                if (bibleData && bibleData.type === 'epub' && bibleData.parserVersion === BIBLE_PARSER_VERSION && bibleData.fileName === fileName && bibleData.books.length > 0) {
+                    parsedBible = bibleData;
+                } else {
+                    parsedBible = await parseBibleEpubBuffer(arrayBuffer, fileName, (pct, msg) => {
+                        if (loadingTitle) loadingTitle.textContent = `Analisi struttura EPUB (${pct}%)...`;
+                        if (loadingSub) loadingSub.textContent = msg;
+                    });
+                }
+
+                if (parsedBible && parsedBible.books && parsedBible.books.length > 0) {
+                    bibleData = parsedBible;
+                    await saveBibleToIndexedDb(bibleData);
+                    if (sideBibleRendition) {
+                        try { sideBibleRendition.destroy(); } catch (_) {}
+                        sideBibleRendition = null;
+                    }
+                    if (sideBibleBook) {
+                        try { sideBibleBook.destroy(); } catch (_) {}
+                        sideBibleBook = null;
+                    }
+                    renderSideBibleStructuredUI(!!sideBibleState.verseNum);
+                    persistSideBibleMeta();
+                    return;
+                }
+            } catch (bibleErr) {
+                console.warn('EPUB non riconosciuto come Bibbia strutturata, passo al lettore epub.js generico:', bibleErr);
+            } finally {
+                if (loadingOverlay) loadingOverlay.classList.add('hidden');
+            }
+
+            // 2. Fallback generico con epub.js (per file EPUB non biblici)
+            if (typeof window.ePub !== 'function') {
+                showToast('Libreria epub.js non disponibile. Verifica la connessione internet e riprova.', true);
+                return;
+            }
+
+            if (bcvBar) bcvBar.classList.add('hidden');
+            if (structuredEl) structuredEl.classList.add('hidden');
+            if (epubJsEl) epubJsEl.classList.remove('hidden');
+            if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+            sideBibleState.mode = 'epubjs';
 
             try {
                 if (sideBibleRendition) {
@@ -826,9 +1109,8 @@
                     try { sideBibleBook.destroy(); } catch (_) {}
                     sideBibleBook = null;
                 }
-                if (viewerEl) viewerEl.innerHTML = '';
+                if (epubJsEl) epubJsEl.innerHTML = '';
 
-                // Passa una copia dell'ArrayBuffer così il buffer salvato resta integro
                 sideBibleBook = window.ePub(arrayBuffer.slice(0));
                 await sideBibleBook.ready;
 
@@ -845,7 +1127,6 @@
                     subtitleEl.textContent = sideBibleState.bookTitle;
                 }
 
-                // Attende un frame affinché il contenitore abbia le dimensioni reali prima di renderTo
                 await new Promise(resolve => requestAnimationFrame(resolve));
 
                 sideBibleRendition = sideBibleBook.renderTo('bible-epub-viewer', {
@@ -856,7 +1137,6 @@
                     allowScriptedContent: false
                 });
 
-                // Stile leggibile e compatibile con lo scorrimento fluido su iPad e desktop
                 sideBibleRendition.hooks.content.register((contents) => {
                     const doc = contents && contents.document;
                     if (!doc || !doc.head) return;
@@ -928,6 +1208,36 @@
         }
 
         async function sideBibleGoToSpineOffset(delta) {
+            if (sideBibleState.mode === 'structured' && bibleData && bibleData.books && bibleData.books.length > 0) {
+                let bIdx = sideBibleState.bookIdx || 0;
+                let cIdx = (sideBibleState.chapterIdx || 0) + delta;
+
+                if (cIdx < 0) {
+                    if (bIdx > 0) {
+                        bIdx--;
+                        cIdx = bibleData.books[bIdx].chapters.length - 1;
+                    } else {
+                        showToast('Sei già al primo capitolo.');
+                        return;
+                    }
+                } else if (cIdx >= bibleData.books[bIdx].chapters.length) {
+                    if (bIdx < bibleData.books.length - 1) {
+                        bIdx++;
+                        cIdx = 0;
+                    } else {
+                        showToast('Sei già all\'ultimo capitolo.');
+                        return;
+                    }
+                }
+
+                sideBibleState.bookIdx = bIdx;
+                sideBibleState.chapterIdx = cIdx;
+                sideBibleState.verseNum = null;
+                renderSideBibleStructuredUI(false);
+                persistSideBibleMeta();
+                return;
+            }
+
             if (!sideBibleBook || !sideBibleRendition) return;
             const spineItems = (sideBibleBook.spine && sideBibleBook.spine.spineItems) || [];
             if (spineItems.length === 0) return;
@@ -971,7 +1281,7 @@
             persistSideBibleMeta();
         }
 
-        function toggleBibleSidePanel() {
+        async function toggleBibleSidePanel() {
             const panel = document.getElementById('bible-side-panel');
             if (!panel) return;
             const isOpening = panel.classList.contains('translate-x-full');
@@ -979,8 +1289,10 @@
             if (window.lucide) lucide.createIcons();
 
             if (isOpening) {
-                if (!sideBibleState.isRendered && sideBibleState.pendingBuffer) {
-                    renderSidePanelEpubFromBuffer(
+                if (bibleData && bibleData.type === 'epub' && bibleData.parserVersion === BIBLE_PARSER_VERSION && bibleData.books.length > 0) {
+                    renderSideBibleStructuredUI(false);
+                } else if (sideBibleState.pendingBuffer) {
+                    await renderSidePanelEpubFromBuffer(
                         sideBibleState.pendingBuffer,
                         sideBibleState.fileName,
                         sideBibleState.lastCfi
@@ -1004,7 +1316,7 @@
             if (!file) return;
             const statusEl = document.getElementById('bible-epub-file-status');
             if (statusEl) {
-                statusEl.textContent = 'Caricamento di ' + file.name + ' in corso...';
+                statusEl.textContent = 'Analisi di ' + file.name + ' in corso...';
             }
 
             try {
@@ -1013,10 +1325,20 @@
                 sideBibleState.fileName = file.name;
                 sideBibleState.lastCfi = null;
                 sideBibleState.currentSpineIndex = 0;
+                sideBibleState.bookIdx = 0;
+                sideBibleState.chapterIdx = 0;
+                sideBibleState.verseNum = null;
+                // Forza rianalisi completa del nuovo file
+                bibleData = { type: null, parserVersion: 0, fileName: '', books: [], pdfBuffer: null, diagnostics: null };
 
                 await saveSidePanelEpubBinary(arrayBuffer, file.name);
                 await renderSidePanelEpubFromBuffer(arrayBuffer, file.name, null);
-                showToast('EPUB caricato e salvato sul dispositivo: ' + file.name);
+
+                if (bibleData && bibleData.type === 'epub' && bibleData.books.length > 0) {
+                    showToast(`Bibbia EPUB verificata: ${bibleData.books.length}/66 libri caricati e salvati!`);
+                } else {
+                    showToast('EPUB caricato e salvato sul dispositivo: ' + file.name);
+                }
             } catch (err) {
                 console.error('Errore selezione file EPUB:', err);
                 showToast('Errore durante il caricamento del file EPUB.', true);
@@ -1030,10 +1352,1584 @@
                 try { sideBibleRendition.resize(); } catch (_) {}
             }
         });
+        /* BIBBIA INTEGRATA (PARSER STRUTTURALE EPUB V2: 66 LIBRI, CAPITOLI E VERSETTI REALI + PDF) */
+        const BIBLE_PARSER_VERSION = 2;
 
-        /* CONFIGURAZIONE E STATO GLOBALE DEL QUADERNO */
-        if (window.pdfjsLib) {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        let bibleData = {
+            type: null,
+            parserVersion: 0,
+            fileName: '',
+            books: [],
+            pdfBuffer: null,
+            diagnostics: null
+        };
+        let bibleNav = {
+            bookIdx: 0,
+            chapterIdx: 0,
+            selectedVerseNum: null,
+            fontSize: 18
+        };
+
+        // Struttura canonica dei 66 libri (usata per riconoscimento e verifica, mai per generare testo)
+        const BIBLE_CANON_IT = [
+            { num: 1, name: 'Genesi', expectedChapters: 50, aliases: ['genesi', 'gen', 'gn'] },
+            { num: 2, name: 'Esodo', expectedChapters: 40, aliases: ['esodo', 'eso', 'es'] },
+            { num: 3, name: 'Levitico', expectedChapters: 27, aliases: ['levitico', 'lev', 'lv'] },
+            { num: 4, name: 'Numeri', expectedChapters: 36, aliases: ['numeri', 'num', 'nm'] },
+            { num: 5, name: 'Deuteronomio', expectedChapters: 34, aliases: ['deuteronomio', 'deut', 'dt', 'de'] },
+            { num: 6, name: 'Giosuè', expectedChapters: 24, aliases: ['giosue', 'gios', 'gs'] },
+            { num: 7, name: 'Giudici', expectedChapters: 21, aliases: ['giudici', 'giudic', 'gdc'] },
+            { num: 8, name: 'Rut', expectedChapters: 4, aliases: ['rut', 'ruth', 'rt'] },
+            { num: 9, name: '1 Samuele', expectedChapters: 31, aliases: ['1samuele', '1sam', '1sa'] },
+            { num: 10, name: '2 Samuele', expectedChapters: 24, aliases: ['2samuele', '2sam', '2sa'] },
+            { num: 11, name: '1 Re', expectedChapters: 22, aliases: ['1re'] },
+            { num: 12, name: '2 Re', expectedChapters: 25, aliases: ['2re'] },
+            { num: 13, name: '1 Cronache', expectedChapters: 29, aliases: ['1cronache', '1cron', '1cr'] },
+            { num: 14, name: '2 Cronache', expectedChapters: 36, aliases: ['2cronache', '2cron', '2cr'] },
+            { num: 15, name: 'Esdra', expectedChapters: 10, aliases: ['esdra', 'esd', 'esr'] },
+            { num: 16, name: 'Neemia', expectedChapters: 13, aliases: ['neemia', 'nehemia', 'nee', 'ne'] },
+            { num: 17, name: 'Ester', expectedChapters: 10, aliases: ['ester', 'esther', 'est'] },
+            { num: 18, name: 'Giobbe', expectedChapters: 42, aliases: ['giobbe', 'giob', 'gb'] },
+            { num: 19, name: 'Salmi', expectedChapters: 150, aliases: ['salmi', 'salmo', 'sal', 'sl'] },
+            { num: 20, name: 'Proverbi', expectedChapters: 31, aliases: ['proverbi', 'prov', 'pr'] },
+            { num: 21, name: 'Ecclesiaste', expectedChapters: 12, aliases: ['ecclesiaste', 'qoelet', 'qohelet', 'eccl', 'ec', 'qo'] },
+            { num: 22, name: 'Cantico dei Cantici', expectedChapters: 8, aliases: ['canticodeicantici', 'canticodisalomone', 'cantico', 'cant', 'ct'] },
+            { num: 23, name: 'Isaia', expectedChapters: 66, aliases: ['isaia', 'isa', 'is'] },
+            { num: 24, name: 'Geremia', expectedChapters: 52, aliases: ['geremia', 'ger', 'gr'] },
+            { num: 25, name: 'Lamentazioni', expectedChapters: 5, aliases: ['lamentazioni', 'lam', 'lm'] },
+            { num: 26, name: 'Ezechiele', expectedChapters: 48, aliases: ['ezechiele', 'ezec', 'ez'] },
+            { num: 27, name: 'Daniele', expectedChapters: 12, aliases: ['daniele', 'dan', 'dn'] },
+            { num: 28, name: 'Osea', expectedChapters: 14, aliases: ['osea', 'os'] },
+            { num: 29, name: 'Gioele', expectedChapters: 3, aliases: ['gioele', 'gioe', 'gl'] },
+            { num: 30, name: 'Amos', expectedChapters: 9, aliases: ['amos', 'am'] },
+            { num: 31, name: 'Abdia', expectedChapters: 1, aliases: ['abdia', 'abd', 'ab'] },
+            { num: 32, name: 'Giona', expectedChapters: 4, aliases: ['giona', 'gion'] },
+            { num: 33, name: 'Michea', expectedChapters: 7, aliases: ['michea', 'mic', 'mi'] },
+            { num: 34, name: 'Naum', expectedChapters: 3, aliases: ['naum', 'nahum', 'na'] },
+            { num: 35, name: 'Abacuc', expectedChapters: 3, aliases: ['abacuc', 'abac', 'abk'] },
+            { num: 36, name: 'Sofonia', expectedChapters: 3, aliases: ['sofonia', 'sof'] },
+            { num: 37, name: 'Aggeo', expectedChapters: 2, aliases: ['aggeo', 'agg', 'ag'] },
+            { num: 38, name: 'Zaccaria', expectedChapters: 14, aliases: ['zaccaria', 'zac', 'zc'] },
+            { num: 39, name: 'Malachia', expectedChapters: 4, aliases: ['malachia', 'mal', 'ml'] },
+            { num: 40, name: 'Matteo', expectedChapters: 28, aliases: ['matteo', 'mat', 'mt'] },
+            { num: 41, name: 'Marco', expectedChapters: 16, aliases: ['marco', 'mar', 'mc'] },
+            { num: 42, name: 'Luca', expectedChapters: 24, aliases: ['luca', 'luc', 'lc'] },
+            { num: 43, name: 'Giovanni', expectedChapters: 21, aliases: ['giovanni', 'giov', 'gv'] },
+            { num: 44, name: 'Atti', expectedChapters: 28, aliases: ['atti', 'attidegliapostoli', 'att', 'at'] },
+            { num: 45, name: 'Romani', expectedChapters: 16, aliases: ['romani', 'rom', 'rm', 'ro'] },
+            { num: 46, name: '1 Corinti', expectedChapters: 16, aliases: ['1corinti', '1corinzi', '1cor', '1co'] },
+            { num: 47, name: '2 Corinti', expectedChapters: 13, aliases: ['2corinti', '2corinzi', '2cor', '2co'] },
+            { num: 48, name: 'Galati', expectedChapters: 6, aliases: ['galati', 'gal', 'ga'] },
+            { num: 49, name: 'Efesini', expectedChapters: 6, aliases: ['efesini', 'efe', 'ef'] },
+            { num: 50, name: 'Filippesi', expectedChapters: 4, aliases: ['filippesi', 'flp', 'fil'] },
+            { num: 51, name: 'Colossesi', expectedChapters: 4, aliases: ['colossesi', 'col'] },
+            { num: 52, name: '1 Tessalonicesi', expectedChapters: 5, aliases: ['1tessalonicesi', '1tes', '1ts'] },
+            { num: 53, name: '2 Tessalonicesi', expectedChapters: 3, aliases: ['2tessalonicesi', '2tes', '2ts'] },
+            { num: 54, name: '1 Timoteo', expectedChapters: 6, aliases: ['1timoteo', '1tim', '1tm'] },
+            { num: 55, name: '2 Timoteo', expectedChapters: 4, aliases: ['2timoteo', '2tim', '2tm'] },
+            { num: 56, name: 'Tito', expectedChapters: 3, aliases: ['tito', 'tit', 'tt'] },
+            { num: 57, name: 'Filemone', expectedChapters: 1, aliases: ['filemone', 'filem', 'flm'] },
+            { num: 58, name: 'Ebrei', expectedChapters: 13, aliases: ['ebrei', 'ebr', 'eb'] },
+            { num: 59, name: 'Giacomo', expectedChapters: 5, aliases: ['giacomo', 'giac', 'gc'] },
+            { num: 60, name: '1 Pietro', expectedChapters: 5, aliases: ['1pietro', '1piet', '1pt'] },
+            { num: 61, name: '2 Pietro', expectedChapters: 3, aliases: ['2pietro', '2piet', '2pt'] },
+            { num: 62, name: '1 Giovanni', expectedChapters: 5, aliases: ['1giovanni', '1giov', '1gv'] },
+            { num: 63, name: '2 Giovanni', expectedChapters: 1, aliases: ['2giovanni', '2giov', '2gv'] },
+            { num: 64, name: '3 Giovanni', expectedChapters: 1, aliases: ['3giovanni', '3giov', '3gv'] },
+            { num: 65, name: 'Giuda', expectedChapters: 1, aliases: ['giuda', 'gda', 'gd'] },
+            { num: 66, name: 'Rivelazione', expectedChapters: 22, aliases: ['rivelazione', 'apocalisse', 'rivelazioneapocalisse', 'apocalissedigiovanni', 'riv', 'ri', 'ap'] }
+        ];
+
+        const BIBLE_CANON_BY_NUM = new Map(BIBLE_CANON_IT.map(b => [b.num, b]));
+        const BIBLE_ALIAS_EXACT_MAP = new Map();
+        BIBLE_CANON_IT.forEach(book => {
+            book.aliases.forEach(al => {
+                if (!BIBLE_ALIAS_EXACT_MAP.has(al)) {
+                    BIBLE_ALIAS_EXACT_MAP.set(al, book);
+                }
+            });
+        });
+
+        async function saveBibleToIndexedDb(record) {
+            try {
+                const db = await openPdfDatabase();
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction(BIBLE_STORE_NAME, 'readwrite');
+                    tx.objectStore(BIBLE_STORE_NAME).put(record, 'main_bible');
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.warn('Errore salvataggio Bibbia in IndexedDB:', e);
+            }
+        }
+
+        async function loadBibleFromIndexedDb() {
+            try {
+                const db = await openPdfDatabase();
+                const stored = await new Promise((resolve, reject) => {
+                    const tx = db.transaction(BIBLE_STORE_NAME, 'readonly');
+                    const req = tx.objectStore(BIBLE_STORE_NAME).get('main_bible');
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => reject(req.error);
+                });
+                if (stored && stored.type) {
+                    bibleData = stored;
+                }
+            } catch (e) {
+                console.warn('Errore lettura Bibbia da IndexedDB:', e);
+            }
+        }
+
+        function normalizeBibleBookName(str) {
+            return String(str || '')
+                .toLowerCase()
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .replace(/[^a-z0-9]/g, '');
+        }
+
+        function cleanBibleTitleForMatching(raw) {
+            let s = String(raw || '')
+                .replace(/\u00a0/g, ' ')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+            // Converti ordinali / numeri romani iniziali
+            s = s.replace(/^(?:1[°ºª]?|primo|prima|i)\s+(?:libro\s+di\s+|lettera\s+(?:ai|agli|a|di)\s+)?/i, '1 ');
+            s = s.replace(/^(?:2[°ºª]?|secondo|seconda|ii)\s+(?:libro\s+di\s+|lettera\s+(?:ai|agli|a|di)\s+)?/i, '2 ');
+            s = s.replace(/^(?:3[°ºª]?|terzo|terza|iii)\s+(?:libro\s+di\s+|lettera\s+(?:ai|agli|a|di)\s+)?/i, '3 ');
+            // Rimuovi prefissi descrittivi
+            s = s.replace(/^(?:il\s+)?libro\s+(?:di|del|della|dei|degli)\s+/i, '');
+            s = s.replace(/^(?:la\s+)?lettera\s+(?:ai|agli|a|di)\s+/i, '');
+            s = s.replace(/^(?:il\s+|santo\s+)?vangelo\s+(?:secondo|di)\s+/i, '');
+            s = s.replace(/^profezia\s+di\s+/i, '');
+            s = s.replace(/^il\s+/i, '');
+            return s.trim();
+        }
+
+        function isNonBiblicalSectionLabel(raw) {
+            const s = String(raw || '')
+                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+            if (!s) return false;
+            return /\b(appendic[ei]|glossario|prefazione|introduzione\s+alla\s+parola|tavola\s+dei\s+libri|indice\s+dell[ae]|sommario\s+generale|cartin[ae]|mapp[ae]|cronologia|copyright|frontespizio|copertina|note\s+in\s+calce|riferimenti\s+marginali|guida\s+allo\s+studio|elenco\s+dei\s+libri|scritture\s+ebraico|scritture\s+greche|traduzione\s+del\s+nuovo\s+mondo)\b/i.test(s);
+        }
+
+        function matchCanonicalBook(rawLabel, allowShortAbbr = false) {
+            const raw = String(rawLabel || '').trim();
+            if (!raw || isNonBiblicalSectionLabel(raw)) return null;
+
+            const candidates = [raw];
+            // Gestisce forme come "Rivelazione (Apocalisse)" o "Ecclesiaste (Qoèlet)"
+            const parenMatch = raw.match(/^([^(]+)\(([^)]+)\)/);
+            if (parenMatch) {
+                candidates.push(parenMatch[1].trim(), parenMatch[2].trim());
+            }
+            // Gestisce forme come "Atti — Contenuto" o "Atti: Introduzione"
+            const sepSplit = raw.split(/\s*[—–|:]\s*/);
+            if (sepSplit.length > 1 && sepSplit[0].trim()) {
+                candidates.push(sepSplit[0].trim());
+            }
+
+            for (const cand of candidates) {
+                if (isNonBiblicalSectionLabel(cand)) continue;
+                const cleaned = cleanBibleTitleForMatching(cand);
+                const key = normalizeBibleBookName(cleaned);
+                if (!key) continue;
+                const exact = BIBLE_ALIAS_EXACT_MAP.get(key);
+                if (exact) {
+                    // Evita che abbreviazioni di 2 caratteri (es. "es", "re", "is", "at") scattino su testi generici se non autorizzate
+                    if (!allowShortAbbr && key.length <= 2 && key !== '1re' && key !== '2re') continue;
+                    return exact;
+                }
+            }
+            return null;
+        }
+
+        function extractBookAndChapterFromText(raw, allowShortAbbr = false) {
+            const text = String(raw || '').replace(/\u00a0/g, ' ').trim();
+            if (!text) return null;
+            if (isNonBiblicalSectionLabel(text)) return { isNonBiblical: true };
+
+            // 1. Nome esatto del libro senza numero di capitolo
+            const exactBook = matchCanonicalBook(text, allowShortAbbr);
+            if (exactBook) return { book: exactBook, chapterNum: null };
+
+            // 2. "Libro Capitolo" (es. "Atti 1", "2 Timoteo 3", "Salmo 23", "Atti, capitolo 14")
+            const mBookChap = text.match(/^(.+?)(?:,\s*|\s+)(?:capitolo\s+|cap\.?\s+)?(\d{1,3})(?:\s*[:\-–—]\s*\d+.*)?$/i);
+            if (mBookChap) {
+                const book = matchCanonicalBook(mBookChap[1].trim(), allowShortAbbr);
+                const chNum = parseInt(mBookChap[2], 10);
+                if (book && chNum >= 1 && chNum <= book.expectedChapters) {
+                    return { book, chapterNum: chNum };
+                }
+            }
+
+            // 3. "Capitolo X — Libro" / "Capitolo X di Libro"
+            const mChapBook = text.match(/^(?:capitolo|cap\.?)\s+(\d{1,3})\s*(?:[-–—:|]|di|del|della)\s*(.+)$/i);
+            if (mChapBook) {
+                const book = matchCanonicalBook(mChapBook[2].trim(), allowShortAbbr);
+                const chNum = parseInt(mChapBook[1], 10);
+                if (book && chNum >= 1 && chNum <= book.expectedChapters) {
+                    return { book, chapterNum: chNum };
+                }
+            }
+
+            return null;
+        }
+
+        function normalizeZipPath(pathStr) {
+            const clean = String(pathStr || '').replace(/\\/g, '/').split('#')[0].split('?')[0];
+            let decoded = clean;
+            try { decoded = decodeURIComponent(clean); } catch (_) {}
+            const parts = decoded.split('/');
+            const stack = [];
+            for (const part of parts) {
+                if (!part || part === '.') continue;
+                if (part === '..') {
+                    if (stack.length > 0) stack.pop();
+                } else {
+                    stack.push(part);
+                }
+            }
+            return stack.join('/');
+        }
+
+        function resolveZipPath(baseFilePath, relHref) {
+            const rawRel = String(relHref || '').trim();
+            if (!rawRel || /^[a-z]+:/i.test(rawRel)) return '';
+            const relNoHash = rawRel.split('#')[0];
+            if (!relNoHash) return normalizeZipPath(baseFilePath);
+            if (relNoHash.startsWith('/')) return normalizeZipPath(relNoHash);
+            const normBase = normalizeZipPath(baseFilePath);
+            const dir = normBase.includes('/') ? normBase.slice(0, normBase.lastIndexOf('/') + 1) : '';
+            return normalizeZipPath(dir + relNoHash);
+        }
+
+        function buildZipCaseInsensitiveLookup(zip) {
+            const map = new Map();
+            Object.keys(zip.files).forEach(k => {
+                map.set(normalizeZipPath(k).toLowerCase(), k);
+            });
+            return map;
+        }
+
+        function getZipFileSafe(zip, lowerLookup, normPath) {
+            if (!normPath) return null;
+            if (zip.file(normPath)) return zip.file(normPath);
+            const actualKey = lowerLookup.get(normPath.toLowerCase());
+            return actualKey ? zip.file(actualKey) : null;
+        }
+
+        function getFileStem(normPath) {
+            const fileName = normPath.split('/').pop() || '';
+            const noExt = fileName.replace(/\.[^.]+$/, '');
+            // Raggruppa file divisi da Calibre/JW (es. 1001061148-split2 -> 1001061148)
+            return noExt.replace(/[-_](?:split|part|ch|chap)\d+$/i, '');
+        }
+
+        function isExcludedAuxFile(normPath, properties) {
+            if (properties && /\bnav\b/i.test(properties)) return true;
+            const fname = (normPath.split('/').pop() || '').toLowerCase();
+            if (/[-_]extracted\d*\.x?html?$/i.test(fname)) return true;
+            if (/\b(toc|nav|biblebooknav|cover|titlepage|copyright|glossary|glossario|appendix|appendice|footnotes?)\b/i.test(fname)) return true;
+            return false;
+        }
+
+        function getElementEpubType(el) {
+            if (!el || el.nodeType !== 1) return '';
+            const a1 = el.getAttribute('epub:type') || '';
+            const a2 = el.getAttribute('role') || '';
+            return (a1 + ' ' + a2).toLowerCase();
+        }
+
+        function isOutlineOrNavDocument(doc, body) {
+            const hTexts = Array.from(doc.querySelectorAll('h1, h2, h3, .contextTtl, .bookOutlineTitle, header'))
+                .map(el => (el.textContent || '').trim().toLowerCase())
+                .join(' ');
+            // Se ha espliciti marcatori di versetto JW/OSIS, NON è un sommario
+            if (body.querySelector('[id^="chapter"][id*="_verse"], [id^="v"][id]')) {
+                const hasRealVerseId = Array.from(body.querySelectorAll('[id]')).some(el =>
+                    /^(?:chapter\d+_verse\d+|v\d{8}|v\d{1,2}[-_]\d{1,3}[-_]\d{1,3})$/i.test(el.id)
+                );
+                if (hasRealVerseId) return false;
+            }
+            if (body.querySelector('.outline, .bookOutline, .bibleBookNav, .w_navigation, .chapterPicker')) {
+                const pCount = body.querySelectorAll('p.sb, p.sz, p.sl, p.v').length;
+                if (pCount === 0) return true;
+            }
+            if (/\b(contenuto|schema\s+del\s+libro|panoramica|introduzione\s+a\s+|sommario|tavola\s+dei\s+libri)\b/i.test(hTexts)) {
+                return true;
+            }
+            // Controlla se quasi tutto il testo è composto da link (tipico di pagine indice capitoli: 1 2 3 ... 28)
+            const totalText = (body.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!totalText) return true;
+            const linkText = Array.from(body.querySelectorAll('a')).map(a => (a.textContent || '').trim()).join(' ');
+            if (totalText.length < 1500 && linkText.length > totalText.length * 0.65) {
+                return true;
+            }
+            return false;
+        }
+
+        function cleanClonedDocForScripture(cloneBody) {
+            // Rimuovi elementi non biblici (note in calce, riferimenti marginali, navigazione, numeri di pagina)
+            const removeSelectors = [
+                'script', 'style', 'nav', 'aside', 'figure', 'figcaption', 'header', 'footer',
+                '.footnote', '.footnotes', '.groupFootnote', '.studyNote', '.studyNotes',
+                '.crossref', '.xref', '.pageNum', '.outline', '.bookOutline',
+                '.w_navigation', '.bibleBookNav', '.headerNav', '.nav', '.fn', '.footnoteMarker',
+                'a[href*="footnote"]', 'a[href*="extracted"]', 'a[href*="#fn"]', 'a[href*="study"]',
+                'sup.fn', 'span.fn'
+            ];
+            cloneBody.querySelectorAll(removeSelectors.join(',')).forEach(el => el.remove());
+
+            // Rimuovi elementi con epub:type="noteref" / "footnote" / "pagebreak"
+            Array.from(cloneBody.querySelectorAll('*')).forEach(el => {
+                const epubType = getElementEpubType(el);
+                if (/\b(footnote|noteref|endnote|rearnotes|pagebreak|doc-noteref|doc-footnote|doc-pagebreak)\b/.test(epubType)) {
+                    el.remove();
+                    return;
+                }
+                // Rimuovi tabelle di navigazione capitoli (es. griglia 1 2 3 ... 28)
+                if (el.tagName === 'TABLE') {
+                    const cells = el.querySelectorAll('td, th');
+                    const links = el.querySelectorAll('a');
+                    if (cells.length >= 3 && links.length >= cells.length * 0.6) {
+                        el.remove();
+                    }
+                }
+            });
+        }
+
+        function detectBookFromDomVerseIds(doc) {
+            const els = doc.querySelectorAll('[id]');
+            const counts = new Map();
+            for (const el of els) {
+                const id = el.id || '';
+                let m = id.match(/^v(\d{2})(\d{3})(\d{3})$/i);
+                if (!m) m = id.match(/^v(\d{1,2})[-_](\d{1,3})[-_](\d{1,3})$/i);
+                if (m) {
+                    const bNum = parseInt(m[1], 10);
+                    if (bNum >= 1 && bNum <= 66) {
+                        counts.set(bNum, (counts.get(bNum) || 0) + 1);
+                    }
+                }
+            }
+            let bestBook = null;
+            let bestCount = 0;
+            counts.forEach((cnt, bNum) => {
+                if (cnt > bestCount) {
+                    bestCount = cnt;
+                    bestBook = bNum;
+                }
+            });
+            return bestBook ? BIBLE_CANON_BY_NUM.get(bestBook) : null;
+        }
+
+        function extractChapterNumberFromHeadingText(text, bookSpec) {
+            const t = String(text || '').replace(/\u00a0/g, ' ').trim();
+            if (!t) return null;
+            let m = t.match(/^(?:capitolo|cap\.?|salmo|sal\.?|psalm)\s+(\d{1,3})\b/i);
+            if (m) {
+                const n = parseInt(m[1], 10);
+                if (n >= 1 && n <= bookSpec.expectedChapters) return n;
+            }
+            const parsed = extractBookAndChapterFromText(t, false);
+            if (parsed && parsed.book && parsed.book.num === bookSpec.num && parsed.chapterNum) {
+                return parsed.chapterNum;
+            }
+            if (/^\d{1,3}$/.test(t)) {
+                const n = parseInt(t, 10);
+                if (n >= 1 && n <= bookSpec.expectedChapters) return n;
+            }
+            return null;
+        }
+
+        function parseVerseIdAttribute(idStr) {
+            if (!idStr) return null;
+            let m = idStr.match(/^chapter(\d+)_verse(\d+)$/i);
+            if (m) return { bookNum: null, chapter: parseInt(m[1], 10), verse: parseInt(m[2], 10) };
+
+            m = idStr.match(/^(?:ch|c)(\d+)[_-](?:v|verse)(\d+)$/i);
+            if (m) return { bookNum: null, chapter: parseInt(m[1], 10), verse: parseInt(m[2], 10) };
+
+            m = idStr.match(/^v(\d{2})(\d{3})(\d{3})$/i);
+            if (m) return { bookNum: parseInt(m[1], 10), chapter: parseInt(m[2], 10), verse: parseInt(m[3], 10) };
+
+            m = idStr.match(/^v(\d{1,2})[-_](\d{1,3})[-_](\d{1,3})$/i);
+            if (m) return { bookNum: parseInt(m[1], 10), chapter: parseInt(m[2], 10), verse: parseInt(m[3], 10) };
+
+            m = idStr.match(/^verse(\d+)$/i);
+            if (m) return { bookNum: null, chapter: null, verse: parseInt(m[1], 10) };
+
+            return null;
+        }
+
+        function extractChaptersWithStrategyA(cloneBody, bookSpec, defaultChapterNum) {
+            const chapterResults = new Map(); // chNum -> { verses: Map(vNum -> text), superscription: '' }
+            let markerCount = 0;
+            let activeCh = null;
+            let activeV = null;
+            let justStartedVerse = false;
+            let pendingSuperscription = '';
+            let pendingSuperCh = null;
+
+            const ensureCh = (chNum) => {
+                if (!chapterResults.has(chNum)) {
+                    chapterResults.set(chNum, { verses: new Map(), superscription: '' });
+                }
+                return chapterResults.get(chNum);
+            };
+
+            const appendText = (txt) => {
+                if (!activeCh || !activeV) return;
+                if (activeCh < 1 || activeCh > bookSpec.expectedChapters) return;
+                if (activeV < 1 || activeV > 176) return;
+                let clean = txt.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ');
+                if (!clean.trim()) return;
+
+                if (justStartedVerse) {
+                    const trimmed = clean.trimStart();
+                    // Rimuovi il numero di versetto (o il numero di capitolo sul versetto 1) se duplicato all'inizio del testo
+                    const numTokens = [String(activeV)];
+                    if (activeV === 1) numTokens.push(String(activeCh));
+                    for (const tok of numTokens) {
+                        const re = new RegExp('^' + tok + '(?:\\s+|$)');
+                        if (re.test(trimmed)) {
+                            clean = trimmed.replace(re, '');
+                            justStartedVerse = false;
+                            break;
+                        }
+                    }
+                    if (clean.trim()) justStartedVerse = false;
+                }
+                if (!clean.trim()) return;
+
+                const chObj = ensureCh(activeCh);
+                const prev = chObj.verses.get(activeV) || '';
+                const needsSpace = prev && !prev.endsWith(' ') && !prev.endsWith('\n') && !/^[.,;:!?»”’)\]]/.test(clean.trimStart());
+                chObj.verses.set(activeV, (prev + (needsSpace ? ' ' : '') + clean.trim()).trim());
+            };
+
+            const walk = (node) => {
+                if (!node) return;
+                if (node.nodeType === 3) {
+                    appendText(node.nodeValue || '');
+                    return;
+                }
+                if (node.nodeType !== 1) return;
+
+                const tag = node.tagName;
+                const cls = typeof node.className === 'string' ? node.className : '';
+                const idInfo = parseVerseIdAttribute(node.id || '');
+
+                if (idInfo) {
+                    if (idInfo.bookNum && idInfo.bookNum !== bookSpec.num) {
+                        return;
+                    }
+                    const resolvedCh = idInfo.chapter || activeCh || defaultChapterNum || (bookSpec.expectedChapters === 1 ? 1 : null);
+                    if (resolvedCh && resolvedCh >= 1 && resolvedCh <= bookSpec.expectedChapters && idInfo.verse >= 1 && idInfo.verse <= 176) {
+                        markerCount++;
+                        activeCh = resolvedCh;
+                        activeV = idInfo.verse;
+                        justStartedVerse = true;
+                        const chObj = ensureCh(activeCh);
+                        if (pendingSuperscription && pendingSuperCh === activeCh && !chObj.superscription) {
+                            chObj.superscription = pendingSuperscription;
+                            pendingSuperscription = '';
+                        }
+                        // Se il nodo stesso contiene solo cifre (es. <span id="chapter1_verse8">8</span>), salta le cifre
+                        const ownTxt = (node.textContent || '').replace(/\u00a0/g, ' ').trim();
+                        if (!ownTxt || /^\d{1,3}(?:[-–]\d{1,3})?$/.test(ownTxt)) {
+                            return;
+                        }
+                    }
+                }
+
+                // Salta contenitori visivi di numeri capitolo/versetto (JW.org: .w_ch, .w_vp, .vl, .chapterNum, .verseNum)
+                if (/\b(w_ch|w_vp|chapterNum|chapNum|verseNum|vnum|vl)\b/i.test(cls)) {
+                    const txt = (node.textContent || '').trim();
+                    if (/^\d{1,3}(?:[-–]\d{1,3})?$/.test(txt)) {
+                        justStartedVerse = false;
+                        return;
+                    }
+                }
+
+                // Salta <sup> o <strong> che contengono unicamente il numero del versetto/capitolo appena iniziato
+                if (justStartedVerse && (tag === 'SUP' || tag === 'STRONG' || tag === 'B' || tag === 'SPAN' || tag === 'A')) {
+                    const txt = (node.textContent || '').trim();
+                    if (/^\d{1,3}$/.test(txt)) {
+                        const n = parseInt(txt, 10);
+                        if (n === activeV || (activeV === 1 && n === activeCh)) {
+                            justStartedVerse = false;
+                            return;
+                        }
+                    }
+                }
+
+                // Intestazioni di sezione o capitolo: interrompi la raccolta del versetto precedente ma aggiorna il capitolo se esplicito
+                if (tag === 'H1' || tag === 'H2' || tag === 'H3' || tag === 'H4') {
+                    const hCh = extractChapterNumberFromHeadingText(node.textContent, bookSpec);
+                    if (hCh) {
+                        activeCh = hCh;
+                        activeV = null;
+                    }
+                    return;
+                }
+
+                // Sovrascritta dei Salmi prima del versetto 1
+                if (bookSpec.num === 19 && tag === 'P' && /\b(ss|superscription)\b/i.test(cls) && !activeV) {
+                    const txt = (node.textContent || '').replace(/\s+/g, ' ').trim();
+                    if (txt) {
+                        pendingSuperscription = txt;
+                        pendingSuperCh = activeCh || defaultChapterNum;
+                    }
+                    return;
+                }
+
+                if (tag === 'BR' && activeCh && activeV) {
+                    const chObj = ensureCh(activeCh);
+                    const prev = chObj.verses.get(activeV) || '';
+                    if (prev && !prev.endsWith(' ')) chObj.verses.set(activeV, prev + ' ');
+                    return;
+                }
+
+                for (let child = node.firstChild; child; child = child.nextSibling) {
+                    walk(child);
+                }
+            };
+
+            walk(cloneBody);
+            return markerCount > 0 ? chapterResults : null;
+        }
+
+        function extractChaptersWithStrategyB(cloneBody, bookSpec, defaultChapterNum) {
+            // Strategia B: marcatori semantici DOM (<sup>, .v, .verse, .verseNum, [data-verse], [data-chapter])
+            const chapterResults = new Map();
+            let markerCount = 0;
+            let activeCh = defaultChapterNum || (bookSpec.expectedChapters === 1 ? 1 : null);
+            let activeV = null;
+            let preVerseBuffer = '';
+
+            const ensureCh = (chNum) => {
+                if (!chapterResults.has(chNum)) {
+                    chapterResults.set(chNum, { verses: new Map(), superscription: '' });
+                }
+                return chapterResults.get(chNum);
+            };
+
+            const appendToVerse = (chNum, vNum, txt) => {
+                if (!chNum || !vNum || chNum < 1 || chNum > bookSpec.expectedChapters || vNum < 1 || vNum > 176) return;
+                const clean = txt.replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+                if (!clean) return;
+                const chObj = ensureCh(chNum);
+                const prev = chObj.verses.get(vNum) || '';
+                const needsSpace = prev && !prev.endsWith(' ') && !/^[.,;:!?»”’)\]]/.test(clean);
+                chObj.verses.set(vNum, (prev + (needsSpace ? ' ' : '') + clean).trim());
+            };
+
+            const walk = (node) => {
+                if (!node) return;
+                if (node.nodeType === 3) {
+                    const txt = node.nodeValue || '';
+                    if (activeCh && activeV) {
+                        appendToVerse(activeCh, activeV, txt);
+                    } else if (activeCh && !activeV && txt.trim()) {
+                        preVerseBuffer += ' ' + txt.trim();
+                    }
+                    return;
+                }
+                if (node.nodeType !== 1) return;
+
+                const tag = node.tagName;
+                const cls = typeof node.className === 'string' ? node.className : '';
+                const dataCh = node.getAttribute('data-chapter');
+                const dataV = node.getAttribute('data-verse');
+
+                // Rileva cambio capitolo da data-chapter, classi capitolo o titoli H1-H3
+                if (dataCh && /^\d{1,3}$/.test(dataCh)) {
+                    const n = parseInt(dataCh, 10);
+                    if (n >= 1 && n <= bookSpec.expectedChapters) {
+                        activeCh = n;
+                        activeV = null;
+                        preVerseBuffer = '';
+                    }
+                } else if (/\b(chapterNum|chapNum|w_ch|cnum)\b/i.test(cls) || tag === 'H1' || tag === 'H2' || tag === 'H3') {
+                    const hCh = extractChapterNumberFromHeadingText(node.textContent, bookSpec);
+                    if (hCh) {
+                        activeCh = hCh;
+                        activeV = null;
+                        preVerseBuffer = '';
+                        return;
+                    }
+                    if (tag === 'H1' || tag === 'H2' || tag === 'H3') return;
+                }
+
+                // Rileva numero di versetto da data-verse, classi versetto o <sup> puramente numerico (non link)
+                let detectedV = null;
+                if (dataV && /^\d{1,3}$/.test(dataV)) {
+                    detectedV = parseInt(dataV, 10);
+                } else if (/\b(verseNum|vnum|w_vp|v|vn)\b/i.test(cls)) {
+                    const t = (node.textContent || '').trim();
+                    if (/^\d{1,3}$/.test(t)) detectedV = parseInt(t, 10);
+                } else if (tag === 'SUP' && !node.querySelector('a') && !(node.parentElement && node.parentElement.tagName === 'A')) {
+                    const t = (node.textContent || '').trim();
+                    if (/^\d{1,3}$/.test(t)) detectedV = parseInt(t, 10);
+                }
+
+                if (detectedV !== null && detectedV >= 1 && detectedV <= 176) {
+                    const expectedNext = activeV ? activeV + 1 : 1;
+                    // Se il capitolo inizia con il capilettera del capitolo invece di "1" e compare subito "2"
+                    if (!activeV && detectedV === 2 && activeCh && preVerseBuffer.trim()) {
+                        let v1Txt = preVerseBuffer.trim();
+                        v1Txt = v1Txt.replace(new RegExp('^' + activeCh + '\\s+'), '').trim();
+                        if (v1Txt) {
+                            appendToVerse(activeCh, 1, v1Txt);
+                            markerCount++;
+                        }
+                        preVerseBuffer = '';
+                        activeV = 2;
+                        markerCount++;
+                        return;
+                    }
+                    if (detectedV === expectedNext || (detectedV > (activeV || 0) && detectedV <= (activeV || 0) + 2) || (detectedV === 1 && !activeV)) {
+                        if (!activeCh) activeCh = defaultChapterNum || 1;
+                        activeV = detectedV;
+                        preVerseBuffer = '';
+                        markerCount++;
+                        return;
+                    }
+                }
+
+                for (let child = node.firstChild; child; child = child.nextSibling) {
+                    walk(child);
+                }
+            };
+
+            walk(cloneBody);
+            return markerCount > 0 ? chapterResults : null;
+        }
+
+        function extractChaptersWithStrategyC(cloneBody, bookSpec, defaultChapterNum) {
+            // Strategia C: testo sequenziale con titoli capitolo + versetti 1, 2, 3...
+            const chNum = defaultChapterNum || (bookSpec.expectedChapters === 1 ? 1 : null);
+            if (!chNum || chNum < 1 || chNum > bookSpec.expectedChapters) return null;
+
+            const rawText = (cloneBody.textContent || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
+            if (!rawText || rawText.length < 25) return null;
+
+            const versesMap = new Map();
+            const verseRegex = /(?:^|\s)(\d{1,3})\s+(?=[^\d\s])/g;
+            const matches = [];
+            let m;
+            while ((m = verseRegex.exec(rawText)) !== null) {
+                const vNum = parseInt(m[1], 10);
+                if (vNum >= 1 && vNum <= 176) {
+                    const prevNum = matches.length > 0 ? matches[matches.length - 1].num : 0;
+                    if (vNum === prevNum + 1 || (matches.length === 0 && (vNum === 1 || vNum === 2))) {
+                        matches.push({ num: vNum, start: m.index, textStart: m.index + m[0].length });
+                    }
+                }
+            }
+
+            if (matches.length === 0) return null;
+
+            // Gestisce il caso in cui il versetto 1 inizia con il numero di capitolo prima del versetto 2
+            if (matches[0].num === 2 && matches[0].start > 10) {
+                let v1Text = rawText.slice(0, matches[0].start).trim();
+                v1Text = v1Text.replace(new RegExp('^' + chNum + '\\s+'), '').trim();
+                if (v1Text) versesMap.set(1, v1Text);
+            }
+
+            for (let i = 0; i < matches.length; i++) {
+                const start = matches[i].textStart;
+                const end = i + 1 < matches.length ? matches[i + 1].start : rawText.length;
+                const vText = rawText.slice(start, Math.max(start, end)).trim();
+                if (vText) versesMap.set(matches[i].num, vText);
+            }
+
+            if (versesMap.size === 0) return null;
+            const res = new Map();
+            res.set(chNum, { verses: versesMap, superscription: '' });
+            return res;
+        }
+
+        function extractChaptersAndVersesFromDoc(doc, bookSpec, defaultChapterNum) {
+            const body = doc.body || doc.documentElement;
+            if (!body) return { chapters: null, strategy: null };
+            if (isOutlineOrNavDocument(doc, body)) return { chapters: null, strategy: 'skipped_outline' };
+
+            const clone = body.cloneNode(true);
+            cleanClonedDocForScripture(clone);
+
+            const stratA = extractChaptersWithStrategyA(clone, bookSpec, defaultChapterNum);
+            if (stratA && stratA.size > 0) return { chapters: stratA, strategy: 'ID strutturati (chapter_verse / vBBCCCVVV)' };
+
+            const stratB = extractChaptersWithStrategyB(clone, bookSpec, defaultChapterNum);
+            if (stratB && stratB.size > 0) return { chapters: stratB, strategy: 'Marcatori DOM capitoli/versetti' };
+
+            const stratC = extractChaptersWithStrategyC(clone, bookSpec, defaultChapterNum);
+            if (stratC && stratC.size > 0) return { chapters: stratC, strategy: 'Analisi sequenziale capitoli/versetti' };
+
+            return { chapters: null, strategy: null };
+        }
+
+        function buildBibleVerificationReport(books, extraDiag) {
+            const foundByNum = new Map(books.map(b => [b.bookNum, b]));
+            const missingBooks = [];
+            const chapterMismatches = [];
+
+            BIBLE_CANON_IT.forEach(canon => {
+                const found = foundByNum.get(canon.num);
+                if (!found) {
+                    missingBooks.push(canon.name);
+                } else if (found.chapters.length !== canon.expectedChapters) {
+                    chapterMismatches.push({
+                        name: canon.name,
+                        found: found.chapters.length,
+                        expected: canon.expectedChapters
+                    });
+                }
+            });
+
+            const keyNums = [1, 2, 19, 23, 40, 42, 43, 44, 66];
+            const keyChecks = keyNums.map(num => {
+                const canon = BIBLE_CANON_BY_NUM.get(num);
+                const found = foundByNum.get(num);
+                return {
+                    name: canon.name,
+                    expected: canon.expectedChapters,
+                    found: found ? found.chapters.length : 0,
+                    ok: !!found && found.chapters.length === canon.expectedChapters
+                };
+            });
+
+            // Verifica puntuale Atti 1:8 se presente
+            const attiBook = foundByNum.get(44);
+            const attiCh1 = attiBook ? attiBook.chapters.find(c => c.num === 1) : null;
+            const atti1v8 = attiCh1 ? attiCh1.verses.find(v => v.num === 8) : null;
+
+            return {
+                foundBooksCount: books.length,
+                totalCanonicalBooks: 66,
+                missingBooks,
+                chapterMismatches,
+                keyChecks,
+                atti1v8Verified: !!atti1v8,
+                skippedNonBibleFiles: extraDiag.skippedNonBibleFiles || 0,
+                detectedStrategies: Array.from(extraDiag.strategiesUsed || [])
+            };
+        }
+
+        async function parseBibleEpubBuffer(arrayBuffer, fileName, onProgress = null) {
+            if (!window.JSZip) {
+                throw new Error('Libreria JSZip non caricata.');
+            }
+            const zip = await JSZip.loadAsync(arrayBuffer);
+            const lowerLookup = buildZipCaseInsensitiveLookup(zip);
+            const parser = new DOMParser();
+
+            // 1. Individua il file OPF tramite META-INF/container.xml
+            let opfPath = '';
+            const containerFile = getZipFileSafe(zip, lowerLookup, 'META-INF/container.xml');
+            if (containerFile) {
+                const containerXml = await containerFile.async('text');
+                const cDoc = parser.parseFromString(containerXml, 'application/xml');
+                const rootfile = cDoc.querySelector('rootfile');
+                if (rootfile) opfPath = normalizeZipPath(rootfile.getAttribute('full-path') || '');
+            }
+            if (!opfPath) {
+                const allFiles = Object.keys(zip.files);
+                const foundOpf = allFiles.find(f => f.toLowerCase().endsWith('.opf'));
+                if (foundOpf) opfPath = normalizeZipPath(foundOpf);
+            }
+            const opfZipFile = getZipFileSafe(zip, lowerLookup, opfPath);
+            if (!opfPath || !opfZipFile) {
+                throw new Error('Struttura EPUB non valida (file OPF mancante).');
+            }
+
+            const opfXml = await opfZipFile.async('text');
+            const opfDoc = parser.parseFromString(opfXml, 'application/xml');
+
+            // 2. Legge il Manifest (con percorsi normalizzati)
+            const manifest = {};
+            opfDoc.querySelectorAll('manifest > item').forEach(item => {
+                const id = item.getAttribute('id');
+                const rawHref = item.getAttribute('href') || '';
+                const mediaType = item.getAttribute('media-type') || '';
+                const properties = item.getAttribute('properties') || '';
+                if (id && rawHref) {
+                    manifest[id] = {
+                        href: resolveZipPath(opfPath, rawHref),
+                        mediaType,
+                        properties
+                    };
+                }
+            });
+
+            // 3. Legge lo Spine, escludendo file non lineari (linear="no", es. note in calce estratte)
+            const spineItems = [];
+            let skippedNonBibleFiles = 0;
+            opfDoc.querySelectorAll('spine > itemref').forEach(ref => {
+                const idref = ref.getAttribute('idref');
+                const linear = (ref.getAttribute('linear') || 'yes').toLowerCase();
+                if (!idref || !manifest[idref]) return;
+                if (linear === 'no') {
+                    skippedNonBibleFiles++;
+                    return;
+                }
+                spineItems.push(manifest[idref]);
+            });
+
+            // 4. Costruisce la mappa di navigazione da nav.xhtml, toc.ncx e eventuali pagine biblebooknav
+            const hrefBookHint = new Map();       // normPath -> bookSpec
+            const hrefChapterHint = new Map();    // normPath -> chapterNum
+            const hrefNonBiblical = new Set();    // normPath di Appendici / Glossario / Prefazione
+
+            const registerNavLink = (baseNavPath, label, rawHref, inheritedBook, allowShortAbbr) => {
+                const normHref = resolveZipPath(baseNavPath, rawHref);
+                if (!normHref) return inheritedBook;
+
+                const parsed = extractBookAndChapterFromText(label, allowShortAbbr);
+                if (parsed && parsed.isNonBiblical) {
+                    hrefNonBiblical.add(normHref);
+                    return null;
+                }
+                if (parsed && parsed.book) {
+                    if (!hrefBookHint.has(normHref)) hrefBookHint.set(normHref, parsed.book);
+                    if (parsed.chapterNum && !hrefChapterHint.has(normHref)) {
+                        hrefChapterHint.set(normHref, parsed.chapterNum);
+                    }
+                    return parsed.book;
+                }
+                if (inheritedBook) {
+                    if (!hrefBookHint.has(normHref)) hrefBookHint.set(normHref, inheritedBook);
+                    const chFromLabel = extractChapterNumberFromHeadingText(label, inheritedBook);
+                    if (chFromLabel && !hrefChapterHint.has(normHref)) {
+                        hrefChapterHint.set(normHref, chFromLabel);
+                    }
+                }
+                return inheritedBook;
+            };
+
+            // 4a. nav.xhtml (EPUB 3)
+            const navEntry = Object.values(manifest).find(m =>
+                /\bnav\b/i.test(m.properties) || (m.mediaType.includes('html') && /(?:^|\/)nav\.x?html?$/i.test(m.href))
+            );
+            if (navEntry) {
+                const nf = getZipFileSafe(zip, lowerLookup, navEntry.href);
+                if (nf) {
+                    const navDoc = parser.parseFromString(await nf.async('text'), 'text/html');
+                    const walkNavLi = (ulOrOl, parentBook) => {
+                        Array.from(ulOrOl.children).forEach(li => {
+                            if (li.tagName !== 'LI') return;
+                            const a = li.querySelector(':scope > a[href], :scope > span > a[href]');
+                            let curBook = parentBook;
+                            if (a) {
+                                curBook = registerNavLink(navEntry.href, a.textContent || '', a.getAttribute('href') || '', parentBook, false);
+                            }
+                            li.querySelectorAll(':scope > ol, :scope > ul').forEach(sub => walkNavLi(sub, curBook));
+                        });
+                    };
+                    navDoc.querySelectorAll('nav > ol, nav > ul').forEach(list => walkNavLi(list, null));
+                }
+            }
+
+            // 4b. toc.ncx (EPUB 2)
+            const ncxEntry = Object.values(manifest).find(m =>
+                m.mediaType.includes('ncx') || m.href.toLowerCase().endsWith('.ncx')
+            );
+            if (ncxEntry) {
+                const nf = getZipFileSafe(zip, lowerLookup, ncxEntry.href);
+                if (nf) {
+                    const ncxDoc = parser.parseFromString(await nf.async('text'), 'application/xml');
+                    const walkNavPoint = (np, parentBook) => {
+                        const label = (np.querySelector(':scope > navLabel > text')?.textContent || '').trim();
+                        const src = np.querySelector(':scope > content')?.getAttribute('src') || '';
+                        const curBook = registerNavLink(ncxEntry.href, label, src, parentBook, false);
+                        Array.from(np.children).forEach(ch => {
+                            if (ch.localName === 'navPoint') walkNavPoint(ch, curBook);
+                        });
+                    };
+                    const navMap = ncxDoc.querySelector('navMap');
+                    if (navMap) {
+                        Array.from(navMap.children).forEach(ch => {
+                            if (ch.localName === 'navPoint') walkNavPoint(ch, null);
+                        });
+                    }
+                }
+            }
+
+            // 4c. Eventuale pagina interna di selezione libri (es. JW biblebooknav.xhtml)
+            const bookNavEntries = Object.values(manifest).filter(m =>
+                m.mediaType.includes('html') && /(?:biblebooknav|booknav|booksnav|contents)\b/i.test(m.href)
+            );
+            for (const bne of bookNavEntries) {
+                const bf = getZipFileSafe(zip, lowerLookup, bne.href);
+                if (!bf) continue;
+                const bDoc = parser.parseFromString(await bf.async('text'), 'text/html');
+                bDoc.querySelectorAll('a[href]').forEach(a => {
+                    registerNavLink(bne.href, a.textContent || '', a.getAttribute('href') || '', null, true);
+                });
+            }
+
+            // 5. Scansiona gli elementi lineari dello spine raggruppando per radice del file e unendo i capitoli reali
+            const booksStorage = new Map(); // bookNum -> { spec, chaptersMap: Map(chNum -> { verses: Map, superscription }) }
+            const stemToBook = new Map();   // stem (es. 1001061148) -> bookSpec
+            const strategiesUsed = new Set();
+            let currentBook = null;
+
+            const ensureBookStorage = (spec) => {
+                if (!booksStorage.has(spec.num)) {
+                    booksStorage.set(spec.num, { spec, chaptersMap: new Map() });
+                }
+                return booksStorage.get(spec.num);
+            };
+
+            const totalItems = spineItems.length;
+            for (let idx = 0; idx < totalItems; idx++) {
+                if (idx % 35 === 0) {
+                    if (typeof onProgress === 'function') {
+                        const pct = Math.min(99, Math.round((idx / Math.max(1, totalItems)) * 100));
+                        onProgress(pct, `Scansione sezioni EPUB (${idx}/${totalItems}) • ${booksStorage.size} libri rilevati`);
+                    }
+                    await new Promise(r => setTimeout(r, 0));
+                }
+
+                const item = spineItems[idx];
+                const href = item.href;
+
+                if (isExcludedAuxFile(href, item.properties)) {
+                    skippedNonBibleFiles++;
+                    continue;
+                }
+                if (hrefNonBiblical.has(href)) {
+                    currentBook = null;
+                    skippedNonBibleFiles++;
+                    continue;
+                }
+
+                const zipEntry = getZipFileSafe(zip, lowerLookup, href);
+                if (!zipEntry) continue;
+
+                const xhtml = await zipEntry.async('text');
+                const doc = parser.parseFromString(xhtml, 'text/html');
+
+                // Riconoscimento libro con priorità rigorosa:
+                // (1) ID versetto vBBCCCVVV nel DOM
+                // (2) Intestazione documento (<title>, <h1>, <h2>, .contextTtl, .bookTitle)
+                // (3) Mappa TOC/Navigazione
+                // (4) Stessa radice file (es. 1001061148-splitX -> 1001061148)
+                // (5) Continuità solo se non supera i capitoli del libro corrente
+                const stem = getFileStem(href);
+                let detectedBook = detectBookFromDomVerseIds(doc);
+                let chapterHint = hrefChapterHint.get(href) || null;
+                let docIsNonBiblical = false;
+
+                const titleEl = doc.querySelector('title');
+                const headingCandidates = [
+                    titleEl ? titleEl.textContent : '',
+                    ...Array.from(doc.querySelectorAll('h1, h2, .contextTtl, .bookTitle, header strong')).slice(0, 5).map(el => el.textContent || '')
+                ].map(t => String(t || '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+
+                for (const hText of headingCandidates) {
+                    const parsedH = extractBookAndChapterFromText(hText, false);
+                    if (parsedH && parsedH.isNonBiblical) {
+                        docIsNonBiblical = true;
+                        break;
+                    }
+                    if (parsedH && parsedH.book) {
+                        if (!detectedBook) detectedBook = parsedH.book;
+                        if (parsedH.chapterNum && !chapterHint && detectedBook.num === parsedH.book.num) {
+                            chapterHint = parsedH.chapterNum;
+                        }
+                        break;
+                    }
+                }
+
+                if (docIsNonBiblical && !detectedBook) {
+                    currentBook = null;
+                    skippedNonBibleFiles++;
+                    continue;
+                }
+
+                if (!detectedBook && hrefBookHint.has(href)) {
+                    detectedBook = hrefBookHint.get(href);
+                }
+                if (!detectedBook && stemToBook.has(stem)) {
+                    detectedBook = stemToBook.get(stem);
+                }
+
+                if (detectedBook) {
+                    currentBook = detectedBook;
+                    stemToBook.set(stem, detectedBook);
+                }
+
+                if (!currentBook) {
+                    skippedNonBibleFiles++;
+                    continue;
+                }
+
+                // Se non abbiamo ancora un chapterHint, proviamo dai titoli <h1>/<h2>/<h3> numerici (es. "Capitolo 14" o "14")
+                if (!chapterHint) {
+                    for (const hText of headingCandidates) {
+                        const cNum = extractChapterNumberFromHeadingText(hText, currentBook);
+                        if (cNum) {
+                            chapterHint = cNum;
+                            break;
+                        }
+                    }
+                }
+
+                const extracted = extractChaptersAndVersesFromDoc(doc, currentBook, chapterHint);
+                if (!extracted.chapters || extracted.chapters.size === 0) {
+                    skippedNonBibleFiles++;
+                    continue;
+                }
+
+                if (extracted.strategy) strategiesUsed.add(extracted.strategy);
+
+                const bookStore = ensureBookStorage(currentBook);
+                extracted.chapters.forEach((chData, chNum) => {
+                    if (chNum < 1 || chNum > currentBook.expectedChapters) return;
+                    if (!bookStore.chaptersMap.has(chNum)) {
+                        bookStore.chaptersMap.set(chNum, { verses: new Map(), superscription: chData.superscription || '' });
+                    }
+                    const targetCh = bookStore.chaptersMap.get(chNum);
+                    if (chData.superscription && !targetCh.superscription) {
+                        targetCh.superscription = chData.superscription;
+                    }
+                    chData.verses.forEach((vText, vNum) => {
+                        if (!vText) return;
+                        if (!targetCh.verses.has(vNum)) {
+                            targetCh.verses.set(vNum, vText);
+                        } else if (!targetCh.verses.get(vNum).includes(vText)) {
+                            // Unisce eventuale versetto spezzato tra due file XHTML
+                            targetCh.verses.set(vNum, (targetCh.verses.get(vNum) + ' ' + vText).trim());
+                        }
+                    });
+                });
+            }
+
+            // 6. Assembla i libri in ordine canonico (1..66) con capitoli e versetti ordinati numericamente
+            const books = Array.from(booksStorage.values())
+                .sort((a, b) => a.spec.num - b.spec.num)
+                .map(entry => {
+                    const chapters = Array.from(entry.chaptersMap.entries())
+                        .sort((a, b) => a[0] - b[0])
+                        .map(([chNum, chObj]) => ({
+                            num: chNum,
+                            superscription: chObj.superscription || '',
+                            verses: Array.from(chObj.verses.entries())
+                                .sort((a, b) => a[0] - b[0])
+                                .map(([vNum, vText]) => ({ num: vNum, text: vText }))
+                        }))
+                        .filter(ch => ch.verses.length > 0);
+
+                    return {
+                        bookNum: entry.spec.num,
+                        name: entry.spec.name,
+                        expectedChapters: entry.spec.expectedChapters,
+                        normalized: normalizeBibleBookName(entry.spec.name),
+                        aliases: entry.spec.aliases,
+                        chapters
+                    };
+                })
+                .filter(b => b.chapters.length > 0);
+
+            if (books.length === 0) {
+                throw new Error('Nessun libro biblico strutturato riconosciuto in questo EPUB.');
+            }
+
+            const diagnostics = buildBibleVerificationReport(books, {
+                skippedNonBibleFiles,
+                strategiesUsed
+            });
+
+            if (typeof onProgress === 'function') {
+                onProgress(100, `Completato: ${books.length}/66 libri verificati.`);
+            }
+
+            return {
+                type: 'epub',
+                parserVersion: BIBLE_PARSER_VERSION,
+                fileName,
+                books,
+                pdfBuffer: null,
+                diagnostics
+            };
+        }
+
+        function buildDiagnosticsHtml(diag) {
+            if (!diag) return '';
+            const checksHtml = (diag.keyChecks || []).map(c =>
+                `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg border ${c.ok ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-300 text-amber-900'} font-bold">${c.ok ? '✓' : '⚠️'} ${escapeHtml(c.name)}: ${c.found}/${c.expected}</span>`
+            ).join(' ');
+
+            const missingHtml = diag.missingBooks && diag.missingBooks.length > 0
+                ? `<p class="text-rose-700 font-bold">⚠️ Libri non trovati nell'EPUB (${diag.missingBooks.length}): ${escapeHtml(diag.missingBooks.join(', '))}</p>`
+                : `<p class="text-emerald-800 font-bold">✓ Tutti i 66 libri canonici sono stati individuati nell'EPUB.</p>`;
+
+            const mismatchHtml = diag.chapterMismatches && diag.chapterMismatches.length > 0
+                ? `<p class="text-amber-900 font-bold">⚠️ Differenze numero capitoli: ${diag.chapterMismatches.map(m => `${escapeHtml(m.name)} (${m.found}/${m.expected})`).join(', ')}</p>`
+                : `<p class="text-emerald-800 font-bold">✓ Tutti i libri trovati corrispondono esattamente al numero di capitoli biblici.</p>`;
+
+            const attiCheckHtml = diag.atti1v8Verified
+                ? `<p class="text-emerald-800">✓ Verifica versetto campione: <strong>Atti 1:8</strong> associato correttamente al capitolo 1.</p>`
+                : '';
+
+            const stratHtml = diag.detectedStrategies && diag.detectedStrategies.length > 0
+                ? `<p class="text-[#7c6575]">Struttura EPUB rilevata: <strong>${escapeHtml(diag.detectedStrategies.join(', '))}</strong> • Sezioni non bibliche/sommari esclusi: <strong>${diag.skippedNonBibleFiles}</strong></p>`
+                : '';
+
+            return `
+                ${missingHtml}
+                ${mismatchHtml}
+                ${attiCheckHtml}
+                <div class="flex flex-wrap gap-1 pt-1">${checksHtml}</div>
+                ${stratHtml}
+            `;
+        }
+
+        function renderBibleVerificationUI() {
+            const diag = bibleData && bibleData.diagnostics;
+            const modalBar = document.getElementById('bible-verification-bar');
+            const modalSummary = document.getElementById('bible-verification-summary');
+            const modalDetails = document.getElementById('bible-verification-details');
+            const sideBadge = document.getElementById('bible-side-verify-badge');
+            const sideDetails = document.getElementById('bible-side-verify-details');
+
+            if (!diag) {
+                if (modalBar) modalBar.classList.add('hidden');
+                if (sideBadge) sideBadge.classList.add('hidden');
+                if (sideDetails) sideDetails.classList.add('hidden');
+                return;
+            }
+
+            const allOk = diag.foundBooksCount === 66 && diag.chapterMismatches.length === 0;
+            const attiCheck = (diag.keyChecks || []).find(c => c.name === 'Atti');
+            const salmiCheck = (diag.keyChecks || []).find(c => c.name === 'Salmi');
+            const shortSummary = `${allOk ? '✓' : '⚠️'} ${diag.foundBooksCount}/66 libri` +
+                (attiCheck ? ` • Atti: ${attiCheck.found} cap.` : '') +
+                (salmiCheck ? ` • Salmi: ${salmiCheck.found} cap.` : '');
+
+            const detailsHtml = buildDiagnosticsHtml(diag);
+
+            if (modalBar && modalSummary && modalDetails) {
+                modalBar.classList.remove('hidden');
+                modalBar.className = allOk
+                    ? 'bg-emerald-50 border border-emerald-200 rounded-2xl px-3.5 py-2.5 space-y-2'
+                    : 'bg-amber-50 border border-amber-300 rounded-2xl px-3.5 py-2.5 space-y-2';
+                modalSummary.textContent = shortSummary;
+                modalDetails.innerHTML = detailsHtml;
+            }
+
+            if (sideBadge && sideDetails) {
+                sideBadge.classList.remove('hidden');
+                sideBadge.textContent = `${allOk ? '✓' : '⚠️'} ${diag.foundBooksCount}/66`;
+                sideBadge.className = allOk
+                    ? 'shrink-0 px-2 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-[10px] font-extrabold text-emerald-800'
+                    : 'shrink-0 px-2 py-1 rounded-xl bg-amber-50 border border-amber-300 text-[10px] font-extrabold text-amber-900';
+                sideDetails.innerHTML = detailsHtml;
+            }
+        }
+
+        function toggleBibleDiagnosticsDetails(where) {
+            const el = document.getElementById(where === 'side' ? 'bible-side-verify-details' : 'bible-verification-details');
+            if (el) el.classList.toggle('hidden');
+        }
+
+        async function handleBibleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const sub = document.getElementById('bible-status-subtitle');
+            const progBar = document.getElementById('bible-progress-bar');
+            const progText = document.getElementById('bible-progress-text');
+            const progPct = document.getElementById('bible-progress-pct');
+
+            if (sub) sub.textContent = 'Analisi della Bibbia in corso, attendi qualche secondo...';
+
+            try {
+                const buf = await file.arrayBuffer();
+                if (file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf') {
+                    bibleData = {
+                        type: 'pdf',
+                        parserVersion: BIBLE_PARSER_VERSION,
+                        fileName: file.name,
+                        books: [],
+                        pdfBuffer: buf,
+                        diagnostics: null
+                    };
+                    await saveBibleToIndexedDb(bibleData);
+                    renderBibleModalView();
+                    showToast('Bibbia in PDF salvata permanentemente sul dispositivo!');
+                } else {
+                    if (progBar) progBar.classList.remove('hidden');
+                    await saveSidePanelEpubBinary(buf, file.name);
+                    sideBibleState.pendingBuffer = buf;
+                    sideBibleState.fileName = file.name;
+
+                    const parsedBible = await parseBibleEpubBuffer(buf, file.name, (pct, msg) => {
+                        if (progText) progText.textContent = msg;
+                        if (progPct) progPct.textContent = pct + '%';
+                    });
+
+                    bibleData = parsedBible;
+                    await saveBibleToIndexedDb(bibleData);
+                    bibleNav = { bookIdx: 0, chapterIdx: 0, selectedVerseNum: null, fontSize: bibleNav.fontSize || 18 };
+                    sideBibleState.bookIdx = 0;
+                    sideBibleState.chapterIdx = 0;
+                    sideBibleState.verseNum = null;
+
+                    renderBibleModalView();
+                    const panel = document.getElementById('bible-side-panel');
+                    if (panel && !panel.classList.contains('translate-x-full')) {
+                        renderSideBibleStructuredUI(false);
+                    }
+                    showToast(`Bibbia EPUB verificata: ${bibleData.books.length}/66 libri salvati permanentemente!`);
+                }
+            } catch (err) {
+                console.error('Errore caricamento Bibbia:', err);
+                if (sub) sub.textContent = err.message || 'Errore durante il caricamento del file Bibbia.';
+                showToast(err.message || 'Errore durante il caricamento della Bibbia.', true);
+            } finally {
+                if (progBar) progBar.classList.add('hidden');
+            }
+            event.target.value = '';
+        }
+
+        async function openBibleModal() {
+            const modal = document.getElementById('bible-reader-modal');
+            if (!modal) return;
+            modal.classList.remove('hidden');
+
+            // Se esiste il buffer EPUB salvato nel pannello laterale ma l'indice è vecchio o vuoto, rianalizza in automatico
+            if (sideBibleState.pendingBuffer && (!bibleData || bibleData.type !== 'epub' || bibleData.parserVersion !== BIBLE_PARSER_VERSION)) {
+                const progBar = document.getElementById('bible-progress-bar');
+                const progText = document.getElementById('bible-progress-text');
+                const progPct = document.getElementById('bible-progress-pct');
+                if (progBar) progBar.classList.remove('hidden');
+                try {
+                    bibleData = await parseBibleEpubBuffer(sideBibleState.pendingBuffer, sideBibleState.fileName || 'Bibbia.epub', (pct, msg) => {
+                        if (progText) progText.textContent = msg;
+                        if (progPct) progPct.textContent = pct + '%';
+                    });
+                    await saveBibleToIndexedDb(bibleData);
+                } catch (e) {
+                    console.warn('Rianalisi automatica EPUB non riuscita:', e);
+                } finally {
+                    if (progBar) progBar.classList.add('hidden');
+                }
+            }
+
+            renderBibleModalView();
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function closeBibleModal() {
+            const modal = document.getElementById('bible-reader-modal');
+            if (modal) modal.classList.add('hidden');
+        }
+
+        function changeBibleFontSize(delta) {
+            bibleNav.fontSize = Math.max(14, Math.min(34, (bibleNav.fontSize || 18) + delta));
+            const box = document.getElementById('bible-chapter-text-box');
+            if (box) box.style.fontSize = bibleNav.fontSize + 'px';
+        }
+
+        function renderBibleModalView() {
+            const emptyState = document.getElementById('bible-empty-state');
+            const epubControls = document.getElementById('bible-epub-controls');
+            const epubNav = document.getElementById('bible-epub-navigator');
+            const pdfBox = document.getElementById('bible-pdf-viewer-box');
+            const reparseNotice = document.getElementById('bible-reparse-notice');
+            const sub = document.getElementById('bible-status-subtitle');
+
+            if (reparseNotice) {
+                const isLegacy = bibleData && bibleData.type === 'epub' && bibleData.parserVersion !== BIBLE_PARSER_VERSION;
+                reparseNotice.classList.toggle('hidden', !isLegacy);
+            }
+
+            if (!bibleData || !bibleData.type) {
+                emptyState.classList.remove('hidden');
+                epubControls.classList.add('hidden');
+                epubNav.classList.add('hidden');
+                pdfBox.classList.add('hidden');
+                renderBibleVerificationUI();
+                if (sub) sub.textContent = 'Carica la Bibbia in EPUB (consigliato) o PDF per consultarla ovunque';
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            if (bibleData.type === 'pdf') {
+                epubControls.classList.add('hidden');
+                epubNav.classList.add('hidden');
+                pdfBox.classList.remove('hidden');
+                renderBibleVerificationUI();
+                if (sub) sub.textContent = `Bibbia PDF caricata: ${bibleData.fileName}`;
+                document.getElementById('bible-pdf-name-label').textContent = bibleData.fileName;
+                if (bibleData.pdfBuffer) {
+                    const blob = new Blob([bibleData.pdfBuffer], { type: 'application/pdf' });
+                    document.getElementById('bible-pdf-iframe').src = URL.createObjectURL(blob);
+                }
+                return;
+            }
+
+            pdfBox.classList.add('hidden');
+            epubControls.classList.remove('hidden');
+            epubNav.classList.remove('hidden');
+            if (sub) sub.textContent = `${bibleData.fileName} — ${bibleData.books.length}/66 libri pronti offline`;
+            renderBibleVerificationUI();
+            renderBibleBooksGrid('');
+            setBibleSelectorStep('books');
+        }
+
+        function setBibleSelectorStep(step) {
+            const pBooks = document.getElementById('bible-books-panel');
+            const pChaps = document.getElementById('bible-chapters-panel');
+            const pVerses = document.getElementById('bible-verses-panel');
+            const bBooks = document.getElementById('bible-step-books-btn');
+            const bChaps = document.getElementById('bible-step-chapters-btn');
+            const bVerses = document.getElementById('bible-step-verses-btn');
+
+            [pBooks, pChaps, pVerses].forEach(p => p && p.classList.add('hidden'));
+            [bBooks, bChaps, bVerses].forEach(b => {
+                if (b) b.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold bg-[#f6eef4] text-[#6b2d5c]';
+            });
+
+            if (step === 'chapters') {
+                pChaps.classList.remove('hidden');
+                bChaps.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold plum-primary';
+                renderBibleChaptersGrid();
+            } else if (step === 'verses') {
+                pVerses.classList.remove('hidden');
+                bVerses.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold plum-primary';
+                renderBibleChapterVerses();
+            } else {
+                pBooks.classList.remove('hidden');
+                bBooks.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold plum-primary';
+            }
+        }
+
+        function renderBibleBooksGrid(filterQuery = '') {
+            const grid = document.getElementById('bible-books-grid');
+            if (!grid || !bibleData.books) return;
+            const q = normalizeBibleBookName(filterQuery);
+            grid.innerHTML = bibleData.books.map((b, idx) => {
+                const aliasesMatch = Array.isArray(b.aliases) && b.aliases.some(a => a.includes(q));
+                if (q && !b.normalized.includes(q) && !aliasesMatch) return '';
+                const isSelected = idx === bibleNav.bookIdx;
+                return `
+                    <button type="button" onclick="selectBibleBook(${idx})"
+                        class="px-3 py-2.5 rounded-2xl text-left text-xs sm:text-sm font-extrabold border transition flex items-center justify-between gap-1 ${isSelected ? 'plum-primary border-[#6b2d5c]' : 'bg-[#fbf9fa] text-[#261822] plum-border hover:bg-[#f6eef4]'}">
+                        <span class="truncate">${escapeHtml(b.name)}</span>
+                        <span class="text-[10px] font-bold opacity-75 shrink-0">${b.chapters.length}</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function selectBibleBook(bookIdx) {
+            bibleNav.bookIdx = bookIdx;
+            bibleNav.chapterIdx = 0;
+            bibleNav.selectedVerseNum = null;
+            setBibleSelectorStep('chapters');
+        }
+
+        function renderBibleChaptersGrid() {
+            const book = bibleData.books[bibleNav.bookIdx];
+            if (!book) return;
+            const expectedTxt = book.expectedChapters ? ` (${book.chapters.length}/${book.expectedChapters} capitoli)` : ` (${book.chapters.length} capitoli)`;
+            document.getElementById('bible-chapters-title').textContent = `${book.name} — Scegli il Capitolo${expectedTxt}`;
+            const grid = document.getElementById('bible-chapters-grid');
+            grid.innerHTML = book.chapters.map((ch, idx) => {
+                const isSel = idx === bibleNav.chapterIdx;
+                return `
+                    <button type="button" onclick="selectBibleChapter(${idx})"
+                        class="py-2.5 rounded-xl text-sm font-extrabold border transition ${isSel ? 'plum-primary border-[#6b2d5c]' : 'bg-[#fbf9fa] text-[#261822] plum-border hover:bg-[#f6eef4]'}">
+                        ${ch.num}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function selectBibleChapter(chapterIdx) {
+            bibleNav.chapterIdx = chapterIdx;
+            bibleNav.selectedVerseNum = null;
+            setBibleSelectorStep('verses');
+        }
+
+        function renderBibleChapterVerses() {
+            const book = bibleData.books[bibleNav.bookIdx];
+            if (!book) return;
+            const chapter = book.chapters[bibleNav.chapterIdx] || book.chapters[0];
+            if (!chapter) return;
+
+            document.getElementById('bible-current-passage-label').textContent = `${book.name} ${chapter.num} (${chapter.verses.length} versetti)`;
+            const versesGrid = document.getElementById('bible-verses-grid');
+            versesGrid.innerHTML = chapter.verses.map(v => {
+                const isSel = v.num === bibleNav.selectedVerseNum;
+                return `
+                    <button type="button" onclick="selectBibleVerse(${v.num})"
+                        class="w-9 h-9 rounded-xl text-xs font-extrabold border transition ${isSel ? 'plum-primary border-[#6b2d5c]' : 'bg-white text-[#261822] plum-border hover:bg-[#f6eef4]'}">
+                        ${v.num}
+                    </button>
+                `;
+            }).join('');
+
+            const textBox = document.getElementById('bible-chapter-text-box');
+            textBox.style.fontSize = (bibleNav.fontSize || 18) + 'px';
+            const superHtml = chapter.superscription
+                ? `<p class="italic text-[#6b2d5c] text-[0.9em] bg-[#fbf9fa] border plum-border rounded-xl px-3 py-2">${escapeHtml(chapter.superscription)}</p>`
+                : '';
+            textBox.innerHTML = superHtml + chapter.verses.map(v => {
+                const isSel = v.num === bibleNav.selectedVerseNum;
+                return `
+                    <p id="bible-verse-el-${v.num}" onclick="selectBibleVerse(${v.num})"
+                       class="p-2 rounded-xl cursor-pointer transition ${isSel ? 'bg-amber-100 border border-amber-300 font-semibold' : 'hover:bg-[#fbf9fa]'}">
+                        <sup class="font-extrabold text-[#6b2d5c] mr-1">${v.num}</sup>${escapeHtml(v.text)}
+                    </p>
+                `;
+            }).join('');
+
+            updateSelectedBibleVerseBanner();
+            if (bibleNav.selectedVerseNum) {
+                setTimeout(() => {
+                    const el = document.getElementById('bible-verse-el-' + bibleNav.selectedVerseNum);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }, 40);
+            }
+        }
+
+        function selectBibleVerse(verseNum) {
+            bibleNav.selectedVerseNum = verseNum;
+            renderBibleChapterVerses();
+        }
+
+        function getSelectedBiblePassage() {
+            const book = bibleData.books[bibleNav.bookIdx];
+            if (!book) return null;
+            const chapter = book.chapters[bibleNav.chapterIdx];
+            if (!chapter) return null;
+            const verse = chapter.verses.find(v => v.num === bibleNav.selectedVerseNum) || chapter.verses[0];
+            if (!verse) return null;
+            return {
+                ref: `${book.name} ${chapter.num}:${verse.num}`,
+                text: verse.text
+            };
+        }
+
+        function updateSelectedBibleVerseBanner() {
+            const box = document.getElementById('bible-selected-verse-actions');
+            const passage = getSelectedBiblePassage();
+            if (!box || !passage || !bibleNav.selectedVerseNum) {
+                if (box) box.classList.add('hidden');
+                return;
+            }
+            box.classList.remove('hidden');
+            document.getElementById('bible-selected-ref-badge').textContent = passage.ref;
+            document.getElementById('bible-selected-preview').textContent = passage.text;
+        }
+
+        function jumpToBibleReference(query) {
+            if (!bibleData || bibleData.type !== 'epub' || !bibleData.books.length) return;
+            const clean = String(query || '').trim();
+            if (!clean) return;
+            const match = clean.match(/^([1-3]?\s*[a-zA-ZÀ-ÿ\s]+?)\s*(\d+)(?:[:.,\s]+(\d+))?$/);
+            if (!match) {
+                showToast('Scrivi ad esempio: Atti 1:8 oppure 2 Timoteo 3:16', true);
+                return;
+            }
+            const matchedSpec = matchCanonicalBook(match[1], true);
+            const bookQuery = normalizeBibleBookName(match[1]);
+            const chapNum = parseInt(match[2], 10);
+            const verseNum = match[3] ? parseInt(match[3], 10) : null;
+
+            let bIdx = -1;
+            if (matchedSpec) {
+                bIdx = bibleData.books.findIndex(b => b.bookNum === matchedSpec.num);
+            }
+            if (bIdx < 0) {
+                bIdx = bibleData.books.findIndex(b => b.normalized.startsWith(bookQuery) || b.normalized.includes(bookQuery));
+            }
+            if (bIdx < 0) {
+                showToast('Libro biblico non trovato nell\'EPUB caricato.', true);
+                return;
+            }
+            bibleNav.bookIdx = bIdx;
+            const book = bibleData.books[bIdx];
+            const cIdx = book.chapters.findIndex(c => c.num === chapNum);
+            if (cIdx < 0) {
+                showToast(`Il capitolo ${chapNum} non esiste in ${book.name} (capitoli disponibili: ${book.chapters.length}).`, true);
+                return;
+            }
+            bibleNav.chapterIdx = cIdx;
+            bibleNav.selectedVerseNum = verseNum;
+            setBibleSelectorStep('verses');
+        }
+
+        function insertBiblePassageIntoActiveNote(passage) {
+            if (!passage) return;
+            if (state.view === 'home') {
+                state.view = 'session';
+            }
+            const s = getActiveSession();
+            let targetNote = s.notes[s.notes.length - 1];
+            if (!targetNote) {
+                targetNote = {
+                    id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+                    title: 'Nota #' + (s.notes.length + 1),
+                    html: '',
+                    fontSize: 17,
+                    pdfPage: null,
+                    collapsed: false,
+                    image: null,
+                    isQuickNote: false,
+                    handwriting: { visible: false, height: 260, strokes: [] }
+                };
+                s.notes.push(targetNote);
+            }
+            targetNote.collapsed = false;
+            const snippet = `<div><strong>📖 ${escapeHtml(passage.ref)}:</strong> ${escapeHtml(passage.text)}</div>`;
+            targetNote.html = (targetNote.html ? targetNote.html + '<br>' : '') + snippet;
+            saveState();
+            renderApp();
+            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
+                renderPdfSideNotes();
+            }
+            showToast(`${passage.ref} inserito nella nota!`);
+        }
+
+        function saveBiblePassageToActiveScriptures(passage) {
+            if (!passage) return;
+            if (state.view === 'home') {
+                state.view = 'session';
+            }
+            const s = getActiveSession();
+            s.scriptures.push({
+                id: 'scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
+                ref: passage.ref,
+                pdfPage: null,
+                text: passage.text
+            });
+            saveState();
+            renderApp();
+            showToast(`${passage.ref} salvato nelle Scritture!`);
+        }
+
+        function insertSelectedBibleVerseIntoNote() {
+            const passage = getSelectedBiblePassage();
+            if (!passage) return;
+            closeBibleModal();
+            insertBiblePassageIntoActiveNote(passage);
+        }
+
+        function saveSelectedBibleVerseToScriptures() {
+            const passage = getSelectedBiblePassage();
+            if (!passage) return;
+            closeBibleModal();
+            saveBiblePassageToActiveScriptures(passage);
         }
 
         const STORAGE_KEY = 'quaderno_studio_anna_v1';
@@ -2752,545 +4648,6 @@
                 const badge = document.getElementById('onedrive-conn-badge');
                 if (badge) badge.textContent = 'Connesso';
             }
-        }
-
-        /* BIBBIA INTEGRATA (EPUB CON LIBRO -> CAPITOLO -> VERSETTO E PDF) */
-        let bibleData = {
-            type: null,
-            fileName: '',
-            books: [],
-            pdfBuffer: null
-        };
-        let bibleNav = {
-            bookIdx: 0,
-            chapterIdx: 0,
-            selectedVerseNum: null,
-            fontSize: 18
-        };
-
-        async function saveBibleToIndexedDb(record) {
-            try {
-                const db = await openPdfDatabase();
-                await new Promise((resolve, reject) => {
-                    const tx = db.transaction(BIBLE_STORE_NAME, 'readwrite');
-                    tx.objectStore(BIBLE_STORE_NAME).put(record, 'main_bible');
-                    tx.oncomplete = () => resolve();
-                    tx.onerror = () => reject(tx.error);
-                });
-            } catch (e) {
-                console.warn('Errore salvataggio Bibbia in IndexedDB:', e);
-            }
-        }
-
-        async function loadBibleFromIndexedDb() {
-            try {
-                const db = await openPdfDatabase();
-                const stored = await new Promise((resolve, reject) => {
-                    const tx = db.transaction(BIBLE_STORE_NAME, 'readonly');
-                    const req = tx.objectStore(BIBLE_STORE_NAME).get('main_bible');
-                    req.onsuccess = () => resolve(req.result || null);
-                    req.onerror = () => reject(req.error);
-                });
-                if (stored && stored.type) {
-                    bibleData = stored;
-                }
-            } catch (e) {
-                console.warn('Errore lettura Bibbia da IndexedDB:', e);
-            }
-        }
-
-        function normalizeBibleBookName(str) {
-            return String(str || '')
-                .toLowerCase()
-                .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-                .replace(/[^a-z0-9]/g, '');
-        }
-
-        const CANONICAL_BIBLE_BOOKS_IT = [
-            'Genesi', 'Esodo', 'Levitico', 'Numeri', 'Deuteronomio', 'Giosuè', 'Giudici', 'Rut',
-            '1 Samuele', '2 Samuele', '1 Re', '2 Re', '1 Cronache', '2 Cronache', 'Esdra', 'Neemia', 'Ester',
-            'Giobbe', 'Salmi', 'Proverbi', 'Ecclesiaste', 'Cantico dei Cantici', 'Isaia', 'Geremia',
-            'Lamentazioni', 'Ezechiele', 'Daniele', 'Osea', 'Gioele', 'Amos', 'Abdia', 'Giona', 'Michea',
-            'Naum', 'Abacuc', 'Sofonia', 'Aggeo', 'Zaccaria', 'Malachia',
-            'Matteo', 'Marco', 'Luca', 'Giovanni', 'Atti', 'Romani', '1 Corinti', '2 Corinti',
-            'Galati', 'Efesini', 'Filippesi', 'Colossesi', '1 Tessalonicesi', '2 Tessalonicesi',
-            '1 Timoteo', '2 Timoteo', 'Tito', 'Filemone', 'Ebrei', 'Giacomo',
-            '1 Pietro', '2 Pietro', '1 Giovanni', '2 Giovanni', '3 Giovanni', 'Giuda', 'Rivelazione'
-        ];
-
-        function parseChapterVersesFromDoc(doc, fallbackChapterNum) {
-            const body = doc.body || doc.documentElement;
-            if (!body) return { num: fallbackChapterNum, verses: [] };
-
-            const clone = body.cloneNode(true);
-            clone.querySelectorAll('script, style, nav, .footnote, .footnotes, [epub\\:type="footnote"], [epub\\:type="noteref"]').forEach(el => el.remove());
-
-            const rawText = (clone.innerText || clone.textContent || '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
-            const verses = [];
-
-            const verseRegex = /(?:^|\s)(\d{1,3})\s+(?=[^\d\s])/g;
-            const matches = [];
-            let m;
-            while ((m = verseRegex.exec(rawText)) !== null) {
-                const vNum = parseInt(m[1], 10);
-                if (vNum >= 1 && vNum <= 176) {
-                    const prevNum = matches.length > 0 ? matches[matches.length - 1].num : 0;
-                    if (vNum === prevNum + 1 || (matches.length === 0 && vNum === 1)) {
-                        matches.push({ num: vNum, index: m.index + m[0].length });
-                    }
-                }
-            }
-
-            if (matches.length > 0) {
-                for (let i = 0; i < matches.length; i++) {
-                    const start = matches[i].index;
-                    const end = i + 1 < matches.length ? matches[i + 1].index - String(matches[i + 1].num).length - 1 : rawText.length;
-                    const vText = rawText.slice(start, Math.max(start, end)).trim();
-                    if (vText) {
-                        verses.push({ num: matches[i].num, text: vText });
-                    }
-                }
-            } else if (rawText) {
-                verses.push({ num: 1, text: rawText });
-            }
-
-            return { num: fallbackChapterNum, verses };
-        }
-
-        async function parseBibleEpubBuffer(arrayBuffer, fileName) {
-            if (!window.JSZip) {
-                throw new Error('Libreria JSZip non caricata.');
-            }
-            const zip = await JSZip.loadAsync(arrayBuffer);
-            const parser = new DOMParser();
-
-            let opfPath = '';
-            const containerFile = zip.file('META-INF/container.xml');
-            if (containerFile) {
-                const containerXml = await containerFile.async('text');
-                const cDoc = parser.parseFromString(containerXml, 'application/xml');
-                const rootfile = cDoc.querySelector('rootfile');
-                if (rootfile) opfPath = rootfile.getAttribute('full-path') || '';
-            }
-            if (!opfPath) {
-                const allFiles = Object.keys(zip.files);
-                opfPath = allFiles.find(f => f.toLowerCase().endsWith('.opf')) || '';
-            }
-            if (!opfPath || !zip.file(opfPath)) {
-                throw new Error('Struttura EPUB non valida (file OPF mancante).');
-            }
-
-            const baseDir = opfPath.includes('/') ? opfPath.slice(0, opfPath.lastIndexOf('/') + 1) : '';
-            const opfXml = await zip.file(opfPath).async('text');
-            const opfDoc = parser.parseFromString(opfXml, 'application/xml');
-
-            const manifest = {};
-            opfDoc.querySelectorAll('manifest > item').forEach(item => {
-                const id = item.getAttribute('id');
-                const href = decodeURIComponent(item.getAttribute('href') || '');
-                const mediaType = item.getAttribute('media-type') || '';
-                if (id && href) {
-                    manifest[id] = { href: baseDir + href, mediaType };
-                }
-            });
-
-            const spineHrefs = [];
-            opfDoc.querySelectorAll('spine > itemref').forEach(ref => {
-                const idref = ref.getAttribute('idref');
-                if (idref && manifest[idref]) {
-                    spineHrefs.push(manifest[idref].href);
-                }
-            });
-
-            const navTargets = [];
-            const navEntry = Object.values(manifest).find(m => m.href.toLowerCase().includes('nav') && m.mediaType.includes('html'));
-            const ncxEntry = Object.values(manifest).find(m => m.mediaType.includes('ncx') || m.href.toLowerCase().endsWith('.ncx'));
-
-            if (navEntry && zip.file(navEntry.href)) {
-                const navHtml = await zip.file(navEntry.href).async('text');
-                const navDoc = parser.parseFromString(navHtml, 'text/html');
-                const navBase = navEntry.href.includes('/') ? navEntry.href.slice(0, navEntry.href.lastIndexOf('/') + 1) : '';
-                navDoc.querySelectorAll('a[href]').forEach(a => {
-                    const label = (a.textContent || '').trim();
-                    const rawHref = decodeURIComponent((a.getAttribute('href') || '').split('#')[0]);
-                    if (label && rawHref) {
-                        navTargets.push({ label, href: (navBase + rawHref).replace(/\/+/g, '/') });
-                    }
-                });
-            } else if (ncxEntry && zip.file(ncxEntry.href)) {
-                const ncxXml = await zip.file(ncxEntry.href).async('text');
-                const ncxDoc = parser.parseFromString(ncxXml, 'application/xml');
-                const ncxBase = ncxEntry.href.includes('/') ? ncxEntry.href.slice(0, ncxEntry.href.lastIndexOf('/') + 1) : '';
-                ncxDoc.querySelectorAll('navPoint').forEach(np => {
-                    const label = (np.querySelector('navLabel > text')?.textContent || '').trim();
-                    const content = np.querySelector('content');
-                    const rawSrc = decodeURIComponent((content?.getAttribute('src') || '').split('#')[0]);
-                    if (label && rawSrc) {
-                        navTargets.push({ label, href: (ncxBase + rawSrc).replace(/\/+/g, '/') });
-                    }
-                });
-            }
-
-            const booksMap = new Map();
-            let currentBookName = '';
-
-            const hrefToLabels = {};
-            navTargets.forEach(t => {
-                if (!hrefToLabels[t.href]) hrefToLabels[t.href] = [];
-                hrefToLabels[t.href].push(t.label);
-            });
-
-            for (const href of spineHrefs) {
-                const f = zip.file(href);
-                if (!f) continue;
-                const labels = hrefToLabels[href] || [];
-                for (const lbl of labels) {
-                    const normLbl = normalizeBibleBookName(lbl);
-                    const matchedCanon = CANONICAL_BIBLE_BOOKS_IT.find(b => normalizeBibleBookName(b) === normLbl);
-                    if (matchedCanon) {
-                        currentBookName = matchedCanon;
-                        if (!booksMap.has(currentBookName)) {
-                            booksMap.set(currentBookName, { name: currentBookName, normalized: normalizeBibleBookName(currentBookName), chapters: [] });
-                        }
-                    }
-                }
-
-                if (!currentBookName) continue;
-                const bookObj = booksMap.get(currentBookName);
-                const xhtml = await f.async('text');
-                const doc = parser.parseFromString(xhtml, 'text/html');
-                const h1Text = (doc.querySelector('h1, h2')?.textContent || '').trim();
-                const chMatch = h1Text.match(/(\d{1,3})/);
-                const chapterNum = chMatch ? parseInt(chMatch[1], 10) : (bookObj.chapters.length + 1);
-                const parsedCh = parseChapterVersesFromDoc(doc, chapterNum);
-
-                if (parsedCh.verses.length > 0 && !(parsedCh.verses.length === 1 && parsedCh.verses[0].text.length < 40)) {
-                    bookObj.chapters.push(parsedCh);
-                }
-            }
-
-            const books = Array.from(booksMap.values()).filter(b => b.chapters.length > 0);
-            if (books.length === 0) {
-                throw new Error('Nessun libro biblico riconosciuto in questo EPUB. Prova a scaricare l\'EPUB della Bibbia da jw.org.');
-            }
-
-            return {
-                type: 'epub',
-                fileName,
-                books,
-                pdfBuffer: null
-            };
-        }
-
-        async function handleBibleFileUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            const sub = document.getElementById('bible-status-subtitle');
-            if (sub) sub.textContent = 'Elaborazione della Bibbia in corso, attendi qualche secondo...';
-
-            try {
-                const buf = await file.arrayBuffer();
-                if (file.name.toLowerCase().endsWith('.pdf') || file.type === 'application/pdf') {
-                    bibleData = {
-                        type: 'pdf',
-                        fileName: file.name,
-                        books: [],
-                        pdfBuffer: buf
-                    };
-                    await saveBibleToIndexedDb(bibleData);
-                    renderBibleModalView();
-                    showToast('Bibbia in PDF salvata permanentemente sul dispositivo!');
-                } else {
-                    const parsedBible = await parseBibleEpubBuffer(buf, file.name);
-                    bibleData = parsedBible;
-                    await saveBibleToIndexedDb(bibleData);
-                    bibleNav = { bookIdx: 0, chapterIdx: 0, selectedVerseNum: null, fontSize: bibleNav.fontSize || 18 };
-                    renderBibleModalView();
-                    showToast(`Bibbia EPUB caricata: ${bibleData.books.length} libri salvati permanentemente!`);
-                }
-            } catch (err) {
-                console.error('Errore caricamento Bibbia:', err);
-                if (sub) sub.textContent = err.message || 'Errore durante il caricamento del file Bibbia.';
-                showToast(err.message || 'Errore durante il caricamento della Bibbia.', true);
-            }
-            event.target.value = '';
-        }
-
-        function openBibleModal() {
-            const modal = document.getElementById('bible-reader-modal');
-            if (!modal) return;
-            renderBibleModalView();
-            modal.classList.remove('hidden');
-            if (window.lucide) lucide.createIcons();
-        }
-
-        function closeBibleModal() {
-            const modal = document.getElementById('bible-reader-modal');
-            if (modal) modal.classList.add('hidden');
-        }
-
-        function changeBibleFontSize(delta) {
-            bibleNav.fontSize = Math.max(14, Math.min(34, (bibleNav.fontSize || 18) + delta));
-            const box = document.getElementById('bible-chapter-text-box');
-            if (box) box.style.fontSize = bibleNav.fontSize + 'px';
-        }
-
-        function renderBibleModalView() {
-            const emptyState = document.getElementById('bible-empty-state');
-            const epubControls = document.getElementById('bible-epub-controls');
-            const epubNav = document.getElementById('bible-epub-navigator');
-            const pdfBox = document.getElementById('bible-pdf-viewer-box');
-            const sub = document.getElementById('bible-status-subtitle');
-
-            if (!bibleData || !bibleData.type) {
-                emptyState.classList.remove('hidden');
-                epubControls.classList.add('hidden');
-                epubNav.classList.add('hidden');
-                pdfBox.classList.add('hidden');
-                if (sub) sub.textContent = 'Carica la Bibbia in EPUB (consigliato) o PDF per consultarla ovunque';
-                return;
-            }
-
-            emptyState.classList.add('hidden');
-            if (bibleData.type === 'pdf') {
-                epubControls.classList.add('hidden');
-                epubNav.classList.add('hidden');
-                pdfBox.classList.remove('hidden');
-                if (sub) sub.textContent = `Bibbia PDF caricata: ${bibleData.fileName}`;
-                document.getElementById('bible-pdf-name-label').textContent = bibleData.fileName;
-                if (bibleData.pdfBuffer) {
-                    const blob = new Blob([bibleData.pdfBuffer], { type: 'application/pdf' });
-                    document.getElementById('bible-pdf-iframe').src = URL.createObjectURL(blob);
-                }
-                return;
-            }
-
-            pdfBox.classList.add('hidden');
-            epubControls.classList.remove('hidden');
-            epubNav.classList.remove('hidden');
-            if (sub) sub.textContent = `${bibleData.fileName} — ${bibleData.books.length} libri pronti offline`;
-            renderBibleBooksGrid('');
-            setBibleSelectorStep('books');
-        }
-
-        function setBibleSelectorStep(step) {
-            const pBooks = document.getElementById('bible-books-panel');
-            const pChaps = document.getElementById('bible-chapters-panel');
-            const pVerses = document.getElementById('bible-verses-panel');
-            const bBooks = document.getElementById('bible-step-books-btn');
-            const bChaps = document.getElementById('bible-step-chapters-btn');
-            const bVerses = document.getElementById('bible-step-verses-btn');
-
-            [pBooks, pChaps, pVerses].forEach(p => p && p.classList.add('hidden'));
-            [bBooks, bChaps, bVerses].forEach(b => {
-                if (b) b.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold bg-[#f6eef4] text-[#6b2d5c]';
-            });
-
-            if (step === 'chapters') {
-                pChaps.classList.remove('hidden');
-                bChaps.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold plum-primary';
-                renderBibleChaptersGrid();
-            } else if (step === 'verses') {
-                pVerses.classList.remove('hidden');
-                bVerses.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold plum-primary';
-                renderBibleChapterVerses();
-            } else {
-                pBooks.classList.remove('hidden');
-                bBooks.className = 'px-3 py-1.5 rounded-xl text-xs font-extrabold plum-primary';
-            }
-        }
-
-        function renderBibleBooksGrid(filterQuery = '') {
-            const grid = document.getElementById('bible-books-grid');
-            if (!grid || !bibleData.books) return;
-            const q = normalizeBibleBookName(filterQuery);
-            grid.innerHTML = bibleData.books.map((b, idx) => {
-                if (q && !b.normalized.includes(q)) return '';
-                const isSelected = idx === bibleNav.bookIdx;
-                return `
-                    <button type="button" onclick="selectBibleBook(${idx})"
-                        class="px-3 py-2.5 rounded-2xl text-left text-xs sm:text-sm font-extrabold border transition ${isSelected ? 'plum-primary border-[#6b2d5c]' : 'bg-[#fbf9fa] text-[#261822] plum-border hover:bg-[#f6eef4]'}">
-                        ${escapeHtml(b.name)}
-                    </button>
-                `;
-            }).join('');
-        }
-
-        function selectBibleBook(bookIdx) {
-            bibleNav.bookIdx = bookIdx;
-            bibleNav.chapterIdx = 0;
-            bibleNav.selectedVerseNum = null;
-            setBibleSelectorStep('chapters');
-        }
-
-        function renderBibleChaptersGrid() {
-            const book = bibleData.books[bibleNav.bookIdx];
-            if (!book) return;
-            document.getElementById('bible-chapters-title').textContent = `${book.name} — Scegli il Capitolo`;
-            const grid = document.getElementById('bible-chapters-grid');
-            grid.innerHTML = book.chapters.map((ch, idx) => {
-                const isSel = idx === bibleNav.chapterIdx;
-                return `
-                    <button type="button" onclick="selectBibleChapter(${idx})"
-                        class="py-2.5 rounded-xl text-sm font-extrabold border transition ${isSel ? 'plum-primary border-[#6b2d5c]' : 'bg-[#fbf9fa] text-[#261822] plum-border hover:bg-[#f6eef4]'}">
-                        ${ch.num}
-                    </button>
-                `;
-            }).join('');
-        }
-
-        function selectBibleChapter(chapterIdx) {
-            bibleNav.chapterIdx = chapterIdx;
-            bibleNav.selectedVerseNum = null;
-            setBibleSelectorStep('verses');
-        }
-
-        function renderBibleChapterVerses() {
-            const book = bibleData.books[bibleNav.bookIdx];
-            if (!book) return;
-            const chapter = book.chapters[bibleNav.chapterIdx] || book.chapters[0];
-            if (!chapter) return;
-
-            document.getElementById('bible-current-passage-label').textContent = `${book.name} ${chapter.num}`;
-            const versesGrid = document.getElementById('bible-verses-grid');
-            versesGrid.innerHTML = chapter.verses.map(v => {
-                const isSel = v.num === bibleNav.selectedVerseNum;
-                return `
-                    <button type="button" onclick="selectBibleVerse(${v.num})"
-                        class="w-9 h-9 rounded-xl text-xs font-extrabold border transition ${isSel ? 'plum-primary border-[#6b2d5c]' : 'bg-white text-[#261822] plum-border hover:bg-[#f6eef4]'}">
-                        ${v.num}
-                    </button>
-                `;
-            }).join('');
-
-            const textBox = document.getElementById('bible-chapter-text-box');
-            textBox.style.fontSize = (bibleNav.fontSize || 18) + 'px';
-            textBox.innerHTML = chapter.verses.map(v => {
-                const isSel = v.num === bibleNav.selectedVerseNum;
-                return `
-                    <p id="bible-verse-el-${v.num}" onclick="selectBibleVerse(${v.num})"
-                       class="p-2 rounded-xl cursor-pointer transition ${isSel ? 'bg-amber-100 border border-amber-300 font-semibold' : 'hover:bg-[#fbf9fa]'}">
-                        <sup class="font-extrabold text-[#6b2d5c] mr-1">${v.num}</sup>${escapeHtml(v.text)}
-                    </p>
-                `;
-            }).join('');
-
-            updateSelectedBibleVerseBanner();
-            if (bibleNav.selectedVerseNum) {
-                setTimeout(() => {
-                    const el = document.getElementById('bible-verse-el-' + bibleNav.selectedVerseNum);
-                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 40);
-            }
-        }
-
-        function selectBibleVerse(verseNum) {
-            bibleNav.selectedVerseNum = verseNum;
-            renderBibleChapterVerses();
-        }
-
-        function getSelectedBiblePassage() {
-            const book = bibleData.books[bibleNav.bookIdx];
-            if (!book) return null;
-            const chapter = book.chapters[bibleNav.chapterIdx];
-            if (!chapter) return null;
-            const verse = chapter.verses.find(v => v.num === bibleNav.selectedVerseNum) || chapter.verses[0];
-            if (!verse) return null;
-            return {
-                ref: `${book.name} ${chapter.num}:${verse.num}`,
-                text: verse.text
-            };
-        }
-
-        function updateSelectedBibleVerseBanner() {
-            const box = document.getElementById('bible-selected-verse-actions');
-            const passage = getSelectedBiblePassage();
-            if (!box || !passage || !bibleNav.selectedVerseNum) {
-                if (box) box.classList.add('hidden');
-                return;
-            }
-            box.classList.remove('hidden');
-            document.getElementById('bible-selected-ref-badge').textContent = passage.ref;
-            document.getElementById('bible-selected-preview').textContent = passage.text;
-        }
-
-        function jumpToBibleReference(query) {
-            if (!bibleData || bibleData.type !== 'epub' || !bibleData.books.length) return;
-            const clean = String(query || '').trim();
-            if (!clean) return;
-            const match = clean.match(/^([1-3]?\s*[a-zA-ZÀ-ÿ\s]+?)\s*(\d+)(?:[:.,\s]+(\d+))?$/);
-            if (!match) {
-                showToast('Scrivi ad esempio: 2 Timoteo 3:16 oppure Salmo 23:1', true);
-                return;
-            }
-            const bookQuery = normalizeBibleBookName(match[1]);
-            const chapNum = parseInt(match[2], 10);
-            const verseNum = match[3] ? parseInt(match[3], 10) : null;
-
-            const bIdx = bibleData.books.findIndex(b => b.normalized.startsWith(bookQuery) || b.normalized.includes(bookQuery));
-            if (bIdx < 0) {
-                showToast('Libro biblico non trovato.', true);
-                return;
-            }
-            bibleNav.bookIdx = bIdx;
-            const book = bibleData.books[bIdx];
-            const cIdx = book.chapters.findIndex(c => c.num === chapNum);
-            bibleNav.chapterIdx = cIdx >= 0 ? cIdx : 0;
-            bibleNav.selectedVerseNum = verseNum;
-            setBibleSelectorStep('verses');
-        }
-
-        function insertSelectedBibleVerseIntoNote() {
-            const passage = getSelectedBiblePassage();
-            if (!passage) return;
-            if (state.view === 'home') {
-                state.view = 'session';
-            }
-            const s = getActiveSession();
-            let targetNote = s.notes[s.notes.length - 1];
-            if (!targetNote) {
-                targetNote = {
-                    id: 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
-                    title: 'Nota #' + (s.notes.length + 1),
-                    html: '',
-                    fontSize: 17,
-                    pdfPage: null,
-                    collapsed: false,
-                    image: null,
-                    isQuickNote: false,
-                    handwriting: { visible: false, height: 260, strokes: [] }
-                };
-                s.notes.push(targetNote);
-            }
-            targetNote.collapsed = false;
-            const snippet = `<div><strong>📖 ${escapeHtml(passage.ref)}:</strong> ${escapeHtml(passage.text)}</div>`;
-            targetNote.html = (targetNote.html ? targetNote.html + '<br>' : '') + snippet;
-            saveState();
-            closeBibleModal();
-            renderApp();
-            if (!document.getElementById('pdf-workspace-overlay').classList.contains('hidden')) {
-                renderPdfSideNotes();
-            }
-            showToast(`${passage.ref} inserito nella nota!`);
-        }
-
-        function saveSelectedBibleVerseToScriptures() {
-            const passage = getSelectedBiblePassage();
-            if (!passage) return;
-            if (state.view === 'home') {
-                state.view = 'session';
-            }
-            const s = getActiveSession();
-            s.scriptures.push({
-                id: 'scr_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5),
-                ref: passage.ref,
-                pdfPage: null,
-                text: passage.text
-            });
-            saveState();
-            closeBibleModal();
-            renderApp();
-            showToast(`${passage.ref} salvato nelle Scritture!`);
         }
 
         async function openBiblePdfInMainReader() {
