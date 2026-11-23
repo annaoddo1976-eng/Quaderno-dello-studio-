@@ -826,14 +826,18 @@
                         Salva un solo file <strong>Quaderno_Studio_Sync.json</strong> nella tua cartella <strong>iCloud Drive</strong> o <strong>OneDrive</strong>: include le pagine a righe, i tratti Apple Pencil, le note, le immagini incollate da Gemini, i PDF e i programmi delle assemblee.
                     </p>
                     <div class="flex flex-wrap items-center gap-2 pt-1">
-                        <button type="button" id="btn-link-cloud-file" onclick="linkCloudSyncFile()" class="px-3.5 py-2 rounded-xl bg-white border plum-border text-[#6b2d5c] font-bold text-xs hover:bg-[#f6eef4]">
+                        <button type="button" id="btn-link-cloud-file" onclick="linkCloudSyncFile()" class="px-3.5 py-2 rounded-xl bg-white border plum-border text-[#6b2d5c] font-bold text-xs hover:bg-[#f6edf3]">
                             🔗 Collega file (Auto-Sync)
+                        </button>
+                        <button type="button" id="btn-verify-cloud-permission" onclick="reauthorizeLinkedCloudFile()" class="hidden px-3.5 py-2 rounded-xl bg-amber-50 border border-amber-300 text-amber-950 font-bold text-xs hover:bg-amber-100">
+                            🔓 Riattiva accesso al file
                         </button>
                         <label class="inline-flex items-center gap-1.5 text-xs font-semibold text-[#3d2937] cursor-pointer px-2 py-1">
                             <input type="checkbox" id="cloud-auto-sync-checkbox" onchange="toggleCloudAutoSync(this.checked)" class="rounded">
                             <span>Salvataggio automatico sul file collegato</span>
                         </label>
                     </div>
+                    <p id="cloud-autosync-hint" class="text-[11px] font-medium text-[#7a6273]"></p>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -2063,6 +2067,10 @@
                 if (settingsBadge) {
                     settingsBadge.textContent = `✓ Salvato (${now})`;
                 }
+            }
+
+            if (typeof triggerCloudAutoSyncIfEnabled === 'function') {
+                triggerCloudAutoSyncIfEnabled();
             }
 
             clearTimeout(stateIdbSaveTimer);
@@ -7402,43 +7410,119 @@
         /* =========================================================================
            16. BACKUP COMPLETO (INCLUSI QUADERNI A RIGHE, IMMAGINI INCOLLATE, VIDEO E PDF MOBILI) & RIPRISTINO
            ========================================================================= */
-        function verifyBackupIntegrityBeforeExport(jsonString, expectedState) {
+        function inspectBackupIntegrity(jsonString, expectedState, expectedBinaryCounts = null) {
+            const errors = [];
             try {
                 const parsed = JSON.parse(jsonString);
-                if (!parsed || !Array.isArray(parsed.sessions)) return false;
+                if (!parsed || typeof parsed !== 'object') {
+                    return { ok: false, errors: ['Contenuto JSON del backup non valido.'], stats: null };
+                }
+
+                const targetContainer = (parsed.appState && typeof parsed.appState === 'object') ? parsed.appState : parsed;
+                const parsedSessions = Array.isArray(targetContainer.sessions) ? targetContainer.sessions : null;
+                if (!parsedSessions) {
+                    return { ok: false, errors: ['Elenco sessioni mancante nel payload di backup.'], stats: null };
+                }
+
+                let totalNotes = 0;
+                let totalPdfLinks = 0;
+                let totalNotebookPages = 0;
+                let totalNotebookStrokes = 0;
+                let totalNoteImages = 0;
+
                 for (const origSess of (expectedState.sessions || [])) {
-                    const bakSess = parsed.sessions.find(x => x.id === origSess.id);
-                    if (!bakSess) return false;
+                    const bakSess = parsedSessions.find(x => x.id === origSess.id);
+                    if (!bakSess) {
+                        errors.push(`Sessione mancante: "${origSess.name || origSess.id}".`);
+                        continue;
+                    }
+
                     for (const origNote of (origSess.notes || [])) {
+                        totalNotes++;
+                        const bakNote = (bakSess.notes || []).find(n => n.id === origNote.id);
+                        if (!bakNote) {
+                            errors.push(`Nota mancante in "${origSess.name}": "${origNote.title || origNote.id}".`);
+                            continue;
+                        }
+
                         const origPages = extractAllPageNumbersFromNote(origNote);
                         if (origPages.length > 0) {
-                            const bakNote = (bakSess.notes || []).find(n => n.id === origNote.id);
-                            if (!bakNote) return false;
+                            totalPdfLinks++;
                             const bakPages = extractAllPageNumbersFromNote(bakNote);
-                            if (origPages.some(p => !bakPages.includes(p))) return false;
-                        }
-                        if (origNote.videoId && typeof origNote.videoTime === 'number') {
-                            const bakNote = (bakSess.notes || []).find(n => n.id === origNote.id);
-                            if (!bakNote || bakNote.videoId !== origNote.videoId || bakNote.videoTime !== origNote.videoTime) {
-                                return false;
+                            if (origPages.some(p => !bakPages.includes(p))) {
+                                errors.push(`Collegamento pagina PDF non corrispondente nella nota "${origNote.title || origNote.id}".`);
                             }
                         }
-                    }
-                    if (Array.isArray(origSess.notebookPages) && origSess.notebookPages.length > 0) {
-                        if (!Array.isArray(bakSess.notebookPages) || bakSess.notebookPages.length < origSess.notebookPages.length) {
-                            return false;
+
+                        if (origNote.videoId && typeof origNote.videoTime === 'number') {
+                            if (bakNote.videoId !== origNote.videoId || bakNote.videoTime !== origNote.videoTime) {
+                                errors.push(`Riferimento minuto video non corrispondente nella nota "${origNote.title || origNote.id}".`);
+                            }
+                        }
+
+                        const origImgs = Array.isArray(origNote.images) ? origNote.images : [];
+                        const bakImgs = Array.isArray(bakNote.images) ? bakNote.images : [];
+                        totalNoteImages += bakImgs.length;
+                        if (bakImgs.length < origImgs.length) {
+                            errors.push(`Immagini mancanti nella nota "${origNote.title || origNote.id}".`);
+                        }
+
+                        if (origNote.handwritingData && !bakNote.handwritingData) {
+                            errors.push(`Appunto a mano mancante nella nota "${origNote.title || origNote.id}".`);
                         }
                     }
+
+                    if (Array.isArray(origSess.notebookPages) && origSess.notebookPages.length > 0) {
+                        if (!Array.isArray(bakSess.notebookPages) || bakSess.notebookPages.length < origSess.notebookPages.length) {
+                            errors.push(`Pagine quaderno a righe incomplete in "${origSess.name}".`);
+                        } else {
+                            totalNotebookPages += bakSess.notebookPages.length;
+                            bakSess.notebookPages.forEach(p => {
+                                totalNotebookStrokes += Array.isArray(p.strokes) ? p.strokes.length : 0;
+                            });
+                        }
+                    }
+
                     if (Array.isArray(origSess.videos) && origSess.videos.length > 0) {
                         if (!Array.isArray(bakSess.videos) || bakSess.videos.length < origSess.videos.length) {
-                            return false;
+                            errors.push(`Metadati video incompleti in "${origSess.name}".`);
                         }
                     }
                 }
-                return true;
-            } catch (_) {
-                return false;
+
+                const pdfFilesCount = parsed.pdfFiles && typeof parsed.pdfFiles === 'object' ? Object.keys(parsed.pdfFiles).length : 0;
+                const floatingDocFilesCount = parsed.floatingDocFiles && typeof parsed.floatingDocFiles === 'object' ? Object.keys(parsed.floatingDocFiles).length : 0;
+
+                if (expectedBinaryCounts) {
+                    if (pdfFilesCount < expectedBinaryCounts.pdfFilesCount) {
+                        errors.push('Uno o più file PDF allegati non sono stati inclusi nel backup.');
+                    }
+                    if (floatingDocFilesCount < expectedBinaryCounts.floatingDocFilesCount) {
+                        errors.push('Uno o più documenti PDF mobili non sono stati inclusi nel backup.');
+                    }
+                }
+
+                return {
+                    ok: errors.length === 0,
+                    errors,
+                    stats: {
+                        sessionsCount: parsedSessions.length,
+                        totalNotes,
+                        totalPdfLinks,
+                        totalNotebookPages,
+                        totalNotebookStrokes,
+                        totalNoteImages,
+                        pdfFilesCount,
+                        floatingDocFilesCount
+                    }
+                };
+            } catch (err) {
+                return { ok: false, errors: ['Errore di lettura JSON durante la verifica: ' + (err && err.message ? err.message : 'errore sconosciuto')], stats: null };
             }
+        }
+
+        function verifyBackupIntegrityBeforeExport(jsonString, expectedState) {
+            return inspectBackupIntegrity(jsonString, expectedState).ok;
         }
 
         function arrayBufferToBase64(buffer) {
@@ -7521,9 +7605,12 @@
                 showToast('Preparazione e verifica backup completo...');
                 const payload = await buildCompleteBackupPayload();
                 const jsonStr = JSON.stringify(payload);
-                const ok = verifyBackupIntegrityBeforeExport(jsonStr, state);
-                if (!ok) {
-                    showToast('Errore verifica integrità dati nel backup.', true);
+                const report = inspectBackupIntegrity(jsonStr, state, {
+                    pdfFilesCount: Object.keys(payload.pdfFiles || {}).length,
+                    floatingDocFilesCount: Object.keys(payload.floatingDocFiles || {}).length
+                });
+                if (!report.ok) {
+                    showToast('Errore verifica integrità backup: ' + (report.errors[0] || 'dati incompleti'), true);
                     return;
                 }
                 const blob = new Blob([jsonStr], { type: 'application/json' });
@@ -7533,10 +7620,12 @@
                 a.download = `Quaderno_Studio_Backup_${new Date().toISOString().slice(0, 10)}.json`;
                 a.click();
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
+                const st = report.stats;
+                const summary = `${st.sessionsCount} sessioni, ${st.totalNotes} note, ${st.totalNotebookPages} pag. quaderno, ${st.pdfFilesCount + st.floatingDocFilesCount} PDF`;
                 if (payload.hasExternalLargeVideos) {
-                    showToast('Backup esportato! Nota: i video originali restano sul dispositivo e sono ricollegabili senza perdere appunti.');
+                    showToast(`Backup verificato ed esportato (${summary}). I video originali restano sul dispositivo.`);
                 } else {
-                    showToast('Backup completo verificato ed esportato!');
+                    showToast(`Backup completo verificato ed esportato (${summary})!`);
                 }
             } catch (err) {
                 console.error('Errore esportazione backup:', err);
@@ -7732,14 +7821,143 @@
         /* =========================================================================
            17. CLOUD SYNC & TEST ISOLATO QUADERNI + PAGINE PDF + BROADCASTING
            ========================================================================= */
+        const CLOUD_HANDLE_IDB_KEY = 'cloud_sync_file_handle';
         let linkedCloudFileHandle = null;
+        let linkedCloudPermissionState = 'none'; // 'none' | 'granted' | 'prompt' | 'denied'
+        let cloudAutoSyncDebounceTimer = null;
+        let cloudAutoSyncInFlight = false;
 
-        function openCloudSyncModal() {
+        function showCloudSyncModalBanner(message, type = 'success') {
+            const box = document.getElementById('cloud-sync-status-msg');
+            if (!box) return;
+            box.textContent = message;
+            if (type === 'error') {
+                box.className = 'rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-bold border bg-rose-50 text-rose-800 border-rose-300';
+            } else if (type === 'warning') {
+                box.className = 'rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-bold border bg-amber-50 text-amber-950 border-amber-300';
+            } else {
+                box.className = 'rounded-2xl px-3.5 py-2.5 text-xs sm:text-sm font-bold border bg-emerald-50 text-emerald-900 border-emerald-300';
+            }
+            box.classList.remove('hidden');
+        }
+
+        async function persistCloudFileHandleToIdb(handle) {
+            try {
+                const db = await openPdfDatabase();
+                await new Promise((resolve, reject) => {
+                    const tx = db.transaction(STATE_BACKUP_STORE, 'readwrite');
+                    if (handle) {
+                        tx.objectStore(STATE_BACKUP_STORE).put(handle, CLOUD_HANDLE_IDB_KEY);
+                    } else {
+                        tx.objectStore(STATE_BACKUP_STORE).delete(CLOUD_HANDLE_IDB_KEY);
+                    }
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.warn('Salvataggio handle file Cloud in IndexedDB non supportato:', e);
+            }
+        }
+
+        async function restoreCloudFileHandleFromIdb() {
+            try {
+                const db = await openPdfDatabase();
+                const handle = await new Promise((resolve, reject) => {
+                    const tx = db.transaction(STATE_BACKUP_STORE, 'readonly');
+                    const req = tx.objectStore(STATE_BACKUP_STORE).get(CLOUD_HANDLE_IDB_KEY);
+                    req.onsuccess = () => resolve(req.result || null);
+                    req.onerror = () => reject(req.error);
+                });
+                if (handle) {
+                    linkedCloudFileHandle = handle;
+                    if (!state.uiPrefs.cloudSync) state.uiPrefs.cloudSync = {};
+                    state.uiPrefs.cloudSync.linkedFileName = handle.name || state.uiPrefs.cloudSync.linkedFileName || 'Quaderno_Studio_Sync.json';
+                    if (typeof handle.queryPermission === 'function') {
+                        linkedCloudPermissionState = await handle.queryPermission({ mode: 'readwrite' });
+                    } else {
+                        linkedCloudPermissionState = 'granted';
+                    }
+                } else {
+                    linkedCloudFileHandle = null;
+                    linkedCloudPermissionState = 'none';
+                }
+            } catch (_) {
+                linkedCloudFileHandle = null;
+                linkedCloudPermissionState = 'none';
+            }
+        }
+
+        function updateCloudSyncModalUI() {
+            const cs = (state.uiPrefs && state.uiPrefs.cloudSync) || {};
+            const last = cs.lastSyncAt;
+            const lbl = document.getElementById('cloud-last-sync-label');
+            if (lbl) {
+                lbl.textContent = last
+                    ? 'Ultima sincronizzazione riuscita: ' + last
+                    : 'Ultima sincronizzazione: mai effettuata';
+            }
+
+            const autoChk = document.getElementById('cloud-auto-sync-checkbox');
+            if (autoChk) autoChk.checked = !!cs.autoSync;
+
+            const badge = document.getElementById('cloud-linked-file-badge');
+            const reauthBtn = document.getElementById('btn-verify-cloud-permission');
+            const hint = document.getElementById('cloud-autosync-hint');
+            const supportsPicker = typeof window.showSaveFilePicker === 'function';
+
+            if (badge) {
+                if (linkedCloudFileHandle && linkedCloudPermissionState === 'granted') {
+                    badge.textContent = '✓ Collegato: ' + (linkedCloudFileHandle.name || cs.linkedFileName || 'Quaderno_Studio_Sync.json');
+                    badge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200';
+                    if (reauthBtn) reauthBtn.classList.add('hidden');
+                } else if (linkedCloudFileHandle && linkedCloudPermissionState === 'prompt') {
+                    badge.textContent = '⚠️ Da riconfermare: ' + (linkedCloudFileHandle.name || cs.linkedFileName || 'Quaderno_Studio_Sync.json');
+                    badge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 border border-amber-300';
+                    if (reauthBtn) reauthBtn.classList.remove('hidden');
+                } else if (cs.linkedFileName) {
+                    badge.textContent = 'Riferimento: ' + cs.linkedFileName + ' (ricollega o usa Salva ora)';
+                    badge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-amber-50 text-amber-900 border border-amber-200';
+                    if (reauthBtn) reauthBtn.classList.add('hidden');
+                } else {
+                    badge.textContent = 'Nessun file collegato';
+                    badge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600';
+                    if (reauthBtn) reauthBtn.classList.add('hidden');
+                }
+            }
+
+            if (hint) {
+                if (!supportsPicker) {
+                    hint.textContent = 'Su Safari iPadOS il browser non consente la sovrascrittura automatica silenziosa dei file locali: usa "Salva ora su iCloud / OneDrive" oppure OneDrive Diretto.';
+                } else if (linkedCloudFileHandle && linkedCloudPermissionState === 'granted' && cs.autoSync) {
+                    hint.textContent = 'Salvataggio automatico attivo: ogni modifica viene scritta realmente in "' + (linkedCloudFileHandle.name || 'Quaderno_Studio_Sync.json') + '".';
+                } else if (linkedCloudFileHandle && linkedCloudPermissionState === 'prompt') {
+                    hint.textContent = 'Premi "Riattiva accesso al file" o "Salva ora su iCloud / OneDrive" per autorizzare la scrittura sul file collegato.';
+                } else {
+                    hint.textContent = 'Collega un file .json in iCloud Drive / OneDrive oppure usa "Salva ora su iCloud / OneDrive".';
+                }
+            }
+
+            const cidInput = document.getElementById('onedrive-client-id');
+            const tokInput = document.getElementById('onedrive-access-token');
+            const odBadge = document.getElementById('onedrive-conn-badge');
+            if (cidInput && cs.oneDriveClientId && !cidInput.value) cidInput.value = cs.oneDriveClientId;
+            if (tokInput && cs.oneDriveToken && !tokInput.value) tokInput.value = cs.oneDriveToken;
+            if (odBadge) {
+                if (cs.oneDriveToken) {
+                    odBadge.textContent = 'Token salvato';
+                    odBadge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700';
+                } else {
+                    odBadge.textContent = 'Non connesso';
+                    odBadge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600';
+                }
+            }
+        }
+
+        async function openCloudSyncModal() {
             const modal = document.getElementById('cloud-sync-modal');
             if (!modal) return;
-            const last = state.uiPrefs && state.uiPrefs.cloudSync && state.uiPrefs.cloudSync.lastSyncAt;
-            const lbl = document.getElementById('cloud-last-sync-label');
-            if (lbl && last) lbl.textContent = 'Ultima sincronizzazione: ' + last;
+            await restoreCloudFileHandleFromIdb();
+            updateCloudSyncModalUI();
             modal.classList.remove('hidden');
             if (window.lucide) lucide.createIcons();
         }
@@ -7761,8 +7979,31 @@
                 : 'flex-1 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold text-[#7c6575] transition';
         }
 
+        async function reauthorizeLinkedCloudFile() {
+            if (!linkedCloudFileHandle) {
+                await linkCloudSyncFile();
+                return;
+            }
+            try {
+                if (typeof linkedCloudFileHandle.requestPermission === 'function') {
+                    linkedCloudPermissionState = await linkedCloudFileHandle.requestPermission({ mode: 'readwrite' });
+                } else {
+                    linkedCloudPermissionState = 'granted';
+                }
+                updateCloudSyncModalUI();
+                if (linkedCloudPermissionState === 'granted') {
+                    await saveToCloudFile();
+                } else {
+                    showCloudSyncModalBanner('Permesso di scrittura sul file non concesso dal browser.', 'warning');
+                }
+            } catch (err) {
+                showCloudSyncModalBanner('Impossibile riattivare il file: selezionalo nuovamente con "Collega file".', 'warning');
+            }
+        }
+
         async function linkCloudSyncFile() {
             if (typeof window.showSaveFilePicker !== 'function') {
+                showCloudSyncModalBanner('Su Safari iPadOS usa "Salva ora su iCloud / OneDrive" per salvare il file in iCloud Drive o OneDrive.', 'warning');
                 showToast('Su iPad usa direttamente "Salva ora su iCloud / OneDrive".');
                 return;
             }
@@ -7771,57 +8012,152 @@
                     suggestedName: 'Quaderno_Studio_Sync.json',
                     types: [{ description: 'Quaderno Sync JSON', accept: { 'application/json': ['.json'] } }]
                 });
-                const badge = document.getElementById('cloud-linked-file-badge');
-                if (badge && linkedCloudFileHandle) {
-                    badge.textContent = 'Collegato: ' + linkedCloudFileHandle.name;
-                    badge.className = 'text-[11px] font-bold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700';
-                }
+                linkedCloudPermissionState = 'granted';
+                if (!state.uiPrefs.cloudSync) state.uiPrefs.cloudSync = {};
+                state.uiPrefs.cloudSync.linkedFileName = linkedCloudFileHandle.name || 'Quaderno_Studio_Sync.json';
+                state.uiPrefs.cloudSync.autoSync = true;
+                await persistCloudFileHandleToIdb(linkedCloudFileHandle);
+                saveState();
+                updateCloudSyncModalUI();
                 await saveToCloudFile();
-            } catch (_) {}
+            } catch (err) {
+                if (err && err.name !== 'AbortError') {
+                    showCloudSyncModalBanner('Collegamento file non riuscito: ' + (err.message || 'riprova'), 'error');
+                }
+            }
         }
 
         function toggleCloudAutoSync(checked) {
             if (!state.uiPrefs.cloudSync) state.uiPrefs.cloudSync = {};
             state.uiPrefs.cloudSync.autoSync = !!checked;
             saveState();
+            updateCloudSyncModalUI();
+            if (checked) {
+                if (linkedCloudFileHandle && linkedCloudPermissionState === 'granted') {
+                    showCloudSyncModalBanner('Salvataggio automatico attivato sul file "' + linkedCloudFileHandle.name + '".', 'success');
+                    triggerCloudAutoSyncIfEnabled();
+                } else if (linkedCloudFileHandle && linkedCloudPermissionState === 'prompt') {
+                    showCloudSyncModalBanner('Salvataggio automatico attivato: premi "Riattiva accesso al file" per confermare la scrittura.', 'warning');
+                } else {
+                    showCloudSyncModalBanner('Salvataggio automatico attivato: collega prima un file con "Collega file (Auto-Sync)" oppure usa "Salva ora".', 'warning');
+                }
+            } else {
+                showCloudSyncModalBanner('Salvataggio automatico disattivato. Puoi comunque salvare manualmente in qualsiasi momento.', 'warning');
+            }
+        }
+
+        function triggerCloudAutoSyncIfEnabled() {
+            const cs = state.uiPrefs && state.uiPrefs.cloudSync;
+            if (!cs || !cs.autoSync || !linkedCloudFileHandle || linkedCloudPermissionState !== 'granted') return;
+            clearTimeout(cloudAutoSyncDebounceTimer);
+            cloudAutoSyncDebounceTimer = setTimeout(async () => {
+                if (cloudAutoSyncInFlight) return;
+                cloudAutoSyncInFlight = true;
+                try {
+                    const payload = await buildCompleteBackupPayload();
+                    const jsonStr = JSON.stringify(payload);
+                    const report = inspectBackupIntegrity(jsonStr, state, {
+                        pdfFilesCount: Object.keys(payload.pdfFiles || {}).length,
+                        floatingDocFilesCount: Object.keys(payload.floatingDocFiles || {}).length
+                    });
+                    if (!report.ok) return;
+                    const writable = await linkedCloudFileHandle.createWritable();
+                    await writable.write(jsonStr);
+                    await writable.close();
+                    const ts = new Date().toLocaleString('it-IT');
+                    state.uiPrefs.cloudSync.lastSyncAt = ts;
+                    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (_) {}
+                    updateCloudSyncModalUI();
+                    showCloudSyncModalBanner(`✓ Salvataggio automatico riuscito alle ${ts} su "${linkedCloudFileHandle.name}" (${report.stats.sessionsCount} sessioni, ${report.stats.totalNotes} note).`, 'success');
+                } catch (err) {
+                    linkedCloudPermissionState = 'prompt';
+                    updateCloudSyncModalUI();
+                    showCloudSyncModalBanner('Salvataggio automatico in pausa: premi "Riattiva accesso al file" per confermare il permesso di scrittura.', 'warning');
+                } finally {
+                    cloudAutoSyncInFlight = false;
+                }
+            }, 1200);
         }
 
         async function saveToCloudFile() {
             const payload = await buildCompleteBackupPayload();
             const jsonStr = JSON.stringify(payload);
-            if (!verifyBackupIntegrityBeforeExport(jsonStr, state)) {
-                showToast('Errore verifica integrità backup.', true);
+            const report = inspectBackupIntegrity(jsonStr, state, {
+                pdfFilesCount: Object.keys(payload.pdfFiles || {}).length,
+                floatingDocFilesCount: Object.keys(payload.floatingDocFiles || {}).length
+            });
+            if (!report.ok) {
+                const errReason = report.errors[0] || 'dati incompleti';
+                showCloudSyncModalBanner('Errore verifica integrità backup: ' + errReason, 'error');
+                showToast('Errore verifica integrità backup: ' + errReason, true);
                 return;
             }
+
+            const st = report.stats;
+            const summaryText = `${st.sessionsCount} sessioni, ${st.totalNotes} note, ${st.totalNotebookPages} pag. quaderno, ${st.pdfFilesCount + st.floatingDocFilesCount} PDF`;
+
             if (linkedCloudFileHandle) {
                 try {
-                    const writable = await linkedCloudFileHandle.createWritable();
-                    await writable.write(jsonStr);
-                    await writable.close();
-                    state.uiPrefs.cloudSync.lastSyncAt = new Date().toLocaleString('it-IT');
-                    saveState();
-                    showToast('Sincronizzato sul file Cloud collegato!');
-                    return;
-                } catch (_) {}
+                    if (typeof linkedCloudFileHandle.queryPermission === 'function') {
+                        let perm = await linkedCloudFileHandle.queryPermission({ mode: 'readwrite' });
+                        if (perm !== 'granted' && typeof linkedCloudFileHandle.requestPermission === 'function') {
+                            perm = await linkedCloudFileHandle.requestPermission({ mode: 'readwrite' });
+                        }
+                        linkedCloudPermissionState = perm;
+                    }
+                    if (linkedCloudPermissionState === 'granted') {
+                        const writable = await linkedCloudFileHandle.createWritable();
+                        await writable.write(jsonStr);
+                        await writable.close();
+                        const ts = new Date().toLocaleString('it-IT');
+                        state.uiPrefs.cloudSync.lastSyncAt = ts;
+                        saveState();
+                        updateCloudSyncModalUI();
+                        const okMsg = `✓ Salvataggio riuscito alle ${ts} su "${linkedCloudFileHandle.name}" (${summaryText}).`;
+                        showCloudSyncModalBanner(okMsg, 'success');
+                        showToast('Sincronizzato realmente sul file Cloud collegato!');
+                        return;
+                    }
+                } catch (writeErr) {
+                    console.warn('Scrittura diretta sul file collegato non riuscita, uso esportazione/condivisione:', writeErr);
+                    linkedCloudPermissionState = 'prompt';
+                    updateCloudSyncModalUI();
+                }
             }
+
             const blob = new Blob([jsonStr], { type: 'application/json' });
             const file = new File([blob], 'Quaderno_Studio_Sync.json', { type: 'application/json' });
             if (navigator.canShare && navigator.canShare({ files: [file] })) {
                 try {
                     await navigator.share({ files: [file], title: 'Quaderno per lo studio Sync' });
-                    state.uiPrefs.cloudSync.lastSyncAt = new Date().toLocaleString('it-IT');
+                    const ts = new Date().toLocaleString('it-IT');
+                    state.uiPrefs.cloudSync.lastSyncAt = ts;
                     saveState();
+                    updateCloudSyncModalUI();
+                    const okMsg = `✓ File Quaderno_Studio_Sync.json condiviso/salvato alle ${ts} (${summaryText}).`;
+                    showCloudSyncModalBanner(okMsg, 'success');
+                    showToast('Sincronizzazione completata!');
                     return;
-                } catch (_) {}
+                } catch (shareErr) {
+                    if (shareErr && shareErr.name === 'AbortError') {
+                        showCloudSyncModalBanner('Salvataggio annullato prima del completamento.', 'warning');
+                        return;
+                    }
+                }
             }
+
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
             a.download = 'Quaderno_Studio_Sync.json';
             a.click();
             setTimeout(() => URL.revokeObjectURL(url), 1000);
-            state.uiPrefs.cloudSync.lastSyncAt = new Date().toLocaleString('it-IT');
+            const ts = new Date().toLocaleString('it-IT');
+            state.uiPrefs.cloudSync.lastSyncAt = ts;
             saveState();
+            updateCloudSyncModalUI();
+            const okMsg = `✓ File Quaderno_Studio_Sync.json generato e verificato alle ${ts} (${summaryText}). Salvalo nella cartella iCloud Drive o OneDrive.`;
+            showCloudSyncModalBanner(okMsg, 'success');
             showToast('File Quaderno_Studio_Sync.json pronto per iCloud / OneDrive!');
         }
 
@@ -7839,13 +8175,22 @@
             reader.onload = async (e) => {
                 try {
                     const parsed = JSON.parse(e.target.result);
-                    await restoreBackupIntoState(parsed, mode, state, true);
-                    state.uiPrefs.cloudSync.lastSyncAt = new Date().toLocaleString('it-IT');
+                    const ok = await restoreBackupIntoState(parsed, mode, state, true);
+                    if (!ok) {
+                        showCloudSyncModalBanner('Il file selezionato non contiene dati validi del quaderno.', 'error');
+                        return;
+                    }
+                    const ts = new Date().toLocaleString('it-IT');
+                    state.uiPrefs.cloudSync.lastSyncAt = ts;
                     saveState();
+                    updateCloudSyncModalUI();
                     applyAppearanceTheme();
                     renderApp();
+                    const msg = `✓ Ripristino completato alle ${ts} da "${file.name}" (${mode === 'merge' ? 'uniti senza duplicati' : 'copia Cloud caricata'}).`;
+                    showCloudSyncModalBanner(msg, 'success');
                     showToast('Dati caricati dal Cloud con successo!');
                 } catch (_) {
+                    showCloudSyncModalBanner('File di sincronizzazione non valido o danneggiato.', 'error');
                     showToast('File di sincronizzazione non valido.', true);
                 }
             };
@@ -7891,21 +8236,36 @@
         async function uploadToOneDriveDirect() {
             const tok = state.uiPrefs.cloudSync.oneDriveToken;
             if (!tok) {
+                showCloudSyncModalBanner('Inserisci prima un Access Token OneDrive valido.', 'warning');
                 showToast('Inserisci prima un Access Token OneDrive.', true);
                 return;
             }
             try {
                 const payload = await buildCompleteBackupPayload();
+                const jsonStr = JSON.stringify(payload);
+                const report = inspectBackupIntegrity(jsonStr, state, {
+                    pdfFilesCount: Object.keys(payload.pdfFiles || {}).length,
+                    floatingDocFilesCount: Object.keys(payload.floatingDocFiles || {}).length
+                });
+                if (!report.ok) {
+                    showCloudSyncModalBanner('Errore verifica integrità backup: ' + (report.errors[0] || 'dati incompleti'), 'error');
+                    return;
+                }
                 const res = await fetch('https://graph.microsoft.com/v1.0/me/drive/root:/QuadernoStudio/Quaderno_Studio_Sync.json:/content', {
                     method: 'PUT',
                     headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
+                    body: jsonStr
                 });
                 if (!res.ok) throw new Error('HTTP ' + res.status);
-                state.uiPrefs.cloudSync.lastSyncAt = new Date().toLocaleString('it-IT');
+                const ts = new Date().toLocaleString('it-IT');
+                state.uiPrefs.cloudSync.lastSyncAt = ts;
                 saveState();
+                updateCloudSyncModalUI();
+                const st = report.stats;
+                showCloudSyncModalBanner(`✓ Caricamento su OneDrive riuscito alle ${ts} (${st.sessionsCount} sessioni, ${st.totalNotes} note, ${st.pdfFilesCount + st.floatingDocFilesCount} PDF).`, 'success');
                 showToast('Caricato su OneDrive con successo!');
             } catch (err) {
+                showCloudSyncModalBanner('Errore caricamento su OneDrive: verifica che il token non sia scaduto.', 'error');
                 showToast('Errore caricamento su OneDrive: verifica il token.', true);
             }
         }
@@ -7913,6 +8273,7 @@
         async function downloadFromOneDriveDirect() {
             const tok = state.uiPrefs.cloudSync.oneDriveToken;
             if (!tok) {
+                showCloudSyncModalBanner('Inserisci prima un Access Token OneDrive valido.', 'warning');
                 showToast('Inserisci prima un Access Token OneDrive.', true);
                 return;
             }
@@ -7923,19 +8284,27 @@
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const parsed = await res.json();
                 await restoreBackupIntoState(parsed, 'merge', state, true);
+                const ts = new Date().toLocaleString('it-IT');
+                state.uiPrefs.cloudSync.lastSyncAt = ts;
+                saveState();
+                updateCloudSyncModalUI();
                 applyAppearanceTheme();
                 renderApp();
+                showCloudSyncModalBanner(`✓ Scaricamento e unione da OneDrive completati alle ${ts}.`, 'success');
                 showToast('Dati scaricati e uniti da OneDrive!');
             } catch (err) {
+                showCloudSyncModalBanner('Errore scaricamento da OneDrive: verifica il token o la presenza del file.', 'error');
                 showToast('Errore scaricamento da OneDrive.', true);
             }
         }
 
         async function initCloudSync() {
+            await restoreCloudFileHandleFromIdb();
             if (window.location.hash && window.location.hash.includes('access_token=')) {
                 const params = new URLSearchParams(window.location.hash.slice(1));
                 const tok = params.get('access_token');
                 if (tok) {
+                    if (!state.uiPrefs.cloudSync) state.uiPrefs.cloudSync = {};
                     state.uiPrefs.cloudSync.oneDriveToken = tok;
                     saveState();
                     history.replaceState(null, '', window.location.pathname + window.location.search);
@@ -7947,6 +8316,13 @@
             const out = document.getElementById('pdf-links-selftest-output');
             if (!out) return;
             out.classList.remove('hidden');
+
+            const realPayload = await buildCompleteBackupPayload();
+            const realJson = JSON.stringify(realPayload);
+            const realReport = inspectBackupIntegrity(realJson, state, {
+                pdfFilesCount: Object.keys(realPayload.pdfFiles || {}).length,
+                floatingDocFilesCount: Object.keys(realPayload.floatingDocFiles || {}).length
+            });
 
             const sandbox = {
                 sessions: [{
@@ -7974,14 +8350,17 @@
                 appState: sandbox,
                 notePdfLinks: [{ noteId: 'n1', sessionId: 'broadcasting', pdfId: '', pageNumber: 2, pdfPages: [2] }]
             });
-            const integrityOk = verifyBackupIntegrityBeforeExport(backupJson, sandbox);
+            const sandboxReport = inspectBackupIntegrity(backupJson, sandbox);
             const targetSandbox = { sessions: [] };
             await restoreBackupIntoState(JSON.parse(backupJson), 'replace', targetSandbox, false);
             const restored = targetSandbox.sessions[0];
             const restoredImg = restored.notes[0].images[0];
             out.innerHTML = `
-                <div class="font-extrabold text-emerald-800">✓ Test isolato completato senza toccare i tuoi dati:</div>
-                <div>• Integrità backup pre-esportazione: <strong>${integrityOk ? 'SUPERATA' : 'ERRORE'}</strong></div>
+                <div class="font-extrabold ${realReport.ok && sandboxReport.ok ? 'text-emerald-800' : 'text-rose-700'}">
+                    ${realReport.ok && sandboxReport.ok ? '✓ Verifica completata senza modificare i tuoi dati:' : '⚠️ Rilevato problema nella verifica:'}
+                </div>
+                <div>• Integrità dei tuoi dati reali pre-esportazione: <strong>${realReport.ok ? 'SUPERATA' : 'ERRORE (' + realReport.errors.join('; ') + ')'}</strong> (${realReport.stats ? `${realReport.stats.sessionsCount} sessioni, ${realReport.stats.totalNotes} note, ${realReport.stats.totalNotebookPages} pag. quaderno, ${realReport.stats.pdfFilesCount + realReport.stats.floatingDocFilesCount} PDF` : ''})</div>
+                <div>• Prova isolata di esportazione e ripristino: <strong>${sandboxReport.ok ? 'SUPERATA' : 'ERRORE'}</strong></div>
                 <div>• Pagine quaderno a righe ripristinate: <strong>${restored.notebookPages.length} pagine</strong> (${restored.notebookPages[0].strokes.length} tratto Apple Pencil)</div>
                 <div>• Video e posizione riproduzione: <strong>${restored.videos[0].title} (${formatVideoSeconds(restored.videos[0].lastTime)})</strong></div>
                 <div>• Immagine incollata ripristinata: <strong>larghezza ${restoredImg.widthPct}% (${restoredImg.position === 'top' ? 'sopra testo' : 'sotto testo'})</strong></div>
