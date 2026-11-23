@@ -289,43 +289,6 @@
             opacity: 0.85;
         }
 
-        /* FINESTRA MOBILE GEMINI AI SOPRA IL QUADERNO */
-        #floating-gemini-window {
-            position: absolute;
-            z-index: 26;
-            display: flex;
-            flex-direction: column;
-            background: #fdfbf8;
-            border: 1.5px solid #4338ca;
-            border-radius: 18px;
-            box-shadow: 0 20px 50px -14px rgba(30, 27, 75, 0.42);
-            overflow: hidden;
-            min-width: 290px;
-            min-height: 220px;
-            max-width: calc(100% - 12px);
-            max-height: calc(100% - 12px);
-        }
-        #floating-gemini-window.hidden {
-            display: none !important;
-        }
-        #floating-gemini-header {
-            cursor: move;
-            touch-action: none;
-            user-select: none;
-        }
-        #floating-gemini-resize-handle {
-            position: absolute;
-            right: 0;
-            bottom: 0;
-            width: 24px;
-            height: 24px;
-            cursor: nwse-resize;
-            touch-action: none;
-            z-index: 15;
-            background: linear-gradient(135deg, transparent 50%, #4338ca 50%);
-            border-bottom-right-radius: 16px;
-            opacity: 0.85;
-        }
         .note-pasted-img-card {
             position: relative;
             border: 1.5px solid var(--theme-border-strong);
@@ -1116,14 +1079,6 @@
                     </div>
                 </div>
 
-                <!-- PULSANTE GEMINI AI DISPONIBILE IN OGNI SESSIONE (APRE NEL BROWSER SENZA APP) -->
-                <button type="button" id="btn-gemini-ai-toolbar" onclick="openGeminiAiAssistant()"
-                    title="Apri Gemini Web nel browser senza aprire l'app e senza chiudere il quaderno"
-                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-gradient-to-r from-[#5b2c6f] to-[#1e40af] text-white shadow-2xs hover:opacity-95 transition">
-                    <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-200"></i>
-                    <span>Gemini AI</span>
-                </button>
-
                 <!-- UNICO PULSANTE NOTE / BIBBIA -->
                 <button type="button" id="btn-pdf-toolbar-panel" onclick="togglePdfFloatingPanel()" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-[#f6edf3] text-[#6b2d5c] border plum-border hover:bg-[#ecdae6] transition">
                     <i data-lucide="panel-right" class="w-3.5 h-3.5"></i>
@@ -1294,67 +1249,6 @@
                 </div>
 
                 <div id="floating-video-resize-handle" title="Trascina per ridimensionare la finestra video"></div>
-            </div>
-
-            <!-- 3C. FINESTRA MOBILE GEMINI AI SOPRA IL QUADERNO (APRE GEMINI WEB NEL BROWSER SENZA L'APP NATIVA) -->
-            <div id="floating-gemini-window" class="hidden" style="left: 18px; top: 14px; width: 380px; height: 375px;">
-                <div id="floating-gemini-header" class="bg-gradient-to-r from-[#5b2c6f] to-[#1e40af] text-white px-3 py-2 flex items-center justify-between gap-2 shrink-0">
-                    <div class="flex items-center gap-1.5 min-w-0">
-                        <span class="text-amber-200 text-sm">✨</span>
-                        <span class="font-extrabold text-xs tracking-wide truncate">Gemini Web (Browser) • Immagini</span>
-                    </div>
-                    <div class="flex items-center gap-1 shrink-0">
-                        <button type="button" onclick="snapFloatingGeminiWindow('left')" title="Sposta a sinistra" class="px-1.5 py-0.5 rounded bg-white/15 hover:bg-white/25 text-white text-[10px] font-bold">⬅️</button>
-                        <button type="button" onclick="snapFloatingGeminiWindow('center')" title="Centra finestra" class="px-1.5 py-0.5 rounded bg-white/15 hover:bg-white/25 text-white text-[10px] font-bold">⏺️</button>
-                        <button type="button" onclick="snapFloatingGeminiWindow('right')" title="Sposta a destra" class="px-1.5 py-0.5 rounded bg-white/15 hover:bg-white/25 text-white text-[10px] font-bold">➡️</button>
-                        <button type="button" onclick="closeFloatingGeminiWindow()" title="Chiudi finestra Gemini AI" class="px-2 py-0.5 rounded bg-white/20 hover:bg-rose-500 text-white text-[11px] font-extrabold">✕</button>
-                    </div>
-                </div>
-
-                <div class="flex-1 overflow-y-auto p-3 space-y-2.5 bg-[#fdfbf8] text-xs">
-                    <div class="bg-indigo-50/95 border border-indigo-200 rounded-xl p-2.5 space-y-2 text-[#1e1b4b]">
-                        <p class="font-extrabold text-[11px] flex items-center gap-1">
-                            <span>🌐 Uso contemporaneo nel browser (senza aprire l'app)</span>
-                        </p>
-                        <p class="text-[11px] leading-relaxed text-[#312e81]">
-                            Google blocca l'incorporamento interno (<code>iframe</code>), mentre su iPad un link diretto a <code>gemini.google.com</code> apre l'app installata. Il pulsante sotto apre una <strong>finestra browser ridimensionabile</strong> tramite Google così <strong>Gemini resta in Safari</strong> accanto al quaderno (in <strong>Split View</strong>, <strong>Slide Over</strong> o <strong>Stage Manager</strong>):
-                        </p>
-                        <div class="space-y-1.5">
-                            <button type="button" onclick="openGeminiBrowserWindow('web_bypass')"
-                                class="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-[#5b2c6f] to-[#1e40af] text-white font-extrabold text-xs shadow-2xs flex items-center justify-center gap-1.5 hover:opacity-95 transition">
-                                <span>🌐 Apri Gemini Web nel browser (senza app)</span>
-                            </button>
-                            <button type="button" onclick="openGeminiBrowserWindow('direct')"
-                                class="w-full py-1.5 px-2.5 rounded-lg bg-white border border-indigo-300 text-[#1e1b4b] font-bold text-[11px] hover:bg-indigo-100/60 transition">
-                                ↗ Apri indirizzo diretto (gemini.google.com/app)
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="bg-white border plum-border rounded-xl p-2.5 space-y-2">
-                        <div class="flex items-center justify-between gap-1">
-                            <span class="font-extrabold text-[11px] text-[#4d1c42]">📋 Incolla immagine copiata da Gemini</span>
-                        </div>
-                        <div class="flex items-center gap-1.5 text-[11px]">
-                            <label class="font-bold text-[#7a6273] shrink-0">Destinazione:</label>
-                            <select id="gemini-paste-target-select" class="flex-1 bg-[#fdfbf8] border plum-border rounded-lg px-2 py-1 font-bold text-[#2a1825] min-w-0">
-                                <option value="active_or_new">Nota aperta (o nuova nota)</option>
-                                <option value="new_note">+ Crea nuova nota con immagine</option>
-                            </select>
-                        </div>
-                        <button type="button" onclick="pasteClipboardImageFromGeminiBar()"
-                            class="w-full py-2 px-3 rounded-xl plum-primary font-extrabold text-xs shadow-2xs flex items-center justify-center gap-1.5">
-                            <span>📋 Incolla immagine dagli appunti</span>
-                        </button>
-                        <div id="gemini-direct-paste-zone" tabindex="0" contenteditable="true"
-                            onpaste="handleGeminiBarDirectPaste(event)"
-                            oninput="this.innerHTML='';"
-                            data-placeholder="Oppure tocca qui e scegli 'Incolla' (Cmd+V)..."
-                            class="note-editor !min-h-[42px] text-[11px] bg-[#f6edf3]/70 border border-dashed border-[#6b2d5c] rounded-xl px-2.5 py-2 text-center text-[#6b2d5c] font-semibold"></div>
-                    </div>
-                </div>
-
-                <div id="floating-gemini-resize-handle" title="Trascina per ridimensionare la finestra"></div>
             </div>
 
             <!-- 4. LETTORE VIDEO LOCALE A SCHERMO INTERO (PER LE ALTRE SESSIONI VIDEO) -->
@@ -1861,9 +1755,6 @@
         let fvidObjectUrl = null;
         let fvidLastSavedTime = 0;
         let fvidMaximized = false;
-
-        // Variabili runtime Finestra Mobile Gemini AI
-        let geminiExternalWindowRef = null;
 
         // Variabili runtime lettore Video a schermo intero (altre sessioni)
         let activeVideoObjectUrl = null;
@@ -3279,7 +3170,6 @@
             closePdfSidePanel();
             closeFloatingDocWindow(false);
             closeFloatingVideoWindow(false);
-            closeFloatingGeminiWindow();
             const overlay = document.getElementById('pdf-workspace-overlay');
             if (overlay) overlay.classList.add('hidden');
             state.view = 'home';
@@ -4781,171 +4671,8 @@
         }
 
         /* =========================================================================
-           7E. GEMINI WEB NEL BROWSER (EVITA L'APP IPADOS) + FINESTRA MOBILE + INCOLLA IMMAGINI
+           7E. INCOLLA IMMAGINI NEGLI APPUNTI
            ========================================================================= */
-        function openGeminiBrowserWindow(mode = 'web_bypass') {
-            // Su iPadOS aprire direttamente https://gemini.google.com/app fa scattare l'Universal Link dell'app nativa.
-            // Passando da Google Search (google.com/search?q=Gemini) in una finestra browser ridimensionabile,
-            // iPadOS resta dentro Safari e toccando "Gemini" nei risultati apre Gemini Web nel browser senza l'app!
-            const targetUrl = mode === 'direct'
-                ? 'https://gemini.google.com/app'
-                : 'https://www.google.com/search?q=Gemini';
-            try {
-                if (geminiExternalWindowRef && !geminiExternalWindowRef.closed) {
-                    geminiExternalWindowRef.location.href = targetUrl;
-                    geminiExternalWindowRef.focus();
-                    return;
-                }
-                const w = Math.min(540, Math.max(380, Math.round(window.innerWidth * 0.46)));
-                const h = Math.min(820, Math.max(540, window.innerHeight - 40));
-                const left = Math.max(20, (window.screenX || 0) + (window.outerWidth || window.innerWidth) - w - 20);
-                const top = Math.max(20, (window.screenY || 0) + 30);
-                geminiExternalWindowRef = window.open(
-                    targetUrl,
-                    'GeminiWebBrowserWindow',
-                    `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`
-                );
-                if (geminiExternalWindowRef) {
-                    geminiExternalWindowRef.focus();
-                } else {
-                    const a = document.createElement('a');
-                    a.href = targetUrl;
-                    a.target = '_blank';
-                    a.rel = 'noopener noreferrer';
-                    a.click();
-                }
-            } catch (_) {
-                window.open(targetUrl, '_blank', 'noopener,noreferrer');
-            }
-        }
-
-        function openGeminiAiAssistant() {
-            openGeminiBrowserWindow('web_bypass');
-
-            const win = document.getElementById('floating-gemini-window');
-            if (win) {
-                const r = (state.uiPrefs && state.uiPrefs.geminiWindowRect) || { left: 18, right: null, top: 14, width: 380, height: 375 };
-                const maxW = Math.max(290, window.innerWidth - 20);
-                const maxH = Math.max(220, window.innerHeight - 80);
-                win.style.width = Math.min(maxW, Math.max(290, r.width || 380)) + 'px';
-                win.style.height = Math.min(maxH, Math.max(220, r.height || 375)) + 'px';
-                win.style.top = Math.max(8, Math.min(maxH - 120, r.top || 14)) + 'px';
-                if (typeof r.left === 'number') {
-                    win.style.left = Math.max(8, Math.min(maxW - 140, r.left)) + 'px';
-                    win.style.right = 'auto';
-                } else {
-                    win.style.right = (r.right ?? 18) + 'px';
-                    win.style.left = 'auto';
-                }
-                win.classList.remove('hidden');
-            }
-            if (window.lucide) lucide.createIcons();
-        }
-
-        function closeFloatingGeminiWindow() {
-            const win = document.getElementById('floating-gemini-window');
-            if (win) win.classList.add('hidden');
-        }
-
-        function snapFloatingGeminiWindow(pos) {
-            const win = document.getElementById('floating-gemini-window');
-            const container = document.getElementById('pdf-split-container');
-            if (!win || !container) return;
-            const cw = container.clientWidth || window.innerWidth;
-            const ww = win.getBoundingClientRect().width;
-            if (!state.uiPrefs.geminiWindowRect) state.uiPrefs.geminiWindowRect = { left: 18, right: null, top: 14, width: 380, height: 375 };
-
-            if (pos === 'left') {
-                win.style.left = '14px';
-                win.style.right = 'auto';
-                state.uiPrefs.geminiWindowRect.left = 14;
-                state.uiPrefs.geminiWindowRect.right = null;
-            } else if (pos === 'center') {
-                const leftVal = Math.max(10, Math.round((cw - ww) / 2));
-                win.style.left = leftVal + 'px';
-                win.style.right = 'auto';
-                state.uiPrefs.geminiWindowRect.left = leftVal;
-                state.uiPrefs.geminiWindowRect.right = null;
-            } else {
-                win.style.left = 'auto';
-                win.style.right = '14px';
-                state.uiPrefs.geminiWindowRect.left = null;
-                state.uiPrefs.geminiWindowRect.right = 14;
-            }
-            saveState();
-        }
-
-        function setupFloatingGeminiWindowInteractions() {
-            const win = document.getElementById('floating-gemini-window');
-            const header = document.getElementById('floating-gemini-header');
-            const resizeHandle = document.getElementById('floating-gemini-resize-handle');
-            const container = document.getElementById('pdf-split-container');
-
-            if (win && header && container) {
-                let dragging = false, sx = 0, sy = 0, origLeft = 0, origTop = 0;
-                header.addEventListener('pointerdown', (e) => {
-                    if (e.target.closest('button, input, select')) return;
-                    dragging = true;
-                    const r = win.getBoundingClientRect();
-                    const cr = container.getBoundingClientRect();
-                    sx = e.clientX;
-                    sy = e.clientY;
-                    origLeft = r.left - cr.left;
-                    origTop = r.top - cr.top;
-                    try { header.setPointerCapture(e.pointerId); } catch (_) {}
-                });
-                header.addEventListener('pointermove', (e) => {
-                    if (!dragging) return;
-                    const maxL = Math.max(8, container.clientWidth - win.offsetWidth - 8);
-                    const maxT = Math.max(8, container.clientHeight - win.offsetHeight - 8);
-                    const nl = Math.max(8, Math.min(maxL, origLeft + (e.clientX - sx)));
-                    const nt = Math.max(8, Math.min(maxT, origTop + (e.clientY - sy)));
-                    win.style.left = nl + 'px';
-                    win.style.right = 'auto';
-                    win.style.top = nt + 'px';
-                });
-                header.addEventListener('pointerup', () => {
-                    if (!dragging) return;
-                    dragging = false;
-                    if (!state.uiPrefs.geminiWindowRect) state.uiPrefs.geminiWindowRect = {};
-                    state.uiPrefs.geminiWindowRect.left = parseFloat(win.style.left) || 14;
-                    state.uiPrefs.geminiWindowRect.right = null;
-                    state.uiPrefs.geminiWindowRect.top = parseFloat(win.style.top) || 14;
-                    saveState();
-                });
-            }
-
-            if (win && resizeHandle && container) {
-                let resizing = false, sx = 0, sy = 0, origW = 0, origH = 0;
-                resizeHandle.addEventListener('pointerdown', (e) => {
-                    e.stopPropagation();
-                    resizing = true;
-                    sx = e.clientX;
-                    sy = e.clientY;
-                    origW = win.offsetWidth;
-                    origH = win.offsetHeight;
-                    try { resizeHandle.setPointerCapture(e.pointerId); } catch (_) {}
-                });
-                resizeHandle.addEventListener('pointermove', (e) => {
-                    if (!resizing) return;
-                    const maxW = Math.max(290, container.clientWidth - 16);
-                    const maxH = Math.max(220, container.clientHeight - 16);
-                    const nw = Math.max(290, Math.min(maxW, origW + (e.clientX - sx)));
-                    const nh = Math.max(220, Math.min(maxH, origH + (e.clientY - sy)));
-                    win.style.width = nw + 'px';
-                    win.style.height = nh + 'px';
-                });
-                resizeHandle.addEventListener('pointerup', () => {
-                    if (!resizing) return;
-                    resizing = false;
-                    if (!state.uiPrefs.geminiWindowRect) state.uiPrefs.geminiWindowRect = {};
-                    state.uiPrefs.geminiWindowRect.width = win.offsetWidth;
-                    state.uiPrefs.geminiWindowRect.height = win.offsetHeight;
-                    saveState();
-                });
-            }
-        }
-
         function readBlobAsDataUrl(blob) {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
@@ -5041,57 +4768,6 @@
                 if (ed) ed.focus();
                 showToast('Tocca dentro la nota e scegli "Incolla" dal menu di Safari.', true);
             }
-        }
-
-        function resolveTargetNoteForGeminiPaste() {
-            const s = getActiveSession();
-            const modeSel = document.getElementById('gemini-paste-target-select');
-            const mode = modeSel ? modeSel.value : 'active_or_new';
-            const targetPg = workspaceCurrentView === 'notebook'
-                ? notebookCurrentPage
-                : ((workspaceCurrentView === 'pdf' && currentPdfDoc) ? pdfCurrentPage : null);
-
-            if (mode === 'new_note' || !s.notes || s.notes.length === 0) {
-                const created = addNoteInCurrentSession(targetPg, false, null);
-                created.title = targetPg ? `Appunto Gemini (Pag. ${targetPg})` : `Appunto Gemini ${s.notes.length}`;
-                saveState();
-                return created;
-            }
-            const openNote = [...s.notes].reverse().find(n => n.isOpen) || s.notes[s.notes.length - 1];
-            return openNote;
-        }
-
-        async function pasteClipboardImageFromGeminiBar() {
-            try {
-                const blob = await readImageBlobFromNavigatorClipboard();
-                if (!blob) {
-                    const zone = document.getElementById('gemini-direct-paste-zone');
-                    if (zone) zone.focus();
-                    showToast('Tocca nel riquadro tratteggiato qui sotto e premi "Incolla" (Cmd+V).', true);
-                    return;
-                }
-                const targetNote = resolveTargetNoteForGeminiPaste();
-                const ok = await appendImageBlobToNote(targetNote.id, blob);
-                if (ok) showToast(`Immagine da Gemini salvata in "${targetNote.title}"!`);
-            } catch (_) {
-                const zone = document.getElementById('gemini-direct-paste-zone');
-                if (zone) zone.focus();
-                showToast('Tocca nel riquadro tratteggiato e premi "Incolla" per inserire l’immagine.', true);
-            }
-        }
-
-        async function handleGeminiBarDirectPaste(event) {
-            const imgBlob = await extractImageBlobFromClipboardEvent(event);
-            event.preventDefault();
-            const zone = document.getElementById('gemini-direct-paste-zone');
-            if (zone) zone.innerHTML = '';
-            if (!imgBlob) {
-                showToast('Negli appunti non c’è un’immagine. Copia prima un’immagine da Gemini.', true);
-                return;
-            }
-            const targetNote = resolveTargetNoteForGeminiPaste();
-            const ok = await appendImageBlobToNote(targetNote.id, imgBlob);
-            if (ok) showToast(`Immagine da Gemini incollata in "${targetNote.title}"!`);
         }
 
         /* =========================================================================
@@ -8365,7 +8041,6 @@
                 setupPdfResizer();
                 setupFloatingDocWindowInteractions();
                 setupFloatingVideoWindowInteractions();
-                setupFloatingGeminiWindowInteractions();
                 enablePencilClicksOnPdfToolbar();
                 setupVideoPlayerListeners();
                 await initCloudSync();
