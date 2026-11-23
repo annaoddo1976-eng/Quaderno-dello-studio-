@@ -1094,24 +1094,24 @@
                         <span>Aggiungi</span>
                         <i data-lucide="chevron-down" class="w-3 h-3"></i>
                     </button>
-                    <div id="pdf-add-menu-dropdown" class="hidden absolute right-0 top-full mt-1.5 w-60 bg-white border plum-border rounded-2xl shadow-xl p-1.5 space-y-1 z-[60]">
-                        <label id="menu-item-upload-main-pdf" onclick="closePdfAddMenu()" class="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-[#f6edf3] text-xs font-bold text-[#2a1825] cursor-pointer">
-                            <i data-lucide="file-up" class="w-4 h-4 text-[#7e2248]"></i>
-                            <span>Carica / Sostituisci PDF</span>
+                    <div id="pdf-add-menu-dropdown" style="max-width: calc(100vw - 24px); -webkit-overflow-scrolling: touch;" class="hidden fixed w-60 bg-white border plum-border rounded-2xl shadow-xl p-1.5 space-y-1 overflow-y-auto z-[95]">
+                        <label id="menu-item-upload-main-pdf" onclick="closePdfAddMenu()" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-[#f6edf3] text-xs font-bold text-[#2a1825] cursor-pointer">
+                            <i data-lucide="file-up" class="w-4 h-4 text-[#7e2248] shrink-0"></i>
+                            <span class="break-words">Carica / Sostituisci PDF</span>
                             <input type="file" accept="application/pdf" onchange="handlePdfFileUpload(event)" class="hidden">
                         </label>
-                        <label id="menu-item-upload-video" onclick="closePdfAddMenu()" class="hidden w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-[#f6edf3] text-xs font-bold text-[#2a1825] cursor-pointer">
-                            <i data-lucide="video" class="w-4 h-4 text-[#6b2d5c]"></i>
-                            <span>+ Carica video</span>
+                        <label id="menu-item-upload-video" onclick="closePdfAddMenu()" class="hidden w-full flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-[#f6edf3] text-xs font-bold text-[#2a1825] cursor-pointer">
+                            <i data-lucide="video" class="w-4 h-4 text-[#6b2d5c] shrink-0"></i>
+                            <span class="break-words">+ Carica video</span>
                             <input type="file" accept="video/*" onchange="handleVideoFileUpload(event)" class="hidden">
                         </label>
-                        <button type="button" onclick="addNoteFromPdfToolbar()" class="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-[#f6edf3] text-xs font-bold text-[#2a1825] text-left">
-                            <i data-lucide="sticky-note" class="w-4 h-4 text-[#6b2d5c]"></i>
-                            <span>Nuova nota</span>
+                        <button type="button" onclick="addNoteFromPdfToolbar()" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-[#f6edf3] text-xs font-bold text-[#2a1825] text-left">
+                            <i data-lucide="sticky-note" class="w-4 h-4 text-[#6b2d5c] shrink-0"></i>
+                            <span class="break-words">Nuova nota</span>
                         </button>
-                        <button type="button" onclick="closePdfAddMenu(); openPastePrepModal();" class="w-full flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-[#f6edf3] text-xs font-bold text-[#2a1825] text-left">
-                            <i data-lucide="clipboard-paste" class="w-4 h-4 text-[#6b2d5c]"></i>
-                            <span>Incolla preparazione</span>
+                        <button type="button" onclick="closePdfAddMenu(); openPastePrepModal();" class="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-[#f6edf3] text-xs font-bold text-[#2a1825] text-left">
+                            <i data-lucide="clipboard-paste" class="w-4 h-4 text-[#6b2d5c] shrink-0"></i>
+                            <span class="break-words">Incolla preparazione</span>
                         </button>
                     </div>
                 </div>
@@ -3154,10 +3154,55 @@
         /* =========================================================================
            7. SPAZIO DI LAVORO: QUADERNO A RIGHE / PDF / VIDEO + PANNELLO FLOTTANTE
            ========================================================================= */
+        function positionPdfAddMenuDropdown() {
+            const btn = document.getElementById('btn-pdf-add-menu');
+            const dd = document.getElementById('pdf-add-menu-dropdown');
+            if (!btn || !dd || dd.classList.contains('hidden')) return;
+
+            const margin = 12;
+            const vw = window.innerWidth || document.documentElement.clientWidth || 360;
+            const vh = window.innerHeight || document.documentElement.clientHeight || 640;
+            const btnRect = btn.getBoundingClientRect();
+
+            // Larghezza adattiva sempre contenuta entro i margini dello schermo
+            const menuWidth = Math.min(256, Math.max(190, vw - margin * 2));
+            dd.style.width = menuWidth + 'px';
+
+            // Allineamento orizzontale sicuro: preferisce allinearsi al bordo sinistro del pulsante,
+            // altrimenti al bordo destro, senza mai superare i bordi destro o sinistro dello schermo
+            let left = btnRect.left;
+            if (left + menuWidth > vw - margin) {
+                left = btnRect.right - menuWidth;
+            }
+            left = Math.max(margin, Math.min(vw - menuWidth - margin, left));
+
+            // Posizione verticale e altezza massima scorrevole
+            const spaceBelow = vh - btnRect.bottom - margin;
+            const spaceAbove = btnRect.top - margin;
+            let top = btnRect.bottom + 6;
+            let maxHeight = Math.max(140, spaceBelow - 6);
+
+            if (spaceBelow < 170 && spaceAbove > spaceBelow) {
+                maxHeight = Math.max(140, spaceAbove - 6);
+                const approxH = Math.min(dd.scrollHeight || 220, maxHeight);
+                top = Math.max(margin, btnRect.top - approxH - 6);
+            }
+
+            dd.style.left = Math.round(left) + 'px';
+            dd.style.right = 'auto';
+            dd.style.top = Math.round(top) + 'px';
+            dd.style.maxHeight = Math.round(maxHeight) + 'px';
+        }
+
         function togglePdfAddMenu(e) {
             if (e) e.stopPropagation();
             const dd = document.getElementById('pdf-add-menu-dropdown');
-            if (dd) dd.classList.toggle('hidden');
+            if (!dd) return;
+            const willOpen = dd.classList.contains('hidden');
+            dd.classList.toggle('hidden');
+            if (willOpen) {
+                positionPdfAddMenuDropdown();
+            }
         }
 
         function closePdfAddMenu() {
@@ -8294,6 +8339,7 @@
         }
 
         window.addEventListener('resize', () => {
+            positionPdfAddMenuDropdown();
             if (state.view === 'session') {
                 syncFloatingPanelDom();
                 if (workspaceCurrentView === 'notebook') {
