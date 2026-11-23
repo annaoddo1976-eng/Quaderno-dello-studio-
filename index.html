@@ -137,7 +137,9 @@
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         #pdf-workspace-overlay {
+            height: 100vh;
             height: 100dvh;
+            max-height: 100vh;
             max-height: 100dvh;
         }
         #pdf-workspace-overlay button,
@@ -418,8 +420,10 @@
             backface-visibility: hidden;
         }
         #pdf-flip-hint {
-            position: sticky;
+            position: absolute;
             top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
             z-index: 20;
             pointer-events: none;
             transition: opacity 0.15s ease;
@@ -922,8 +926,8 @@
 
     <!-- AREA DI STUDIO PRINCIPALE (PDF / QUADERNO A RIGHE / VIDEO + PANNELLO FLOTTANTE NOTE & BIBBIA) -->
     <div id="pdf-workspace-overlay" class="fixed inset-0 z-[60] hidden bg-[#faf7f2] flex flex-col">
-        <div class="bg-[#fdfbf8] border-b plum-border px-3 py-2 flex flex-wrap items-center justify-between gap-2 shadow-2xs shrink-0 relative z-[40]">
-            <div class="flex flex-wrap items-center gap-2 min-w-0">
+        <div id="pdf-workspace-toolbar" class="bg-[#fdfbf8] border-b plum-border px-2.5 py-1.5 flex flex-wrap items-center justify-between gap-1.5 shadow-2xs shrink-0 relative z-[40]">
+            <div class="flex flex-wrap items-center gap-1.5 min-w-0">
                 <button type="button" onclick="closePdfWorkspace()" class="px-3 py-1.5 rounded-xl plum-primary font-bold text-xs sm:text-sm shadow-2xs shrink-0">
                     ← Chiudi
                 </button>
@@ -963,8 +967,8 @@
                 <span class="mx-1 text-[#d7bfd0]">|</span>
                 <button type="button" onclick="changePdfZoom(-0.15)" title="Riduci zoom" class="px-2 py-1 rounded-lg bg-white font-bold text-xs">−</button>
                 <button type="button" onclick="changePdfZoom(0.15)" title="Aumenta zoom" class="px-2 py-1 rounded-lg bg-white font-bold text-xs">+</button>
-                <button type="button" id="btn-pdf-fit-width" onclick="setPdfFitMode('width')" class="px-2 py-1 rounded-lg plum-primary font-bold text-[11px]">Larghezza</button>
-                <button type="button" id="btn-pdf-fit-page" onclick="setPdfFitMode('page')" class="px-2 py-1 rounded-lg bg-white font-bold text-[11px] text-[#6b2d5c]">Pag. intera</button>
+                <button type="button" id="btn-pdf-fit-width" onclick="setPdfFitMode('width')" class="px-2 py-1 rounded-lg bg-white font-bold text-[11px] text-[#6b2d5c]">Larghezza</button>
+                <button type="button" id="btn-pdf-fit-page" onclick="setPdfFitMode('page')" class="px-2 py-1 rounded-lg plum-primary font-bold text-[11px]">Pag. intera</button>
             </div>
 
             <!-- CONTROLLI PAGINE E ZOOM PER QUADERNO A RIGHE -->
@@ -1094,8 +1098,8 @@
         </div>
 
         <div id="pdf-split-container">
-            <!-- 1. VISUALIZZATORE PDF TRADIZIONALE -->
-            <div id="pdf-left-pane" class="bg-[#efeae4]/75 p-2 sm:p-4">
+            <!-- 1. VISUALIZZATORE PDF TRADIZIONALE (POSIZIONATO PIÙ IN ALTO CON PAGINA INTERA AUTOMATICA) -->
+            <div id="pdf-left-pane" class="bg-[#efeae4]/75 px-1.5 pt-1 pb-1 sm:px-2 sm:pt-1.5 sm:pb-1.5">
                 <div id="pdf-empty-state" class="hidden h-full min-h-[60vh] flex items-center justify-center p-4">
                     <div class="editorial-card rounded-3xl p-6 sm:p-8 max-w-md w-full text-center space-y-4">
                         <div class="w-14 h-14 rounded-2xl session-icon-badge flex items-center justify-center mx-auto">
@@ -1115,7 +1119,7 @@
                     </div>
                 </div>
 
-                <div id="pdf-flip-hint" class="hidden w-fit mx-auto mb-2 px-3 py-1 rounded-full bg-[#261822]/85 text-white text-xs font-bold shadow-md"></div>
+                <div id="pdf-flip-hint" class="hidden w-fit px-3 py-1 rounded-full bg-[#261822]/85 text-white text-xs font-bold shadow-md"></div>
                 <div id="pdf-canvas-wrapper" class="relative bg-white shadow-lg rounded-lg overflow-hidden">
                     <canvas id="pdf-render-canvas" class="block"></canvas>
                     <iframe id="pdf-fallback-frame" class="hidden w-full h-[70vh] border-0"></iframe>
@@ -1187,7 +1191,7 @@
                     </div>
                 </div>
 
-                <div id="floating-doc-scroll-area" class="flex-1 overflow-auto bg-[#efeae4] p-2 relative" style="-webkit-overflow-scrolling: touch;">
+                <div id="floating-doc-scroll-area" class="flex-1 overflow-auto bg-[#efeae4] p-1.5 relative" style="-webkit-overflow-scrolling: touch;">
                     <div id="fdoc-canvas-wrapper" class="relative bg-white shadow rounded overflow-hidden mx-auto">
                         <canvas id="fdoc-render-canvas" class="block"></canvas>
                         <canvas id="fdoc-annot-canvas" class="absolute inset-0 pointer-events-none"></canvas>
@@ -1718,7 +1722,7 @@
         let pdfCurrentPage = 1;
         let pdfTotalPages = 1;
         let pdfScale = 1.0;
-        let pdfFitMode = 'width';
+        let pdfFitMode = 'page';
         let pdfTool = 'none'; // 'none' | 'pen' | 'highlighter' | 'eraser'
         let pdfPenColor = '#2a1825';
         let pdfHighlighterColor = 'rgba(250, 204, 21, 0.42)';
@@ -1874,7 +1878,7 @@
             if (!Array.isArray(s.notes)) s.notes = [];
             if (!Array.isArray(s.scriptures)) s.scriptures = [];
             if (!s.pdfMeta || typeof s.pdfMeta !== 'object') {
-                s.pdfMeta = { pdfId: '', fileName: '', totalPages: 1, lastPage: 1, scale: 1.0, fitMode: 'width' };
+                s.pdfMeta = { pdfId: '', fileName: '', totalPages: 1, lastPage: 1, scale: 1.0, fitMode: 'page' };
             }
             if (!s.pdfAnnotations || typeof s.pdfAnnotations !== 'object') s.pdfAnnotations = {};
             if (!s.pdfOverlayImages || typeof s.pdfOverlayImages !== 'object') s.pdfOverlayImages = {};
@@ -1950,7 +1954,7 @@
                         studyMode: 'preparazione',
                         notes: [],
                         scriptures: [],
-                        pdfMeta: { pdfId: '', fileName: '', totalPages: 1, lastPage: 1, scale: 1.0, fitMode: 'width' },
+                        pdfMeta: { pdfId: '', fileName: '', totalPages: 1, lastPage: 1, scale: 1.0, fitMode: 'page' },
                         pdfAnnotations: {},
                         pdfOverlayImages: {},
                         videos: [],
@@ -2345,7 +2349,8 @@
                     pdfTotalPages = currentPdfDoc.numPages || 1;
                     s.pdfMeta.totalPages = pdfTotalPages;
                     pdfCurrentPage = Math.max(1, Math.min(pdfTotalPages, s.pdfMeta.lastPage || 1));
-                    pdfFitMode = s.pdfMeta.fitMode || 'width';
+                    pdfFitMode = 'page';
+                    s.pdfMeta.fitMode = 'page';
                     pdfScale = s.pdfMeta.scale || 1.0;
                     if (shouldRenderCanvas) {
                         await renderCurrentPdfPage();
@@ -2959,7 +2964,7 @@
                     studyMode: 'preparazione',
                     notes: [],
                     scriptures: [],
-                    pdfMeta: { pdfId: '', fileName: '', totalPages: 1, lastPage: 1, scale: 1.0, fitMode: 'width' },
+                    pdfMeta: { pdfId: '', fileName: '', totalPages: 1, lastPage: 1, scale: 1.0, fitMode: 'page' },
                     pdfAnnotations: {},
                     pdfOverlayImages: {},
                     videos: [],
@@ -3072,6 +3077,10 @@
             document.getElementById('pdf-session-name').textContent = s.name;
             applySessionStudyModeUI(s.studyMode || 'preparazione');
 
+            // All'apertura di qualsiasi sessione PDF imposta automaticamente "Pag. intera"
+            pdfFitMode = 'page';
+            if (s.pdfMeta) s.pdfMeta.fitMode = 'page';
+
             const isNotebook = isLinedNotebookSession(s);
             const isBroadcasting = isBroadcastingSession(s);
             const videoSupported = isVideoSupportedSession(s) && !isBroadcasting;
@@ -3093,6 +3102,9 @@
                 initialView = 'video';
             }
 
+            state.uiPrefs.floatingPanel.isOpen = false;
+            syncFloatingPanelDom();
+
             await switchWorkspaceView(initialView, false);
 
             if (targetPage) {
@@ -3106,9 +3118,14 @@
                 }
             }
 
-            state.uiPrefs.floatingPanel.isOpen = false;
-            syncFloatingPanelDom();
             if (window.lucide) lucide.createIcons();
+
+            // Ricalcola dopo il layout delle icone in modo che l'altezza della barra superiore sia esatta
+            if (workspaceCurrentView === 'pdf' && currentPdfDoc && pdfFitMode === 'page') {
+                requestAnimationFrame(() => {
+                    renderCurrentPdfPage();
+                });
+            }
         }
 
         function closePdfWorkspace() {
@@ -3620,7 +3637,7 @@
                     lastPage: 1,
                     totalPages: 1,
                     scale: 1.0,
-                    fitMode: 'width',
+                    fitMode: 'page',
                     addedAt: new Date().toISOString()
                 });
                 s.activeFloatingDocId = docId;
@@ -3740,7 +3757,8 @@
             fdocTotalPages = fdocPdfObj.numPages || 1;
             docMeta.totalPages = fdocTotalPages;
             fdocCurrentPage = Math.max(1, Math.min(fdocTotalPages, docMeta.lastPage || 1));
-            fdocFitMode = docMeta.fitMode || 'width';
+            fdocFitMode = 'page';
+            docMeta.fitMode = 'page';
             fdocScale = docMeta.scale || 1.0;
 
             if (persist) saveState();
@@ -3819,8 +3837,8 @@
             try {
                 const page = await fdocPdfObj.getPage(fdocCurrentPage);
                 const unscaled = page.getViewport({ scale: 1 });
-                const availW = Math.max(240, scrollArea.clientWidth - 20);
-                const availH = Math.max(220, scrollArea.clientHeight - 20);
+                const availW = Math.max(240, scrollArea.clientWidth - 12);
+                const availH = Math.max(220, scrollArea.clientHeight - 12);
 
                 if (fdocFitMode === 'width') fdocScale = availW / unscaled.width;
                 else if (fdocFitMode === 'page') fdocScale = Math.min(availW / unscaled.width, availH / unscaled.height);
@@ -4719,6 +4737,46 @@
         /* =========================================================================
            8. LETTORE PDF TRADIZIONALE & SCRITTURA APPLE PENCIL
            ========================================================================= */
+        function syncLeftPanePanelClearance() {
+            const leftPane = document.getElementById('pdf-left-pane');
+            const floatingPanel = document.getElementById('pdf-floating-panel');
+            const fp = state.uiPrefs && state.uiPrefs.floatingPanel;
+            if (!leftPane) return;
+
+            leftPane.style.paddingLeft = '';
+            leftPane.style.paddingRight = '';
+
+            if (fp && fp.isOpen && floatingPanel && !floatingPanel.classList.contains('hidden')) {
+                const baseW = leftPane.clientWidth || window.innerWidth;
+                const panelW = floatingPanel.getBoundingClientRect().width || floatingPanel.offsetWidth || 0;
+                if (panelW > 0 && (baseW - panelW) >= 220) {
+                    if (fp.side === 'left') {
+                        leftPane.style.paddingLeft = Math.round(panelW + 6) + 'px';
+                    } else {
+                        leftPane.style.paddingRight = Math.round(panelW + 6) + 'px';
+                    }
+                }
+            }
+        }
+
+        function getAvailablePdfViewportBox() {
+            const leftPane = document.getElementById('pdf-left-pane');
+            const splitContainer = document.getElementById('pdf-split-container');
+
+            const baseW = (leftPane && leftPane.clientWidth) || (splitContainer && splitContainer.clientWidth) || window.innerWidth;
+            const baseH = (leftPane && leftPane.clientHeight) || (splitContainer && splitContainer.clientHeight) || (window.innerHeight - 52);
+
+            const cs = leftPane ? window.getComputedStyle(leftPane) : null;
+            const padTop = cs ? (parseFloat(cs.paddingTop) || 4) : 4;
+            const padBottom = cs ? (parseFloat(cs.paddingBottom) || 4) : 4;
+            const padLeft = cs ? (parseFloat(cs.paddingLeft) || 6) : 6;
+            const padRight = cs ? (parseFloat(cs.paddingRight) || 6) : 6;
+
+            const availW = Math.max(220, baseW - padLeft - padRight - 4);
+            const availH = Math.max(220, baseH - padTop - padBottom - 4);
+            return { availW, availH };
+        }
+
         async function refreshPdfViewerDisplay() {
             const s = getActiveSession();
             const emptyBox = document.getElementById('pdf-empty-state');
@@ -4750,7 +4808,7 @@
                 s.pdfMeta.pdfId = pdfId;
                 s.pdfMeta.fileName = file.name;
                 s.pdfMeta.lastPage = 1;
-                s.pdfMeta.fitMode = 'width';
+                s.pdfMeta.fitMode = 'page';
                 currentPdfFileName = file.name;
                 saveState();
 
@@ -4773,6 +4831,13 @@
             const leftPane = document.getElementById('pdf-left-pane');
             if (!canvas || !wrapper || !leftPane) return;
 
+            syncLeftPanePanelClearance();
+
+            if (leftPane.clientHeight < 100) {
+                await new Promise(resolve => requestAnimationFrame(resolve));
+                syncLeftPanePanelClearance();
+            }
+
             pdfCurrentPage = Math.max(1, Math.min(pdfTotalPages, pdfCurrentPage));
             document.getElementById('pdf-page-input').value = pdfCurrentPage;
             document.getElementById('pdf-total-pages').textContent = `/ ${pdfTotalPages}`;
@@ -4787,21 +4852,20 @@
             try {
                 const page = await currentPdfDoc.getPage(pdfCurrentPage);
                 const unscaledViewport = page.getViewport({ scale: 1 });
-                const availW = Math.max(280, leftPane.clientWidth - 28);
-                const availH = Math.max(320, leftPane.clientHeight - 28);
+                const { availW, availH } = getAvailablePdfViewportBox();
 
                 if (pdfFitMode === 'width') {
                     pdfScale = availW / unscaledViewport.width;
                 } else if (pdfFitMode === 'page') {
                     pdfScale = Math.min(availW / unscaledViewport.width, availH / unscaledViewport.height);
                 }
-                pdfScale = Math.max(0.35, Math.min(4.0, pdfScale));
+                pdfScale = Math.max(0.3, Math.min(4.0, pdfScale));
 
                 const viewport = page.getViewport({ scale: pdfScale });
                 const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
 
-                pdfPageCssWidth = Math.round(viewport.width);
-                pdfPageCssHeight = Math.round(viewport.height);
+                pdfPageCssWidth = Math.floor(viewport.width);
+                pdfPageCssHeight = Math.floor(viewport.height);
 
                 wrapper.style.width = pdfPageCssWidth + 'px';
                 wrapper.style.height = pdfPageCssHeight + 'px';
@@ -5766,6 +5830,11 @@
                     sideAside.appendChild(bibleDrawerContent);
                 }
                 if (bibleDrawerCloseBtn) bibleDrawerCloseBtn.classList.remove('hidden');
+
+                syncLeftPanePanelClearance();
+                if (workspaceCurrentView === 'pdf' && currentPdfDoc && (pdfFitMode === 'page' || pdfFitMode === 'width')) {
+                    renderCurrentPdfPage();
+                }
                 return;
             }
 
@@ -5795,6 +5864,11 @@
                 if (tabNotes) tabNotes.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold bg-white text-[#6b2d5c] shadow-2xs transition';
                 if (tabBible) tabBible.className = 'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-extrabold text-[#7a6273] hover:text-[#6b2d5c] transition';
                 renderPdfSideNotes();
+            }
+
+            syncLeftPanePanelClearance();
+            if (workspaceCurrentView === 'pdf' && currentPdfDoc && (pdfFitMode === 'page' || pdfFitMode === 'width')) {
+                renderCurrentPdfPage();
             }
 
             if (window.lucide) lucide.createIcons();
@@ -5857,6 +5931,7 @@
                 panel.style.width = newW + 'px';
                 if (fp.activeTab === 'bible') fp.bibleWidthPx = newW;
                 else fp.notesWidthPx = newW;
+                syncLeftPanePanelClearance();
             });
 
             const stopDrag = () => {
@@ -5864,6 +5939,10 @@
                 dragging = false;
                 resizer.classList.remove('dragging');
                 saveState();
+                syncLeftPanePanelClearance();
+                if (workspaceCurrentView === 'pdf' && currentPdfDoc && (pdfFitMode === 'page' || pdfFitMode === 'width')) {
+                    renderCurrentPdfPage();
+                }
             };
             resizer.addEventListener('pointerup', stopDrag);
             resizer.addEventListener('pointercancel', stopDrag);
@@ -6415,7 +6494,7 @@
                                     </button>
 
                                     <button type="button" onclick="pasteClipboardImageIntoNote('${n.id}')"
-                                        title="Incolla immagine copiata da Gemini o dagli appunti"
+                                        title="Incolla immagine dagli appunti"
                                         class="px-2.5 py-1 rounded-lg bg-indigo-50 text-indigo-800 border border-indigo-200 text-xs font-bold">
                                         📋 Incolla img
                                     </button>
@@ -6431,7 +6510,7 @@
                                 <div id="note-editor-${n.id}" contenteditable="true"
                                     onpaste="handleNotePasteEvent(event, '${n.id}')"
                                     oninput="updateNoteContent('${n.id}', this.innerHTML)"
-                                    data-placeholder="Scrivi qui i tuoi appunti o incolla un'immagine da Gemini..."
+                                    data-placeholder="Scrivi qui i tuoi appunti o incolla un'immagine..."
                                     style="font-size: ${n.fontSize || 15}px;"
                                     class="note-editor bg-[#fdfbf8] border plum-border rounded-xl p-2.5 text-[#2a1825]">${n.content || ''}</div>
 
@@ -8094,6 +8173,11 @@
                 syncFloatingPanelDom();
                 if (workspaceCurrentView === 'notebook') {
                     renderNotebookPages();
+                } else if (workspaceCurrentView === 'pdf' && currentPdfDoc) {
+                    syncLeftPanePanelClearance();
+                    if (pdfFitMode === 'page' || pdfFitMode === 'width') {
+                        renderCurrentPdfPage();
+                    }
                 }
             }
         });
