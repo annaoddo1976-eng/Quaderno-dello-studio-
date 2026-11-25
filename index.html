@@ -253,9 +253,8 @@
             min-height: 0;
             display: flex;
             flex-direction: column;
-            max-width: 1160px;
             width: 100%;
-            margin: 0 auto;
+            margin: 0;
         }
 
         .home-editorial-hero {
@@ -529,9 +528,8 @@
         .calendar-workspace {
             flex: 1 1 auto;
             min-height: 0;
-            max-width: 1160px;
             width: 100%;
-            margin: 0 auto;
+            margin: 0;
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -907,6 +905,16 @@
             inset: 0;
             width: 100%;
             height: 100%;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .lined-sheet-canvas {
+            display: block;
+            touch-action: none;
+            user-select: none;
+            -webkit-user-select: none;
         }
 
         .pdf-empty-card {
@@ -3029,12 +3037,17 @@
             }
             syncStrokeThicknessControls();
             const pdfCanvas = document.getElementById('pdf-annotation-canvas');
+            const pdfPane = document.getElementById('pdf-viewer-pane');
+            const isHand = activeDrawTool === 'hand';
             if (pdfCanvas) {
-                pdfCanvas.style.pointerEvents = activeDrawTool === 'hand' ? 'none' : 'auto';
-                pdfCanvas.style.touchAction = activeDrawTool === 'hand' ? 'auto' : 'none';
+                pdfCanvas.style.pointerEvents = isHand ? 'none' : 'auto';
+                pdfCanvas.style.touchAction = isHand ? 'auto' : 'none';
+            }
+            if (pdfPane) {
+                pdfPane.style.overflow = isHand ? 'auto' : 'hidden';
             }
             document.querySelectorAll('.lined-sheet-canvas').forEach(c => {
-                c.style.touchAction = activeDrawTool === 'hand' ? 'pan-y' : 'none';
+                c.style.touchAction = isHand ? 'pan-y' : 'none';
             });
         }
 
@@ -3505,7 +3518,10 @@
                 ctx.save();
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
-                const scaledW = Math.max(0.25, (st.width || 0.4) * (cssW / 760));
+                const baseWidth = Number(st.width) || 0.4;
+                const scaledW = st.tool === 'highlighter'
+                    ? Math.max(3, baseWidth * (cssW / 760))
+                    : Math.max(0.55, baseWidth * (cssW / 760));
                 if (st.tool === 'highlighter') {
                     ctx.globalCompositeOperation = 'multiply';
                     ctx.strokeStyle = hexToRgba(st.color, 0.36);
@@ -3517,7 +3533,7 @@
                 }
                 ctx.beginPath();
                 if (pts.length === 1) {
-                    ctx.arc(pts[0].x * cssW, pts[0].y * cssH, scaledW / 2, 0, Math.PI * 2);
+                    ctx.arc(pts[0].x * cssW, pts[0].y * cssH, Math.max(0.6, scaledW / 2), 0, Math.PI * 2);
                     ctx.fillStyle = ctx.strokeStyle;
                     ctx.fill();
                 } else {
@@ -3549,6 +3565,7 @@
 
         function bindPdfCanvasPointerEvents() {
             const canvas = document.getElementById('pdf-annotation-canvas');
+            const pane = document.getElementById('pdf-viewer-pane');
             if (!canvas) return;
             let pid = null, pts = null;
             const getNorm = (e) => {
@@ -3568,43 +3585,51 @@
                     scheduleAnnotationsSave();
                 }
             };
-            canvas.addEventListener('pointerdown', (e) => {
+            const onStart = (e) => {
                 if (activeDrawTool === 'hand' || !currentPdfDoc) return;
                 if (pencilOnlyMode && e.pointerType === 'touch') return;
                 if (pid !== null && pid !== e.pointerId) return;
                 e.preventDefault();
+                e.stopPropagation();
                 pid = e.pointerId;
+                if (pane) pane.style.overflow = 'hidden';
                 try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
                 const pt = getNorm(e);
                 if (activeDrawTool === 'eraser') { eraseAt(pt); return; }
                 pts = [pt];
                 redrawPdfAnnotations({ tool: activeDrawTool, color: activeDrawColor, width: getActiveStrokeWidth(), points: pts });
-            }, { passive: false });
-            canvas.addEventListener('pointermove', (e) => {
+            };
+            const onMove = (e) => {
                 if (pid !== e.pointerId) return;
                 e.preventDefault();
+                e.stopPropagation();
                 const pt = getNorm(e);
                 if (activeDrawTool === 'eraser') { eraseAt(pt); return; }
                 if (pts) {
                     pts.push(pt);
                     redrawPdfAnnotations({ tool: activeDrawTool, color: activeDrawColor, width: getActiveStrokeWidth(), points: pts });
                 }
-            }, { passive: false });
+            };
             const end = (e) => {
                 if (pid !== e.pointerId) return;
                 pid = null;
+                if (pane && activeDrawTool === 'hand') pane.style.overflow = 'auto';
                 if (pts && pts.length > 0 && activeDrawTool !== 'eraser') {
                     const k = String(currentPdfPage);
                     if (!Array.isArray(activeSessionRecord.pdfAnnotations[k])) activeSessionRecord.pdfAnnotations[k] = [];
-                    activeSessionRecord.pdfAnnotations[k].push({ tool: activeDrawTool, color: activeDrawColor, width: getActiveStrokeWidth(), points: pts });
+                    activeSessionRecord.pdfAnnotations[k].push({ tool: activeDrawTool, color: activeDrawColor, width: getActiveStrokeWidth(), points: [...pts] });
                     activeSessionRecord.pdfRedoStacks[k] = [];
                     pts = null;
                     redrawPdfAnnotations();
                     scheduleAnnotationsSave();
                 } else pts = null;
             };
+            canvas.addEventListener('pointerdown', onStart, { passive: false });
+            canvas.addEventListener('pointermove', onMove, { passive: false });
             canvas.addEventListener('pointerup', end);
             canvas.addEventListener('pointercancel', end);
+            canvas.addEventListener('touchstart', (e) => { if (activeDrawTool !== 'hand') e.preventDefault(); }, { passive: false });
+            canvas.addEventListener('touchmove', (e) => { if (activeDrawTool !== 'hand') e.preventDefault(); }, { passive: false });
         }
 
         function undoStroke() {
@@ -4758,6 +4783,7 @@
                 updateDbStatus('Memoria temporanea', true);
             }
             bindPdfCanvasPointerEvents();
+            selectDrawTool('pen');
             bindFloatingWindowInteractions('floating-notes-window', 'floating-notes-header', 'notesPanel');
             bindFloatingWindowInteractions('floating-bible-window', 'floating-bible-header', 'biblePanel');
             bindFloatingWindowInteractions('floating-video-window', 'floating-video-header', 'videoWindow');
