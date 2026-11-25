@@ -2211,6 +2211,7 @@
 
         let loadedBibleArchive = null;
         let bibleWindowActiveTab = 'reader';
+        let selectedBibleVerseNums = [];
         let selectedBibleVerseContext = null;
         let activeVideoObjectUrl = null;
         let lastVideoSavedSec = 0;
@@ -4387,12 +4388,14 @@
         function onBibleBookSelected(idx) {
             loadedBibleArchive.currentBookIdx = parseInt(idx, 10) || 0;
             loadedBibleArchive.currentChapterIdx = 0;
+            clearSelectedBibleVerses();
             const searchInp = document.getElementById('bible-book-search-input');
             if (searchInp) searchInp.value = '';
             renderBibleWindowContent();
         }
         function onBibleChapterSelected(idx) {
             loadedBibleArchive.currentChapterIdx = parseInt(idx, 10) || 0;
+            clearSelectedBibleVerses();
             renderBibleWindowContent();
         }
         function changeBibleChapter(d) {
@@ -4400,11 +4403,13 @@
             const book = loadedBibleArchive.books[loadedBibleArchive.currentBookIdx];
             if (!book) return;
             loadedBibleArchive.currentChapterIdx = Math.max(0, Math.min(book.chapters.length - 1, loadedBibleArchive.currentChapterIdx + d));
+            clearSelectedBibleVerses();
             renderBibleWindowContent();
         }
         function jumpToBibleVerse(v) {
             const num = parseInt(v, 10);
             if (!Number.isFinite(num)) return;
+            clearSelectedBibleVerses();
             selectBibleVerse(num);
             document.getElementById('bverse-' + num)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
@@ -4412,6 +4417,66 @@
             if (!loadedBibleArchive) return;
             loadedBibleArchive.fontSizePx = Math.max(12, Math.min(28, (loadedBibleArchive.fontSizePx || 16) + d));
             renderBibleWindowContent();
+            syncSelectedBibleVersesUI();
+        }
+
+        function clearSelectedBibleVerses() {
+            selectedBibleVerseNums = [];
+            selectedBibleVerseContext = null;
+            document.querySelectorAll('.bible-verse-row').forEach(r => r.classList.remove('selected'));
+            document.getElementById('bible-verse-action-bar')?.classList.add('hidden');
+        }
+
+        function formatBibleVerseRange(nums) {
+            const sorted = [...nums].sort((a, b) => a - b);
+            const ranges = [];
+            let i = 0;
+            while (i < sorted.length) {
+                let j = i;
+                while (j + 1 < sorted.length && sorted[j + 1] === sorted[j] + 1) j++;
+                ranges.push(i === j ? String(sorted[i]) : `${sorted[i]}-${sorted[j]}`);
+                i = j + 1;
+            }
+            return ranges.join(', ');
+        }
+
+        function syncSelectedBibleVersesUI() {
+            document.querySelectorAll('.bible-verse-row').forEach(r => r.classList.remove('selected'));
+            if (!loadedBibleArchive || !selectedBibleVerseNums.length) {
+                selectedBibleVerseContext = null;
+                document.getElementById('bible-verse-action-bar')?.classList.add('hidden');
+                return;
+            }
+            const book = loadedBibleArchive.books[loadedBibleArchive.currentBookIdx];
+            const chap = book && book.chapters[loadedBibleArchive.currentChapterIdx];
+            if (!book || !chap) return;
+
+            const chosen = chap.verses
+                .filter(v => selectedBibleVerseNums.includes(v.num))
+                .sort((a, b) => a.num - b.num);
+
+            if (!chosen.length) {
+                clearSelectedBibleVerses();
+                return;
+            }
+
+            chosen.forEach(v => document.getElementById('bverse-' + v.num)?.classList.add('selected'));
+            const rangeStr = formatBibleVerseRange(chosen.map(v => v.num));
+            const combinedText = chosen.length === 1
+                ? chosen[0].text
+                : chosen.map(v => `${v.num} ${v.text}`).join(' ');
+
+            selectedBibleVerseContext = {
+                bookNum: book.num,
+                bookName: book.name,
+                chapterNum: chap.num,
+                verseNum: chosen[0].num,
+                verseNums: chosen.map(v => v.num),
+                ref: `${book.name} ${chap.num}:${rangeStr}`,
+                text: combinedText
+            };
+            document.getElementById('lbl-selected-bible-ref').textContent = selectedBibleVerseContext.ref;
+            document.getElementById('bible-verse-action-bar')?.classList.remove('hidden');
         }
 
         function selectBibleVerse(vNum) {
@@ -4419,18 +4484,12 @@
             const chap = book.chapters[loadedBibleArchive.currentChapterIdx];
             const verse = chap.verses.find(v => v.num === vNum);
             if (!verse) return;
-            document.querySelectorAll('.bible-verse-row').forEach(r => r.classList.remove('selected'));
-            document.getElementById('bverse-' + vNum)?.classList.add('selected');
-            selectedBibleVerseContext = {
-                bookNum: book.num,
-                bookName: book.name,
-                chapterNum: chap.num,
-                verseNum: verse.num,
-                ref: `${book.name} ${chap.num}:${verse.num}`,
-                text: verse.text
-            };
-            document.getElementById('lbl-selected-bible-ref').textContent = selectedBibleVerseContext.ref;
-            document.getElementById('bible-verse-action-bar')?.classList.remove('hidden');
+
+            const idx = selectedBibleVerseNums.indexOf(vNum);
+            if (idx >= 0) selectedBibleVerseNums.splice(idx, 1);
+            else selectedBibleVerseNums.push(vNum);
+
+            syncSelectedBibleVersesUI();
         }
 
         function updateSavedScripturesBadge() {
