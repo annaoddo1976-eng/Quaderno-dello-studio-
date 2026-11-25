@@ -3991,14 +3991,22 @@
                         </div>
                     </div>
                     <div class="note-tools-bar">
-                        <button type="button" class="btn btn-outline btn-icon-sm" style="padding:2px 6px;" onclick="document.execCommand('bold')"><strong>B</strong></button>
-                        <button type="button" class="btn btn-outline btn-icon-sm" style="padding:2px 6px;" onclick="adjustNoteFont('${n.id}', -1)">A−</button>
-                        <button type="button" class="btn btn-outline btn-icon-sm" style="padding:2px 6px;" onclick="adjustNoteFont('${n.id}', 1)">A+</button>
+                        <button type="button" class="btn btn-outline btn-icon-sm" style="padding:2px 6px;" onmousedown="event.preventDefault()" onclick="toggleNoteBold('${n.id}')"><strong>B</strong></button>
+                        <button type="button" class="btn btn-outline btn-icon-sm" style="padding:2px 6px;" onmousedown="event.preventDefault()" onclick="adjustNoteFont('${n.id}', -1)">A−</button>
+                        <button type="button" class="btn btn-outline btn-icon-sm" style="padding:2px 6px;" onmousedown="event.preventDefault()" onclick="adjustNoteFont('${n.id}', 1)">A+</button>
                     </div>
-                    <div class="note-editor-area" contenteditable="true" style="font-size:${n.fontSize}px;" data-placeholder="Scrivi qui..."
+                    <div id="note-editor-${n.id}" class="note-editor-area" contenteditable="true" style="font-size:${n.fontSize}px;" data-placeholder="Scrivi qui..."
                         oninput="updateNoteContent('${n.id}', this.innerHTML)">${n.content || ''}</div>
                 </article>
             `).join('');
+        }
+
+        function toggleNoteBold(id) {
+            const editor = document.getElementById('note-editor-' + id);
+            if (!editor) return;
+            if (document.activeElement !== editor) editor.focus();
+            document.execCommand('bold', false, null);
+            updateNoteContent(id, editor.innerHTML);
         }
 
         async function updateNoteContent(id, html) {
@@ -4013,9 +4021,16 @@
             const sess = getActiveSession();
             const n = sess && sess.keyboardNotes.find(x => x.id === id);
             if (n) {
-                n.fontSize = Math.max(12, Math.min(28, (n.fontSize || 15) + d));
+                n.fontSize = Math.max(12, Math.min(32, (n.fontSize || 15) + d));
+                const editor = document.getElementById('note-editor-' + id);
+                if (editor) {
+                    editor.style.fontSize = n.fontSize + 'px';
+                    editor.querySelectorAll('*').forEach(el => {
+                        el.style.fontSize = 'inherit';
+                    });
+                    n.content = editor.innerHTML;
+                }
                 await saveSessionToIndexedDB(sess);
-                renderFloatingNotesList();
             }
         }
         async function deleteSessionNoteById(id) {
