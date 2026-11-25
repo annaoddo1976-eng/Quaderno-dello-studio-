@@ -857,6 +857,15 @@
             flex: 1 1 auto;
         }
 
+        input.compact-select,
+        textarea.form-input,
+        input.form-input {
+            font-size: 16px !important;
+            touch-action: manipulation;
+            -webkit-user-select: text;
+            user-select: text;
+        }
+
         .compact-page-input {
             border: 1px solid var(--rose-border);
             background-color: #FFFFFF;
@@ -1593,6 +1602,11 @@
                         </div>
 
                         <div class="studio-group">
+                            <label id="btn-upload-audio-bar" class="tool-chip admin-only" style="background:var(--rose-soft);" title="Carica audio MP3 dal dispositivo">
+                                🎧 Carica audio
+                                <input type="file" accept="audio/*,.mp3,.m4a,.wav,.ogg" onchange="handleSessionAudioUpload(event)" class="hidden">
+                            </label>
+                            <button type="button" id="btn-open-audio-win" class="tool-chip hidden" onclick="toggleFloatingAudioWindow()">🎧 Audio</button>
                             <label id="btn-upload-video-bar" class="tool-chip admin-only hidden" style="background:var(--rose-soft);" title="Carica video dal dispositivo">
                                 🎬 Carica video
                                 <input type="file" accept="video/*" onchange="handleSessionVideoUpload(event)" class="hidden">
@@ -1666,113 +1680,161 @@
                             <div class="win-resize-right" data-resize="right"></div>
                             <div class="win-resize-bottom" data-resize="bottom"></div>
                             <div class="win-resize-corner-bl" data-resize="bottom-left"></div>
-                            <div class="win-resize-corner-br" data-resize="bottom-right"></div>
-                        </aside>
+                        <div class="win-resize-corner-br" data-resize="bottom-right"></div>
+                    </aside>
 
-                        <!-- FINESTRA GALLEGGIANTE 2: LA SACRA BIBBIA -->
-                        <aside class="floating-window hidden" id="floating-bible-window" style="right: 14px; top: 12px; width: 390px; height: 480px;">
-                            <div class="floating-window-header" id="floating-bible-header">
-                                <span style="font-weight:700; font-size:0.84rem;">📖 La Sacra Bibbia</span>
-                                <div style="display:flex; gap:4px; align-items:center;">
-                                    <label class="btn btn-soft btn-icon-sm" style="padding:3px 7px;" title="Importa EPUB">
-                                        📂 EPUB
-                                        <input type="file" accept=".epub,application/epub+zip" onchange="handleBibleEpubUpload(event)" class="hidden">
-                                    </label>
-                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-bible-window', 'biblePanel', 'left')">⬅️</button>
-                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-bible-window', 'biblePanel', 'center')">⏺️</button>
-                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-bible-window', 'biblePanel', 'right')">➡️</button>
-                                    <button type="button" class="btn btn-danger btn-icon-sm" style="padding:3px 7px;" onclick="closeFloatingBibleWindow()">✕</button>
+                    <!-- FINESTRA GALLEGGIANTE 2: LA SACRA BIBBIA -->
+                    <aside class="floating-window hidden" id="floating-bible-window" style="right: 14px; top: 12px; width: 390px; height: 480px;">
+                        <div class="floating-window-header" id="floating-bible-header">
+                            <span style="font-weight:700; font-size:0.84rem;">📖 La Sacra Bibbia</span>
+                            <div style="display:flex; gap:4px; align-items:center;">
+                                <label class="btn btn-soft btn-icon-sm" style="padding:3px 7px;" title="Importa EPUB">
+                                    📂 EPUB
+                                    <input type="file" accept=".epub,application/epub+zip" onchange="handleBibleEpubUpload(event)" class="hidden">
+                                </label>
+                                <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-bible-window', 'biblePanel', 'left')">⬅️</button>
+                                <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-bible-window', 'biblePanel', 'center')">⏺️</button>
+                                <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-bible-window', 'biblePanel', 'right')">➡️</button>
+                                <button type="button" class="btn btn-danger btn-icon-sm" style="padding:3px 7px;" onclick="closeFloatingBibleWindow()">✕</button>
+                            </div>
+                        </div>
+
+                        <div class="floating-window-subbar" style="flex-direction:column; align-items:stretch;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                                <div class="segmented-box">
+                                    <button type="button" id="btn-bible-tab-reader" class="segmented-btn active" onclick="switchBibleWindowTab('reader')">📖 Lettura</button>
+                                    <button type="button" id="btn-bible-tab-saved" class="segmented-btn" onclick="switchBibleWindowTab('saved')">🔖 Scritture salvate (<span id="lbl-saved-scr-count">0</span>)</button>
+                                </div>
+                                <div style="display:flex; gap:4px;">
+                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 7px;" onclick="changeBibleFontSize(-1)">A−</button>
+                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 7px;" onclick="changeBibleFontSize(1)">A+</button>
                                 </div>
                             </div>
 
-                            <div class="floating-window-subbar" style="flex-direction:column; align-items:stretch;">
-                                <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-                                    <div class="segmented-box">
-                                        <button type="button" id="btn-bible-tab-reader" class="segmented-btn active" onclick="switchBibleWindowTab('reader')">📖 Lettura</button>
-                                        <button type="button" id="btn-bible-tab-saved" class="segmented-btn" onclick="switchBibleWindowTab('saved')">🔖 Scritture salvate (<span id="lbl-saved-scr-count">0</span>)</button>
-                                    </div>
-                                    <div style="display:flex; gap:4px;">
-                                        <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 7px;" onclick="changeBibleFontSize(-1)">A−</button>
-                                        <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 7px;" onclick="changeBibleFontSize(1)">A+</button>
-                                    </div>
-                                </div>
-
-                                <div id="bible-epub-nav-panel" class="hidden" style="display:flex; flex-direction:column; gap:5px; padding-top:4px;">
-                                    <input type="text" id="bible-book-search-input" class="compact-select" style="width:100%;"
-                                        placeholder="Cerca libro o sezione (es. Genesi, Lamentazioni, Salmi)..."
-                                        oninput="filterBibleBooksDropdown(this.value)">
-                                    <select id="bible-book-select" class="compact-select" style="width:100%;" onchange="onBibleBookSelected(this.value)"></select>
-                                    <div style="display:grid; grid-template-columns: 1fr 1fr auto auto; gap:4px; align-items:center;">
-                                        <select id="bible-chapter-select" class="compact-select" onchange="onBibleChapterSelected(this.value)"></select>
-                                        <select id="bible-verse-jump-select" class="compact-select" onchange="jumpToBibleVerse(this.value)"></select>
-                                        <button type="button" class="btn btn-outline btn-icon-sm" onclick="changeBibleChapter(-1)">◀</button>
-                                        <button type="button" class="btn btn-outline btn-icon-sm" onclick="changeBibleChapter(1)">▶</button>
-                                    </div>
+                            <div id="bible-epub-nav-panel" class="hidden" style="display:flex; flex-direction:column; gap:5px; padding-top:4px;">
+                                <input type="text" id="bible-book-search-input" class="compact-select" style="width:100%; font-size:16px;"
+                                    placeholder="Cerca libro o sezione (es. Genesi, Lamentazioni, Salmi)..."
+                                    onpointerdown="event.stopPropagation(); this.focus();"
+                                    oninput="filterBibleBooksDropdown(this.value)">
+                                <select id="bible-book-select" class="compact-select" style="width:100%;" onchange="onBibleBookSelected(this.value)"></select>
+                                <div style="display:grid; grid-template-columns: 1fr 1fr auto auto; gap:4px; align-items:center;">
+                                    <select id="bible-chapter-select" class="compact-select" onchange="onBibleChapterSelected(this.value)"></select>
+                                    <select id="bible-verse-jump-select" class="compact-select" onchange="jumpToBibleVerse(this.value)"></select>
+                                    <button type="button" class="btn btn-outline btn-icon-sm" onclick="changeBibleChapter(-1)">◀</button>
+                                    <button type="button" class="btn btn-outline btn-icon-sm" onclick="changeBibleChapter(1)">▶</button>
                                 </div>
                             </div>
+                        </div>
 
-                            <div id="bible-reader-tab-body" class="floating-window-body" style="gap:4px;">
-                                <div id="bible-empty-box" class="empty-state-box">
-                                    <p style="margin:0 0 8px 0; font-weight:700; color:var(--plum-dark);">Nessun file EPUB caricato</p>
-                                    <p style="margin:0 0 12px 0; font-size:0.8rem;">Importa il tuo file EPUB per consultare i 66 libri e salvare scritture e commenti.</p>
-                                    <label class="btn btn-primary btn-icon-sm">
-                                        📂 Importa Bibbia EPUB
-                                        <input type="file" accept=".epub,application/epub+zip" onchange="handleBibleEpubUpload(event)" class="hidden">
-                                    </label>
-                                </div>
-                                <div id="bible-chapter-verses-container" class="hidden"></div>
+                        <div id="bible-reader-tab-body" class="floating-window-body" style="gap:4px;">
+                            <div id="bible-empty-box" class="empty-state-box">
+                                <p style="margin:0 0 8px 0; font-weight:700; color:var(--plum-dark);">Nessun file EPUB caricato</p>
+                                <p style="margin:0 0 12px 0; font-size:0.8rem;">Importa il tuo file EPUB per consultare i 66 libri e salvare scritture e commenti.</p>
+                                <label class="btn btn-primary btn-icon-sm">
+                                    📂 Importa Bibbia EPUB
+                                    <input type="file" accept=".epub,application/epub+zip" onchange="handleBibleEpubUpload(event)" class="hidden">
+                                </label>
                             </div>
+                            <div id="bible-chapter-verses-container" class="hidden"></div>
+                        </div>
 
-                            <div id="bible-verse-action-bar" class="hidden" style="flex:0 0 auto; background:#FFF8E6; border-top:1px solid #E6C77A; padding:7px 10px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
-                                <span id="lbl-selected-bible-ref" style="font-size:0.8rem; font-weight:800; color:var(--plum-dark);"></span>
-                                <div style="display:flex; gap:5px;">
-                                    <button type="button" class="btn btn-soft btn-icon-sm" onclick="saveSelectedBibleVerse()">+ Scrittura</button>
-                                    <button type="button" class="btn btn-primary btn-icon-sm" onclick="openAddVerseCommentModal()">+ Nota</button>
-                                </div>
+                        <div id="bible-verse-action-bar" class="hidden" style="flex:0 0 auto; background:#FFF8E6; border-top:1px solid #E6C77A; padding:7px 10px; display:flex; align-items:center; justify-content:space-between; gap:6px;">
+                            <span id="lbl-selected-bible-ref" style="font-size:0.8rem; font-weight:800; color:var(--plum-dark);"></span>
+                            <div style="display:flex; gap:5px;">
+                                <button type="button" class="btn btn-soft btn-icon-sm" onclick="saveSelectedBibleVerse()">+ Scrittura</button>
+                                <button type="button" class="btn btn-primary btn-icon-sm" onclick="openAddVerseCommentModal()">+ Nota</button>
                             </div>
+                        </div>
 
-                            <div id="bible-saved-tab-body" class="floating-window-body hidden">
-                                <input type="text" id="saved-scriptures-search" class="compact-select" style="width:100%;"
-                                    placeholder="Cerca scrittura per libro, capitolo o versetto..."
-                                    oninput="renderSavedScripturesList(this.value)">
-                                <div id="saved-scriptures-list" style="display:flex; flex-direction:column; gap:8px;"></div>
-                                <div id="saved-scripture-detail-box" class="hidden" style="background:#FFFFFF; border:1.5px solid var(--plum); border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:8px;"></div>
+                        <div id="bible-saved-tab-body" class="floating-window-body hidden">
+                            <input type="text" id="saved-scriptures-search" class="compact-select" style="width:100%; font-size:16px;"
+                                placeholder="Cerca scrittura per libro, capitolo o versetto..."
+                                onpointerdown="event.stopPropagation(); this.focus();"
+                                oninput="renderSavedScripturesList(this.value)">
+                            <div id="saved-scriptures-list" style="display:flex; flex-direction:column; gap:8px;"></div>
+                            <div id="saved-scripture-detail-box" class="hidden" style="background:#FFFFFF; border:1.5px solid var(--plum); border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:8px;"></div>
+                        </div>
+
+                        <div class="win-resize-left" data-resize="left"></div>
+                        <div class="win-resize-right" data-resize="right"></div>
+                        <div class="win-resize-bottom" data-resize="bottom"></div>
+                        <div class="win-resize-corner-bl" data-resize="bottom-left"></div>
+                        <div class="win-resize-corner-br" data-resize="bottom-right"></div>
+                    </aside>
+
+                    <!-- FINESTRA GALLEGGIANTE 3: VIDEO 16:9 -->
+                    <aside class="floating-window hidden" id="floating-video-window" style="left: 40px; bottom: 16px; width: 420px; height: 295px;">
+                        <div class="floating-window-header" id="floating-video-header">
+                            <span id="lbl-floating-video-title" style="font-weight:700; font-size:0.84rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">🎬 Video</span>
+                            <div style="display:flex; gap:4px; flex-shrink:0;">
+                                <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="setVideoWindowOrientation('horizontal')" title="Orizzontale 16:9">▭</button>
+                                <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="setVideoWindowOrientation('vertical')" title="Verticale">▯</button>
+                                <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-video-window', 'videoWindow', 'left')">⬅️</button>
+                                <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-video-window', 'videoWindow', 'center')">⏺️</button>
+                                <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-video-window', 'videoWindow', 'right')">➡️</button>
+                                <button type="button" class="btn btn-danger btn-icon-sm" style="padding:3px 7px;" onclick="closeFloatingVideoWindow()">✕</button>
                             </div>
+                        </div>
 
-                            <div class="win-resize-left" data-resize="left"></div>
-                            <div class="win-resize-right" data-resize="right"></div>
-                            <div class="win-resize-bottom" data-resize="bottom"></div>
-                            <div class="win-resize-corner-bl" data-resize="bottom-left"></div>
-                            <div class="win-resize-corner-br" data-resize="bottom-right"></div>
-                        </aside>
+                        <div style="flex:1 1 auto; min-height:0; background:#000000; display:flex; align-items:center; justify-content:center; overflow:hidden;">
+                            <div class="video-16x9-wrapper" id="video-16x9-wrapper">
+                                <video id="session-video-player" playsinline webkit-playsinline preload="metadata" onclick="toggleVideoPlayPause()"></video>
+                            </div>
+                        </div>
 
-                        <!-- FINESTRA GALLEGGIANTE 3: VIDEO 16:9 -->
-                        <aside class="floating-window hidden" id="floating-video-window" style="left: 40px; bottom: 16px; width: 420px; height: 295px;">
-                            <div class="floating-window-header" id="floating-video-header">
-                                <span id="lbl-floating-video-title" style="font-weight:700; font-size:0.84rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">🎬 Video</span>
+                        <div class="floating-window-subbar" style="gap:6px;">
+                            <button type="button" id="btn-video-play" class="btn btn-primary btn-icon-sm" onclick="toggleVideoPlayPause()">▶ Play</button>
+                            <span id="lbl-video-time" style="font-size:0.74rem; font-weight:700; color:var(--plum-dark); font-variant-numeric:tabular-nums;">00:00</span>
+                            <input type="range" id="input-video-seek" min="0" max="100" step="0.5" value="0" oninput="seekVideoTo(this.value)" style="flex:1 1 80px; accent-color:var(--plum);">
+                            <button type="button" id="btn-video-mute" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="toggleVideoMute()">🔊</button>
+                            <input type="range" id="input-video-volume" min="0" max="1" step="0.05" value="1" oninput="setVideoVolume(this.value)" style="width:52px; accent-color:var(--plum);">
+                            <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="toggleVideoFullscreen()" title="Schermo intero">⛶</button>
+                        </div>
+
+                        <div class="win-resize-left" data-resize="left"></div>
+                        <div class="win-resize-right" data-resize="right"></div>
+                        <div class="win-resize-bottom" data-resize="bottom"></div>
+                        <div class="win-resize-corner-bl" data-resize="bottom-left"></div>
+                        <div class="win-resize-corner-br" data-resize="bottom-right"></div>
+                    </aside>
+
+                    <!-- FINESTRA GALLEGGIANTE 4: LETTORE AUDIO MP3 -->
+                    <aside class="floating-window hidden" id="floating-audio-window" style="right: 16px; bottom: 16px; width: 370px; height: 220px; min-height: 175px;">
+                            <div class="floating-window-header" id="floating-audio-header">
+                                <span id="lbl-floating-audio-title" style="font-weight:700; font-size:0.84rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">🎧 Audio MP3</span>
                                 <div style="display:flex; gap:4px; flex-shrink:0;">
-                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="setVideoWindowOrientation('horizontal')" title="Orizzontale 16:9">▭</button>
-                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="setVideoWindowOrientation('vertical')" title="Verticale">▯</button>
-                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-video-window', 'videoWindow', 'left')">⬅️</button>
-                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-video-window', 'videoWindow', 'center')">⏺️</button>
-                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-video-window', 'videoWindow', 'right')">➡️</button>
-                                    <button type="button" class="btn btn-danger btn-icon-sm" style="padding:3px 7px;" onclick="closeFloatingVideoWindow()">✕</button>
+                                    <button type="button" class="btn btn-soft btn-icon-sm" style="padding:3px 7px;" onclick="exportCurrentSessionAudio()" title="Esporta file audio">⬇️ Esporta</button>
+                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-audio-window', 'audioWindow', 'left')">⬅️</button>
+                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-audio-window', 'audioWindow', 'center')">⏺️</button>
+                                    <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="snapFloatingWindow('floating-audio-window', 'audioWindow', 'right')">➡️</button>
+                                    <button type="button" class="btn btn-danger btn-icon-sm" style="padding:3px 7px;" onclick="closeFloatingAudioWindow()">✕</button>
                                 </div>
                             </div>
 
-                            <div style="flex:1 1 auto; min-height:0; background:#000000; display:flex; align-items:center; justify-content:center; overflow:hidden;">
-                                <div class="video-16x9-wrapper" id="video-16x9-wrapper">
-                                    <video id="session-video-player" playsinline webkit-playsinline preload="metadata" onclick="toggleVideoPlayPause()"></video>
+                            <div class="floating-window-body" style="justify-content:center; gap:8px; background:#FDFBF8;">
+                                <audio id="session-audio-player" preload="metadata" class="hidden"></audio>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span id="lbl-audio-cur-time" style="font-size:0.78rem; font-weight:800; color:var(--plum-dark); font-variant-numeric:tabular-nums;">00:00</span>
+                                    <input type="range" id="input-audio-seek" min="0" max="100" step="0.5" value="0" oninput="seekAudioTo(this.value)" style="flex:1; accent-color:var(--plum); cursor:pointer;">
+                                    <span id="lbl-audio-dur-time" style="font-size:0.76rem; font-weight:700; color:var(--text-muted); font-variant-numeric:tabular-nums;">00:00</span>
                                 </div>
-                            </div>
-
-                            <div class="floating-window-subbar" style="gap:6px;">
-                                <button type="button" id="btn-video-play" class="btn btn-primary btn-icon-sm" onclick="toggleVideoPlayPause()">▶ Play</button>
-                                <span id="lbl-video-time" style="font-size:0.74rem; font-weight:700; color:var(--plum-dark); font-variant-numeric:tabular-nums;">00:00</span>
-                                <input type="range" id="input-video-seek" min="0" max="100" step="0.5" value="0" oninput="seekVideoTo(this.value)" style="flex:1 1 80px; accent-color:var(--plum);">
-                                <button type="button" id="btn-video-mute" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="toggleVideoMute()">🔊</button>
-                                <input type="range" id="input-video-volume" min="0" max="1" step="0.05" value="1" oninput="setVideoVolume(this.value)" style="width:52px; accent-color:var(--plum);">
-                                <button type="button" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="toggleVideoFullscreen()" title="Schermo intero">⛶</button>
+                                <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:5px;">
+                                    <div style="display:flex; align-items:center; gap:4px;">
+                                        <button type="button" class="btn btn-outline btn-icon-sm" onclick="seekAudioBy(-15)" title="Indietro 15s">−15s</button>
+                                        <button type="button" id="btn-audio-play" class="btn btn-primary btn-icon-sm" onclick="toggleAudioPlayPause()">▶ Play</button>
+                                        <button type="button" class="btn btn-outline btn-icon-sm" onclick="seekAudioBy(15)" title="Avanti 15s">+15s</button>
+                                    </div>
+                                    <div style="display:flex; align-items:center; gap:4px;">
+                                        <select id="select-audio-speed" onchange="setAudioSpeed(this.value)" class="compact-select" style="padding:4px 6px; font-size:0.76rem;" title="Velocità ascolto">
+                                            <option value="0.85">0.85x</option>
+                                            <option value="1" selected>1.0x</option>
+                                            <option value="1.25">1.25x</option>
+                                            <option value="1.5">1.5x</option>
+                                        </select>
+                                        <button type="button" id="btn-audio-mute" class="btn btn-outline btn-icon-sm" style="padding:3px 6px;" onclick="toggleAudioMute()">🔊</button>
+                                        <input type="range" id="input-audio-volume" min="0" max="1" step="0.05" value="1" oninput="setAudioVolume(this.value)" style="width:48px; accent-color:var(--plum);">
+                                    </div>
+                                </div>
                             </div>
 
                             <div class="win-resize-left" data-resize="left"></div>
@@ -1877,6 +1939,31 @@
                     <option value="pdf">Carica PDF + annotazioni</option>
                 </select>
             </div>
+            <div class="form-group" id="group-home-card-tools">
+                <label class="form-label">Strumenti da attivare nella scheda</label>
+                <div style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:6px; background:var(--bg-ivory); border:1.5px solid var(--rose-border); border-radius:10px; padding:8px 10px; font-size:0.84rem; font-weight:700; color:var(--text-main);">
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="chk-card-tool-pdf" checked style="accent-color:var(--plum);">
+                        <span>📄 PDF</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="chk-card-tool-lined" checked style="accent-color:var(--plum);">
+                        <span>📓 Fogli a righe</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="chk-card-tool-audio" checked style="accent-color:var(--plum);">
+                        <span>🎧 Audio</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="chk-card-tool-video" style="accent-color:var(--plum);">
+                        <span>🎬 Video</span>
+                    </label>
+                    <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+                        <input type="checkbox" id="chk-card-tool-notes" checked style="accent-color:var(--plum);">
+                        <span>📝 Note</span>
+                    </label>
+                </div>
+            </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-outline" onclick="closeHomeCardModal()">Annulla</button>
                 <button type="button" class="btn btn-primary" onclick="submitHomeCardModal()">Salva</button>
@@ -1941,7 +2028,7 @@
             <p id="verse-comment-ref-preview" style="margin:0; font-size:0.84rem; font-weight:700; color:var(--burgundy);"></p>
             <div class="form-group">
                 <label class="form-label">Commento personale</label>
-                <textarea id="textarea-verse-comment" rows="4" class="form-input" placeholder="Scrivi qui il tuo commento..."></textarea>
+                <textarea id="textarea-verse-comment" rows="4" class="form-input" style="font-size:16px;" onpointerdown="event.stopPropagation(); this.focus();" placeholder="Scrivi qui il tuo commento..."></textarea>
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-outline" onclick="closeVerseCommentModal()">Annulla</button>
@@ -1987,7 +2074,7 @@
             </div>
             <p id="lbl-last-backup-status" style="margin:0; font-size:0.82rem; font-weight:700; color:#2E7D5B;">Archivio locale attivo in IndexedDB.</p>
             <p style="margin:0; font-size:0.8rem; color:var(--text-muted); line-height:1.45;">
-                Il backup JSON conserva sessioni, fogli a righe, annotazioni, note, scritture, commenti, segnalibri, appuntamenti del calendario, PDF (fino a 40 MB) e Bibbia EPUB.
+                Il backup JSON conserva sessioni, fogli a righe, annotazioni, note, scritture, commenti, segnalibri, appuntamenti del calendario, PDF, audio MP3 (fino a 40 MB) e Bibbia EPUB.
             </p>
             <div style="display:flex; flex-wrap:wrap; gap:8px;">
                 <button type="button" class="btn btn-primary" onclick="exportVerifiedBackupJson()">⬇️ Esporta Backup (.json)</button>
@@ -2077,7 +2164,8 @@
                 topbarFontPx: 14.5,
                 notesPanel: { isOpen: false, left: 14, top: 12, width: 350, height: 430 },
                 biblePanel: { isOpen: false, left: 260, top: 12, width: 390, height: 480 },
-                videoWindow: { isOpen: false, left: 40, top: 180, width: 420, height: 295 }
+                videoWindow: { isOpen: false, left: 40, top: 180, width: 420, height: 295 },
+                audioWindow: { isOpen: false, left: 40, top: 240, width: 370, height: 210 }
             }
         };
 
@@ -2126,6 +2214,8 @@
         let selectedBibleVerseContext = null;
         let activeVideoObjectUrl = null;
         let lastVideoSavedSec = 0;
+        let activeAudioObjectUrl = null;
+        let lastAudioSavedSec = 0;
         const EPUB_SCHEMA_VERSION = 5;
 
         const BIBLE_CANON_66 = [
@@ -2259,7 +2349,8 @@
                         ...v.windowPrefs,
                         notesPanel: { ...appState.windowPrefs.notesPanel, ...(v.windowPrefs.notesPanel || {}) },
                         biblePanel: { ...appState.windowPrefs.biblePanel, ...(v.windowPrefs.biblePanel || {}) },
-                        videoWindow: { ...appState.windowPrefs.videoWindow, ...(v.windowPrefs.videoWindow || {}) }
+                        videoWindow: { ...appState.windowPrefs.videoWindow, ...(v.windowPrefs.videoWindow || {}) },
+                        audioWindow: { ...appState.windowPrefs.audioWindow, ...(v.windowPrefs.audioWindow || {}) }
                     };
                 }
             }
@@ -2404,7 +2495,10 @@
                 pdfFileIds: Array.isArray(raw.pdfFileIds) ? raw.pdfFileIds : [],
                 videoFileIds: Array.isArray(raw.videoFileIds) ? raw.videoFileIds : [],
                 videoFileName: raw.videoFileName || '',
-                videoLastSec: Number(raw.videoLastSec) || 0
+                videoLastSec: Number(raw.videoLastSec) || 0,
+                audioFileIds: Array.isArray(raw.audioFileIds) ? raw.audioFileIds : [],
+                audioFileName: raw.audioFileName || '',
+                audioLastSec: Number(raw.audioLastSec) || 0
             };
         }
 
@@ -3186,7 +3280,13 @@
             editingHomeCardId = null;
             document.getElementById('home-card-modal-title').textContent = 'Nuova scheda';
             document.getElementById('group-home-card-mode').classList.remove('hidden');
+            document.getElementById('group-home-card-tools')?.classList.remove('hidden');
             document.getElementById('input-home-card-title').value = '';
+            document.getElementById('chk-card-tool-pdf').checked = true;
+            document.getElementById('chk-card-tool-lined').checked = true;
+            document.getElementById('chk-card-tool-audio').checked = true;
+            document.getElementById('chk-card-tool-video').checked = false;
+            document.getElementById('chk-card-tool-notes').checked = true;
             document.getElementById('home-card-modal')?.classList.remove('hidden');
             setTimeout(() => document.getElementById('input-home-card-title')?.focus(), 30);
         }
@@ -3197,6 +3297,7 @@
             editingHomeCardId = cardId;
             document.getElementById('home-card-modal-title').textContent = 'Rinomina scheda';
             document.getElementById('group-home-card-mode').classList.add('hidden');
+            document.getElementById('group-home-card-tools')?.classList.add('hidden');
             document.getElementById('input-home-card-title').value = card.title;
             document.getElementById('home-card-modal')?.classList.remove('hidden');
             setTimeout(() => document.getElementById('input-home-card-title')?.focus(), 30);
@@ -3220,12 +3321,24 @@
                 }
             } else {
                 const mode = document.getElementById('select-home-card-mode').value || 'lined';
+                const tools = {
+                    pdf: !!document.getElementById('chk-card-tool-pdf')?.checked,
+                    lined: !!document.getElementById('chk-card-tool-lined')?.checked,
+                    audio: !!document.getElementById('chk-card-tool-audio')?.checked,
+                    video: !!document.getElementById('chk-card-tool-video')?.checked,
+                    notes: !!document.getElementById('chk-card-tool-notes')?.checked
+                };
+                if (!tools.pdf && !tools.lined) {
+                    if (mode === 'pdf') tools.pdf = true;
+                    else tools.lined = true;
+                }
                 const newId = 'card_' + Date.now() + '_' + Math.random().toString(36).slice(2, 5);
                 appState.homeCards.push({
                     id: newId,
                     title,
                     icon: mode === 'lined' ? '✏️' : '📄',
-                    defaultSurface: mode
+                    defaultSurface: mode,
+                    tools
                 });
             }
             await savePreferencesToIndexedDB();
@@ -3302,6 +3415,7 @@
 
         function navigateToHome() {
             pauseSessionVideo();
+            pauseSessionAudio();
             appState.currentView = 'home';
             appState.activeSessionId = null;
             updateNavigationUI();
@@ -3347,9 +3461,24 @@
             applyTopbarFontSize();
             syncStrokeThicknessControls();
 
-            const vidEnabled = VIDEO_ENABLED_SECTIONS.includes(sess.sectionId);
+            const card = appState.homeCards.find(c => c.id === sess.sectionId);
+            const cardTools = (card && card.tools) ? card.tools : null;
+
+            const showPdfBtn = cardTools ? cardTools.pdf !== false : true;
+            const showLinedBtn = cardTools ? cardTools.lined !== false : true;
+            const showAudioBtn = cardTools ? cardTools.audio !== false : true;
+            const showNotesBtn = cardTools ? cardTools.notes !== false : true;
+            const vidEnabled = cardTools
+                ? !!cardTools.video
+                : (VIDEO_ENABLED_SECTIONS.includes(sess.sectionId) || sess.videoFileIds.length > 0);
+
+            document.getElementById('btn-surface-pdf')?.classList.toggle('hidden', !showPdfBtn);
+            document.getElementById('btn-surface-lined')?.classList.toggle('hidden', !showLinedBtn);
+            document.getElementById('btn-upload-audio-bar')?.classList.toggle('hidden', !showAudioBtn);
+            document.getElementById('btn-open-audio-win')?.classList.toggle('hidden', !showAudioBtn || sess.audioFileIds.length === 0);
             document.getElementById('btn-upload-video-bar')?.classList.toggle('hidden', !vidEnabled);
             document.getElementById('btn-open-video-win')?.classList.toggle('hidden', !vidEnabled || sess.videoFileIds.length === 0);
+            document.getElementById('btn-open-notes-win')?.classList.toggle('hidden', !showNotesBtn);
 
             await loadAnnotationsForSession(sess.id);
 
@@ -3367,8 +3496,13 @@
                 }
             }
 
-            const preferLined = LINED_PRIMARY_SECTIONS.includes(sess.sectionId) && !currentPdfDoc;
-            await switchSurfaceMode(preferLined ? 'lined' : 'pdf', false);
+            let initialMode = 'pdf';
+            if (!showPdfBtn && showLinedBtn) initialMode = 'lined';
+            else if (showPdfBtn && !showLinedBtn) initialMode = 'pdf';
+            else if (card && card.defaultSurface === 'lined' && !currentPdfDoc) initialMode = 'lined';
+            else if (LINED_PRIMARY_SECTIONS.includes(sess.sectionId) && !currentPdfDoc) initialMode = 'lined';
+
+            await switchSurfaceMode(initialMode, false);
             restoreAllFloatingWindows();
         }
 
@@ -3803,16 +3937,18 @@
             const map = [
                 ['floating-notes-window', 'notesPanel', () => renderFloatingNotesList()],
                 ['floating-bible-window', 'biblePanel', () => renderBibleWindowContent()],
-                ['floating-video-window', 'videoWindow', () => loadSessionVideoIntoPlayer()]
+                ['floating-video-window', 'videoWindow', () => loadSessionVideoIntoPlayer()],
+                ['floating-audio-window', 'audioWindow', () => loadSessionAudioIntoPlayer()]
             ];
             map.forEach(([winId, prefKey, onShow]) => {
                 const win = document.getElementById(winId);
                 const p = appState.windowPrefs[prefKey];
                 if (!win || !p) return;
+                const minH = winId === 'floating-audio-window' ? 175 : 220;
                 win.style.width = Math.max(260, Math.min(window.innerWidth - 12, p.width || 360)) + 'px';
-                win.style.height = Math.max(220, Math.min(window.innerHeight - 60, p.height || 420)) + 'px';
+                win.style.height = Math.max(minH, Math.min(window.innerHeight - 60, p.height || 420)) + 'px';
                 win.style.left = Math.max(6, Math.min(window.innerWidth - 270, p.left || 14)) + 'px';
-                win.style.top = Math.max(6, Math.min(window.innerHeight - 230, p.top || 12)) + 'px';
+                win.style.top = Math.max(6, Math.min(window.innerHeight - 190, p.top || 12)) + 'px';
                 win.classList.toggle('hidden', !p.isOpen);
                 if (p.isOpen && onShow) onShow();
             });
@@ -3847,6 +3983,17 @@
             pauseSessionVideo();
             appState.windowPrefs.videoWindow.isOpen = false;
             document.getElementById('floating-video-window')?.classList.add('hidden');
+            await savePreferencesToIndexedDB();
+        }
+        async function toggleFloatingAudioWindow() {
+            appState.windowPrefs.audioWindow.isOpen = !appState.windowPrefs.audioWindow.isOpen;
+            restoreAllFloatingWindows();
+            await savePreferencesToIndexedDB();
+        }
+        async function closeFloatingAudioWindow() {
+            pauseSessionAudio();
+            appState.windowPrefs.audioWindow.isOpen = false;
+            document.getElementById('floating-audio-window')?.classList.add('hidden');
             await savePreferencesToIndexedDB();
         }
 
@@ -4212,14 +4359,36 @@
         function filterBibleBooksDropdown(q) {
             if (!loadedBibleArchive) return;
             const low = (q || '').trim().toLowerCase();
-            document.getElementById('bible-book-select').innerHTML = loadedBibleArchive.books
+            const matches = loadedBibleArchive.books
                 .map((b, i) => ({ b, i }))
-                .filter(({ b }) => !low || b.name.toLowerCase().includes(low))
-                .map(({ b, i }) => `<option value="${i}">${escapeHtml(b.name)}</option>`).join('');
+                .filter(({ b }) => !low || b.name.toLowerCase().includes(low));
+
+            const sel = document.getElementById('bible-book-select');
+            if (!sel) return;
+            sel.innerHTML = matches
+                .map(({ b, i }) => `<option value="${i}">${escapeHtml(b.name)}</option>`)
+                .join('');
+
+            if (low && matches.length > 0) {
+                const exact = matches.find(({ b }) => b.name.toLowerCase() === low) || matches[0];
+                if (loadedBibleArchive.currentBookIdx !== exact.i) {
+                    loadedBibleArchive.currentBookIdx = exact.i;
+                    loadedBibleArchive.currentChapterIdx = 0;
+                    renderBibleWindowContent();
+                    const updatedSel = document.getElementById('bible-book-select');
+                    if (updatedSel) {
+                        updatedSel.innerHTML = matches
+                            .map(({ b, i }) => `<option value="${i}" ${i === exact.i ? 'selected' : ''}>${escapeHtml(b.name)}</option>`)
+                            .join('');
+                    }
+                }
+            }
         }
         function onBibleBookSelected(idx) {
             loadedBibleArchive.currentBookIdx = parseInt(idx, 10) || 0;
             loadedBibleArchive.currentChapterIdx = 0;
+            const searchInp = document.getElementById('bible-book-search-input');
+            if (searchInp) searchInp.value = '';
             renderBibleWindowContent();
         }
         function onBibleChapterSelected(idx) {
@@ -4489,6 +4658,104 @@
             else { w.style.width = '440px'; w.style.height = '310px'; }
         }
 
+        /* =====================================================================
+           LETTORE AUDIO MP3 NELLE SESSIONI + ESPORTAZIONE
+           ===================================================================== */
+        async function handleSessionAudioUpload(event) {
+            const file = event.target.files && event.target.files[0];
+            const sess = getActiveSession();
+            if (!file || !sess) return;
+            const fileId = sess.audioFileIds[0] || ('aud_' + sess.id + '_' + Date.now());
+            await saveBinaryFileToIdb(fileId, file, file.name, file.type || 'audio/mpeg');
+            sess.audioFileIds = [fileId];
+            sess.audioFileName = file.name;
+            sess.audioLastSec = 0;
+            await saveSessionToIndexedDB(sess);
+            document.getElementById('btn-open-audio-win')?.classList.remove('hidden');
+            appState.windowPrefs.audioWindow.isOpen = true;
+            await savePreferencesToIndexedDB();
+            restoreAllFloatingWindows();
+            event.target.value = '';
+        }
+
+        async function loadSessionAudioIntoPlayer() {
+            const sess = getActiveSession();
+            const player = document.getElementById('session-audio-player');
+            if (!sess || !player || !sess.audioFileIds.length) return;
+            const rec = await loadBinaryFileFromIdb(sess.audioFileIds[0]);
+            if (!rec || !rec.blob) return;
+            document.getElementById('lbl-floating-audio-title').textContent = '🎧 ' + (sess.audioFileName || 'Audio MP3');
+            if (activeAudioObjectUrl) URL.revokeObjectURL(activeAudioObjectUrl);
+            activeAudioObjectUrl = URL.createObjectURL(rec.blob);
+            player.src = activeAudioObjectUrl;
+            player.onloadedmetadata = () => {
+                const dur = Math.floor(player.duration || 0);
+                document.getElementById('input-audio-seek').max = Math.max(1, dur);
+                document.getElementById('lbl-audio-dur-time').textContent = `${String(Math.floor(dur / 60)).padStart(2, '0')}:${String(dur % 60).padStart(2, '0')}`;
+                if (sess.audioLastSec > 0 && sess.audioLastSec < dur) player.currentTime = sess.audioLastSec;
+            };
+        }
+
+        function setupAudioControlsListeners() {
+            const a = document.getElementById('session-audio-player');
+            if (!a) return;
+            a.addEventListener('timeupdate', () => {
+                const cur = a.currentTime || 0;
+                document.getElementById('input-audio-seek').value = Math.floor(cur);
+                const m = String(Math.floor(cur / 60)).padStart(2, '0');
+                const s = String(Math.floor(cur % 60)).padStart(2, '0');
+                document.getElementById('lbl-audio-cur-time').textContent = `${m}:${s}`;
+                if (Math.abs(cur - lastAudioSavedSec) >= 3) {
+                    lastAudioSavedSec = cur;
+                    const sess = getActiveSession();
+                    if (sess) { sess.audioLastSec = cur; saveSessionToIndexedDB(sess); }
+                }
+            });
+            a.addEventListener('play', () => { document.getElementById('btn-audio-play').textContent = '⏸ Pausa'; });
+            a.addEventListener('pause', () => { document.getElementById('btn-audio-play').textContent = '▶ Play'; });
+        }
+
+        function pauseSessionAudio() {
+            const a = document.getElementById('session-audio-player');
+            if (a && !a.paused) { try { a.pause(); } catch (_) {} }
+        }
+        function toggleAudioPlayPause() {
+            const a = document.getElementById('session-audio-player');
+            if (a) { if (a.paused) a.play().catch(() => {}); else a.pause(); }
+        }
+        function seekAudioTo(v) {
+            const a = document.getElementById('session-audio-player');
+            if (a) a.currentTime = Number(v) || 0;
+        }
+        function seekAudioBy(deltaSec) {
+            const a = document.getElementById('session-audio-player');
+            if (a) a.currentTime = Math.max(0, Math.min(a.duration || 99999, (a.currentTime || 0) + deltaSec));
+        }
+        function setAudioSpeed(rate) {
+            const a = document.getElementById('session-audio-player');
+            if (a) a.playbackRate = Number(rate) || 1;
+        }
+        function toggleAudioMute() {
+            const a = document.getElementById('session-audio-player');
+            if (a) { a.muted = !a.muted; document.getElementById('btn-audio-mute').textContent = a.muted ? '🔇' : '🔊'; }
+        }
+        function setAudioVolume(v) {
+            const a = document.getElementById('session-audio-player');
+            if (a) a.volume = Number(v);
+        }
+        async function exportCurrentSessionAudio() {
+            const sess = getActiveSession();
+            if (!sess || !sess.audioFileIds.length) return;
+            const rec = await loadBinaryFileFromIdb(sess.audioFileIds[0]);
+            if (!rec || !rec.blob) return;
+            const url = URL.createObjectURL(rec.blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = sess.audioFileName || 'audio_studio.mp3';
+            a.click();
+            setTimeout(() => URL.revokeObjectURL(url), 1500);
+        }
+
         function updateBookmarksCountLabel() {
             const el = document.getElementById('lbl-bookmarks-count');
             if (el) el.textContent = String(appState.bookmarks.length);
@@ -4626,15 +4893,27 @@
                 req.onerror = () => resolve([]);
             });
             const embeddedPdfFiles = [];
+            const embeddedAudioFiles = [];
             for (const f of allFiles) {
                 if (!f || !f.blob) continue;
-                const isPdf = (f.mimeType || '').includes('pdf') || (f.fileName || '').toLowerCase().endsWith('.pdf');
+                const mime = (f.mimeType || '').toLowerCase();
+                const fname = (f.fileName || '').toLowerCase();
+                const isPdf = mime.includes('pdf') || fname.endsWith('.pdf');
+                const isAudio = mime.startsWith('audio/') || /\.(mp3|m4a|wav|ogg|aac)$/.test(fname);
                 if (isPdf && (f.blob.size || 0) <= 40 * 1024 * 1024) {
                     const buf = await f.blob.arrayBuffer();
                     embeddedPdfFiles.push({
                         fileId: f.fileId,
                         fileName: f.fileName || 'documento.pdf',
                         mimeType: f.mimeType || 'application/pdf',
+                        base64: arrayBufferToBase64(buf)
+                    });
+                } else if (isAudio && (f.blob.size || 0) <= 40 * 1024 * 1024) {
+                    const buf = await f.blob.arrayBuffer();
+                    embeddedAudioFiles.push({
+                        fileId: f.fileId,
+                        fileName: f.fileName || 'audio.mp3',
+                        mimeType: f.mimeType || 'audio/mpeg',
                         base64: arrayBufferToBase64(buf)
                     });
                 }
@@ -4655,6 +4934,7 @@
                 sessions: appState.sessions,
                 annotations: allAnnotations,
                 embeddedPdfFiles,
+                embeddedAudioFiles,
                 embeddedBible,
                 bookmarks: appState.bookmarks,
                 savedScriptures: appState.savedScriptures,
@@ -4671,7 +4951,7 @@
             a.download = `Quaderno_Studio_v2_Backup_${new Date().toISOString().slice(0, 10)}.json`;
             a.click();
             setTimeout(() => URL.revokeObjectURL(url), 1500);
-            if (fb) fb.textContent = `✅ Backup esportato: ${appState.sessions.length} sessioni, ${embeddedPdfFiles.length} PDF, ${appState.calendarEvents.length} appuntamenti, ${appState.savedScriptures.length} scritture.`;
+            if (fb) fb.textContent = `✅ Backup esportato: ${appState.sessions.length} sessioni, ${embeddedPdfFiles.length} PDF, ${embeddedAudioFiles.length} audio, ${appState.calendarEvents.length} appuntamenti, ${appState.savedScriptures.length} scritture.`;
         }
 
         function handleImportBackupFile(event) {
@@ -4712,6 +4992,13 @@
                                     if (!f || !f.fileId || !f.base64) continue;
                                     const buf = base64ToArrayBuffer(f.base64);
                                     await saveBinaryFileToIdb(f.fileId, new Blob([buf], { type: f.mimeType || 'application/pdf' }), f.fileName, f.mimeType || 'application/pdf');
+                                }
+                            }
+                            if (Array.isArray(data.embeddedAudioFiles)) {
+                                for (const f of data.embeddedAudioFiles) {
+                                    if (!f || !f.fileId || !f.base64) continue;
+                                    const buf = base64ToArrayBuffer(f.base64);
+                                    await saveBinaryFileToIdb(f.fileId, new Blob([buf], { type: f.mimeType || 'audio/mpeg' }), f.fileName, f.mimeType || 'audio/mpeg');
                                 }
                             }
                             if (data.embeddedBible && data.embeddedBible.base64) {
@@ -4811,16 +5098,11 @@
             bindFloatingWindowInteractions('floating-notes-window', 'floating-notes-header', 'notesPanel');
             bindFloatingWindowInteractions('floating-bible-window', 'floating-bible-header', 'biblePanel');
             bindFloatingWindowInteractions('floating-video-window', 'floating-video-header', 'videoWindow');
+            bindFloatingWindowInteractions('floating-audio-window', 'floating-audio-header', 'audioWindow');
             setupVideoControlsListeners();
+            setupAudioControlsListeners();
             updateNavigationUI();
         });
     </script>
 </body>
 </html>
-```
-
-Ho creato il nuovo file separato **`quaderno_v2.html`** (lasciando completamente intatta la tua versione originale `index.html`), integrando esattamente le funzioni che hai confermato:
-- **Calendario Personale Integrato (`📅 Calendario`):** vista **Mensile** e **Settimanale**, gestione completa degli appuntamenti (*Servizio di campo*, *Adunanze / Parti*, *Assemblee*, *Importanti*) con data, orario e note, più il riquadro promemoria **«Oggi e Prossimi 7 giorni»** (senza collegamenti alle sezioni del quaderno, come richiesto).
-- **Riquadri Riepilogo nella Home:** mostra subito in Home il **Prossimo appuntamento** e le **Ultime scritture salvate**.
-- **Ricerca Globale (`🔍 Cerca`):** cerca istantaneamente una parola chiave tra note, scritture salvate, commenti, segnalibri e calendario.
-- **Esportazione / Stampa PDF (`🖨️`):** disponibile sia nella barra dei **Fogli a righe** sia nelle singole **Note** per esportare/stampare in PDF.
